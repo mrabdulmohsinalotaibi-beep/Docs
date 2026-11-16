@@ -4,7 +4,7 @@
   const STORAGE_PREFIX = "athat-docs-unified-v2-";
   const MAX_BYTES = 32 * 1024 * 1024;
   const CHUNK = 12 * 1024;
-  let pc, channel, accountId = "", received = "", sending = false, paired = false;
+  let pc, channel, accountId = "", received = "", sending = false, paired = false, peerReady = false, autoSent = false;
   const ui = document.createElement("section");
   ui.id = "athatPeerSync";
   ui.dir = "rtl";
@@ -22,7 +22,7 @@
   function reset() {
     if (channel) { try { channel.close(); } catch {} }
     if (pc) { try { pc.close(); } catch {} }
-    pc = null; channel = null; received = ""; sending = false; paired = false;
+    pc = null; channel = null; received = ""; sending = false; paired = false; peerReady = false; autoSent = false;
     el("peerVerify").disabled = true;el("peerFingerprint").textContent="";
     el("peerSend").disabled = true;
   }
@@ -60,6 +60,9 @@
       // Import-only; no deletions, and never overwrite differing documents.
       for (const doc of incoming) {
         if (!doc || typeof doc!=="object" || typeof doc.id!=="string" || doc.id.length>200 || !Array.isArray(doc.photos||[])) continue;
+        const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(doc))));
+        const checksum = Array.from(digest.slice(0,16), x=>x.toString(16).padStart(2,"0")).join("");
+        const conflictId="sync-"+checksum;
         await new Promise((resolve,reject)=>{
           const tx=db.transaction("documents","readwrite"),store=tx.objectStore("documents");
           const req=store.get(doc.id);
@@ -67,7 +70,16 @@
             const existing=req.result;
             if (!existing) { store.put(doc); added++; }
             else if (JSON.stringify(existing)===JSON.stringify(doc)) unchanged++;
-            else { store.put({...doc,id:crypto.randomUUID(),title:String(doc.title||"مستند").slice(0,150)+" (نسخة مستلمة)"}); conflicts++; }
+            else {
+              // Stable hash-derived conflict ID makes repeated exchanges idempotent.
+              const copyReq=store.get(conflictId);
+              copyReq.onsuccess=()=>{
+                if(!copyReq.result){
+                  store.put({...doc,id:conflictId,title:String(doc.title||"مستند").slice(0,150)+" (نسخة مستلمة)"});
+                  conflicts++;
+                }else unchanged++;
+              };
+            }
           };
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         });
@@ -115,14 +127,31 @@
     };
     pc.ondatachannel=event=>configure(event.channel);
   }
+  async function sendReady(){
+    if(paired && channel?.readyState==="open"){
+      channel.send(JSON.stringify({type:"ready",user:accountId}));
+      if(peerReady && !autoSent)await autoSync();
+    }
+  }
+  async function autoSync(){
+    if(autoSent)return;
+    autoSent=true;
+    try{await send(true);}catch(e){autoSent=false;note("المزامنة التلقائية لم تكتمل: "+e.message);}
+  }
   function configure(c) {
     channel=c;c.binaryType="arraybuffer";
-    c.onopen=()=>{showPairing().catch(e=>note(e.message));};
+    c.onopen=()=>{showPairing().then(sendReady).catch(e=>note(e.message));};
     c.onclose=()=>{el("peerSend").disabled=true;note("أُغلق الاتصال.");};
     c.onmessage=async event=>{
       try{
-        if(!paired)throw Error("يجب تأكيد رمز المطابقة قبل استقبال المستندات.");
         const msg=JSON.parse(event.data);
+        if(msg.type==="ready"){
+          if(msg.user!==accountId)throw Error("الحساب مختلف.");
+          peerReady=true;
+          if(paired && !autoSent)await autoSync();
+          return;
+        }
+        if(!paired || !peerReady)throw Error("يجب تأكيد رمز المطابقة على الجهازين قبل نقل المستندات.");
         if (msg.type==="begin") {
           if (!Number.isSafeInteger(msg.length)||msg.length<0||msg.length>MAX_BYTES){received="";throw Error("حجم النقل يتجاوز الحد الآمن.");}
           if (msg.user!==accountId) {reset();throw Error("الحساب على الجهاز الآخر مختلف.");}
@@ -143,14 +172,14 @@
       }catch(err){note("تعذّر الاستقبال: "+err.message);}
     };
   }
-  async function send() {
-    if(!paired || sending || !channel || channel.readyState!=="open")throw Error("أكّد رمز المطابقة أولًا وتأكد من اتصال الجهاز الآخر.");
+  async function send(automatic=false) {
+    if(!paired || !peerReady || sending || !channel || channel.readyState!=="open")throw Error("أكّد رمز المطابقة على الجهازين أولًا.");
     sending=true;el("peerSend").disabled=true;
     try{
       const docs=await allDocs();
       const payload=JSON.stringify(docs);
       if(payload.length>MAX_BYTES)throw Error("حجم المستندات يتجاوز 32 ميجابايت في عملية واحدة؛ استخدم نسخة JSON يدوية.");
-      if(!confirm("سيتم إرسال "+docs.length+" مستندًا وشواهدها إلى جهازك الآخر. متابعة؟"))return;
+      if(!automatic && !confirm("سيتم إرسال "+docs.length+" مستندًا وشواهدها إلى جهازك الآخر. متابعة؟"))return;
       channel.send(JSON.stringify({type:"begin",user:accountId,length:payload.length}));
       for(let i=0;i<payload.length;i+=CHUNK){
         if(channel.readyState!=="open")throw Error("انقطع الاتصال.");
@@ -182,7 +211,8 @@
     if(!confirm("هل ظهر الرمز "+code+" نفسه على شاشة جهازك الآخر؟ لا توافق إذا اختلف الرقمان."))return;
     paired=true;el("peerVerify").disabled=true;
     el("peerSend").disabled=channel?.readyState!=="open";
-    note("تم اعتماد مطابقة الاتصال على هذا الجهاز. تأكد من الاعتماد أيضًا على الجهاز الآخر.");
+    note("تم اعتماد مطابقة الاتصال. ستبدأ المزامنة عندما يؤكد الجهاز الآخر الرمز نفسه.");
+    await sendReady();
   });
   el("peerSend").onclick=job(send);
   el("peerClose").onclick=()=>{reset();note("تم قطع الاتصال.");};
