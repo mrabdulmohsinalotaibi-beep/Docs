@@ -77,7 +77,8 @@ test("WebRTC transfers documents with photos between two independent accounts' l
         else await d.accept();
       });
       await page.goto("http://127.0.0.1:"+port,{waitUntil:"domcontentloaded"});
-      await page.locator("#appMain").waitFor({state:"visible"});
+      try{await page.locator("#appMain").waitFor({state:"visible",timeout:10000});}
+      catch(err){throw Error("App startup failed: errors="+errors.join(" | ")+" authStatus="+await page.locator("#authMsg").textContent().catch(()=>"?")+" peerStatus="+await page.locator("#peerStatus").textContent().catch(()=>"?")+" / "+err.message);}
       await page.locator("#athatPeerSync").waitFor({state:"visible"});
     }
     await seed(a,fakeDocument("a-1","مستند الجهاز الأول"));
