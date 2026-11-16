@@ -30,6 +30,8 @@ test("regional plans and local import work in browser without network upload", {
   assert.ok(choices.includes("مكة المكرمة"));
   assert.ok(choices.includes("جازان"));
   assert.ok(choices.includes("ينبع"));
+  await page.locator("#newBtn").click();
+  await page.locator("#editor").waitFor({state:"visible"});
   await page.selectOption("#profileDepartment","مكة المكرمة");
   await page.selectOption("#profileStage","متوسط");
   await page.selectOption("#programScope","regional");
