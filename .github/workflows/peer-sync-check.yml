@@ -28,3 +28,5 @@ jobs:
         run: which google-chrome || which google-chrome-stable
       - name: WebRTC two-browser smoke test
         run: node --test tests/p2p-browser.test.mjs
+      - name: Department catalog browser test
+        run: node --test tests/program-browser.test.mjs
