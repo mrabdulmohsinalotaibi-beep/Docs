@@ -223,6 +223,13 @@
     const main=document.getElementById("appMain");
     if(!main)return;
     main.appendChild(ui);
+    const actions=main.querySelector(".hero .actions");
+    if(actions && !document.getElementById("peerOpen")){
+      const open=document.createElement("button");
+      open.type="button";open.id="peerOpen";open.textContent="⇄ مزامنة أجهزتي";
+      open.addEventListener("click",()=>ui.scrollIntoView({behavior:"smooth",block:"start"}));
+      actions.appendChild(open);
+    }
     const check=async()=>{try{await identity();ui.hidden=main.hidden;}catch{reset();ui.hidden=true;}};
     setInterval(check,3000);check();
   }
