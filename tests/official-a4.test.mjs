@@ -31,3 +31,30 @@ test('A4 official header, account profile and preserved evidence',()=>{
 test('no document uploads added by A4 work',()=>{
  assert.doesNotMatch(script,/\/api\/documents\/upload|\/api\/a4\/upload/);
 });
+
+test('directory selection includes all 16 primary administrations and local subdivisions',()=>{
+ const data=JSON.parse(readFileSync(new URL('../data/department-programs-1448.json',import.meta.url),'utf8'));
+ assert.equal(data.directories.heads.length,16);
+ assert.equal(data.departments.length,47);
+ assert.equal(data.nationalPrograms.length,10);
+ assert.equal(data.departments.find(x=>x.name==='مكة المكرمة').weeks.length,18);
+ assert.equal(data.departments.find(x=>x.name==='عسير').weeks.length,1);
+ for(const dep of data.departments){
+  assert.ok(['weekly','partial','reference_only','unavailable'].includes(dep.status));
+  if(dep.status==='unavailable')assert.equal(dep.weeks.length,0);
+ }
+});
+test('regional scope, program search, stage profile and local source review are present',()=>{
+ assert.match(page,/id="programScope"/);
+ assert.match(page,/id="programSearch"/);
+ assert.match(page,/id="profileStage"/);
+ assert.match(page,/id="localPlanFile"/);
+ assert.match(page,/id="localProgramText"/);
+ assert.match(page,/id="programCustom"/);
+ assert.match(script,/const DEPT_REF=/);
+ assert.match(script,/const regionalByName=/);
+ assert.match(script,/function availablePrograms\(/);
+ assert.match(script,/localStorage\.setItem\(localProgramsKey\(\)/);
+ assert.match(script,/indexedDB\.open\('athat-docs-planfiles-v1-'/);
+ assert.doesNotMatch(script,/\/api\/plans\/upload/);
+});
