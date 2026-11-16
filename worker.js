@@ -39,7 +39,7 @@ export default {async fetch(request,env){
  }
 
 
- if(path==="/api/students"||path==="/api/students/import"||path==="/api/students/360"||path==="/api/students/insights"){
+ if(path==="/api/students"||path==="/api/students/import"||path==="/api/students/360"||path==="/api/students/insights"||path==="/api/students/a4"||path==="/api/students/a4-sync"||path==="/api/students/a4-record"){
   const token=cookieValue(request);if(!token)return json({ok:false,code:"UNAUTHORIZED"},401);
   if(request.method==="POST"){
    if(request.headers.get("origin")!==url.origin)return json({ok:false,code:"ORIGIN_REQUIRED"},403);
@@ -116,7 +116,66 @@ export default {async fetch(request,env){
     }
     return json({ok:true,added,skipped});
    }
-   if(path==="/api/students/360"){
+
+   if(path==="/api/students/a4"){
+    if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+    const key=url.searchParams.get("key")||"";
+    const sql="SELECT source_record_id,student_key,title,kind,status,date_text,copied_at FROM docs_a4_records WHERE user_id=?1"+(key?" AND student_key=?2":"")+" ORDER BY date_text DESC,source_record_id LIMIT 1200";
+    if(key&&!/^athat:[\w-]{10,}$/.test(key))return json({ok:false,code:"INVALID_STUDENT"},400);
+    const q=env.DOCS_DB.prepare(sql);const data=await (key?q.bind(uid,key):q.bind(uid)).all();
+    return json({ok:true,records:data.results||[]});
+   }
+   if(path==="/api/students/a4-record"){
+    if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+    const sourceId=url.searchParams.get("id")||"";
+    if(!sourceId||sourceId.length>250)return json({ok:false,code:"INVALID_RECORD"},400);
+    const row=await env.DOCS_DB.prepare("SELECT source_record_id,student_key,title,kind,status,date_text,payload_json FROM docs_a4_records WHERE user_id=?1 AND source_record_id=?2").bind(uid,sourceId).first();
+    if(!row)return json({ok:false,code:"NOT_FOUND"},404);
+    return json({ok:true,record:{source_record_id:row.source_record_id,student_key:row.student_key,title:row.title,kind:row.kind,status:row.status,date_text:row.date_text,payload:JSON.parse(row.payload_json)}});
+   }
+   if(path==="/api/students/a4-sync"){
+    if(request.method!=="POST")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+    const raw=await request.text();if(raw.length>2000)return json({ok:false,code:"BODY_TOO_LARGE"},413);
+    let args;try{args=JSON.parse(raw)}catch{return json({ok:false,code:"INVALID_JSON"},400)}
+    const offset=Number(args?.offset||0);
+    if(!Number.isInteger(offset)||offset<0||offset>5000)return json({ok:false,code:"INVALID_OFFSET"},400);
+    const matchSql=[
+      "WITH students AS (",
+      "SELECT user_id,source_record_id sid,json_extract(payload_json,'$.id') pid,json_extract(payload_json,'$.student_no') student_no",
+      "FROM athat_import_records WHERE user_id=?1 AND source_table='students'",
+      "),reports AS (",
+      "SELECT user_id,source_record_id,payload_json,source_updated_at,",
+      "json_extract(payload_json,'$.student_id') direct_id,",
+      "json_extract(payload_json,'$.form_fields.student') form_id,",
+      "json_extract(payload_json,'$.migration_original.student_id') legacy_id,",
+      "json_extract(payload_json,'$.migration_original.student_no') legacy_no",
+      "FROM athat_import_records WHERE user_id=?1 AND source_table='reports'",
+      "AND (json_extract(payload_json,'$.report_type') LIKE '%A4%' OR target_section='النماذج الموحدة A4')",
+      "),unique_matches AS (",
+      "SELECT r.source_record_id,MIN(s.sid) sid",
+      "FROM reports r JOIN students s ON s.user_id=r.user_id AND (",
+      "s.sid IN (r.direct_id,r.form_id,r.legacy_id) OR s.pid IN (r.direct_id,r.form_id,r.legacy_id)",
+      "OR (s.student_no IS NOT NULL AND s.student_no<>'' AND s.student_no=r.legacy_no)",
+      ") GROUP BY r.source_record_id HAVING COUNT(DISTINCT s.sid)=1",
+      ") SELECT r.source_record_id,'athat:'||u.sid student_key,r.payload_json,r.source_updated_at",
+      "FROM unique_matches u JOIN reports r ON r.source_record_id=u.source_record_id",
+      "ORDER BY r.source_record_id LIMIT 4 OFFSET ?2"
+    ].join(" ");
+    const matches=(await env.SOURCE_DB.prepare(matchSql).bind(uid,offset).all()).results||[];
+    const writeSql="INSERT INTO docs_a4_records (user_id,source_record_id,student_key,title,kind,status,date_text,source_updated_at,payload_json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(user_id,source_record_id) DO UPDATE SET student_key=excluded.student_key,title=excluded.title,kind=excluded.kind,status=excluded.status,date_text=excluded.date_text,source_updated_at=excluded.source_updated_at,payload_json=excluded.payload_json,copied_at=CURRENT_TIMESTAMP";
+    let saved=0;
+    for(const r of matches){
+     const p=JSON.parse(r.payload_json);
+     const title=String(p.title||p.template_label||'نموذج A4').slice(0,220);
+     const kind=String(p.template_label||p.template_type||p.report_type||'A4').slice(0,130);
+     const status=String(p.work_status||p.status||'').slice(0,70);
+     const date=String(p.report_date||p.created_at||'').slice(0,40);
+     await env.DOCS_DB.prepare(writeSql).bind(uid,r.source_record_id,r.student_key,title,kind,status,date,r.source_updated_at||'',r.payload_json).run();
+     saved++;
+    }
+    return json({ok:true,saved,nextOffset:offset+matches.length,done:matches.length<4});
+   }
+      if(path==="/api/students/360"){
     if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
     const key=url.searchParams.get("key")||"";
     if(key.length>170||!key)return json({ok:false,code:"INVALID_STUDENT"},400);
