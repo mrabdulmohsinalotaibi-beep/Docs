@@ -38,3 +38,9 @@ test('auto-sync after both devices approve; idempotent conflict names',()=>{
  assert.match(peer,/const conflictId="sync-"/);
  assert.match(peer,/store\.get\(conflictId\)/);
 });
+
+test('worker embeds exactly the current peer-sync client',()=>{
+ const match=worker.match(/const PEER_SYNC=(.+);\\nconst UPSTREAM=/);
+ assert.ok(match,'embedded client should exist');
+ assert.equal(JSON.parse(match[1]),peer);
+});
