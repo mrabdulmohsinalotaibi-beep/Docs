@@ -12,14 +12,102 @@ async function upstream(path,method,body,token,env){
  const response=await r.text();if(response.length>150000)return{status:502,data:{ok:false,code:"UPSTREAM_TOO_LARGE"}};
  try{return{status:r.status,data:JSON.parse(response)}}catch{return{status:502,data:{ok:false,code:"UPSTREAM_INVALID_JSON"}}}
 }
+
+const DOCS_KV_PREFIX="dsk_";
+const DOCS_KV_AUTH_TTL=30*24*60*60;
+async function docsSha(input){
+ const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(String(input))));
+ return Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
+}
+function docsEmail(text){return String(text||"").trim().toLowerCase()}
+function docsRandom(){const a=new Uint8Array(32);crypto.getRandomValues(a);return DOCS_KV_PREFIX+Array.from(a,b=>b.toString(16).padStart(2,"0")).join("")}
+async function docsPassword(password,salt,iterations=150000){
+ const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveBits"]);
+ const bits=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:Uint8Array.from(salt.match(/.{2}/g).map(v=>parseInt(v,16))),iterations},key,256));
+ return Array.from(bits,b=>b.toString(16).padStart(2,"0")).join("");
+}
+function docsEqual(a,b){if(typeof a!=="string"||typeof b!=="string"||a.length!==b.length)return false;let v=0;for(let i=0;i<a.length;i++)v|=a.charCodeAt(i)^b.charCodeAt(i);return v===0}
+async function docsAuthRecord(env,email){return env.DOCS_AUTH_KV.get("account:"+await docsSha(docsEmail(email)),"json")}
+async function docsKvSession(env,token){
+ if(typeof token!=="string"||!/^dsk_[a-f0-9]{64}$/.test(token))return null;
+ const session=await env.DOCS_AUTH_KV.get("session:"+await docsSha(token),"json");
+ if(!session||!/^usr_[\w-]{10,}$/.test(session.user?.id||""))return null;
+ return session.user;
+}
+async function docsIdent(request,env){
+ const token=cookieValue(request);if(!token)return null;
+ if(token.startsWith(DOCS_KV_PREFIX))return docsKvSession(env,token);
+ const legacy=await upstream("/v1/auth/me","GET",null,token,env);
+ return legacy.status===200&&legacy.data?.ok===true?legacy.data.user:null;
+}
+async function docsIssueSession(env,user){
+ const token=docsRandom();
+ await env.DOCS_AUTH_KV.put("session:"+await docsSha(token),JSON.stringify({user}),{expirationTtl:DOCS_KV_AUTH_TTL});
+ return token;
+}
+async function docsKvAuthRoute(request,env,path,data,token){
+ if(path==="/api/auth/me"){
+  const user=await docsIdent(request,env);
+  return user?json({ok:true,user}):json({ok:false,code:"UNAUTHORIZED"},401,{"set-cookie":cookie("",true)});
+ }
+ if(path==="/api/auth/logout"){
+  if(token.startsWith(DOCS_KV_PREFIX))await env.DOCS_AUTH_KV.delete("session:"+await docsSha(token));
+  else if(token){try{await upstream("/v1/auth/logout","POST",{},token,env)}catch{}}
+  return json({ok:true},200,{"set-cookie":cookie("",true)});
+ }
+ const email=docsEmail(data?.loginIdentifier);
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof data?.password!=="string"||data.password.length<8||data.password.length>1024)return json({ok:false,code:"INVALID_EMAIL_OR_PASSWORD"},400);
+ const key="account:"+await docsSha(email);
+ let account=await env.DOCS_AUTH_KV.get(key,"json");
+ if(path==="/api/auth/register"){
+  // Existing records must never become claimable via a new unverified account.
+  // New signups are staged until email ownership verification is available.
+  return json({ok:false,code:"EMAIL_VERIFICATION_REQUIRED",message:"إنشاء الحسابات الجديدة يحتاج تحققًا من البريد، وهو غير مفعّل بعد في خدمة المستندات المنفصلة."},503);
+ }
+ if(path!=="/api/auth/login")return json({ok:false,code:"NOT_FOUND"},404);
+ const throttleKey="attempt:"+await docsSha(email);
+ const now=Date.now(),state=await env.DOCS_AUTH_KV.get(throttleKey,"json");
+ if(state?.until>now)return json({ok:false,code:"AUTH_RATE_LIMITED",message:"تم تجاوز عدد المحاولات المسموح مؤقتًا."},429);
+ const reject=async()=>{
+  const failures=(state?.failures||0)+1;
+  await env.DOCS_AUTH_KV.put(throttleKey,JSON.stringify({failures,until:failures>=7?now+15*60*1000:0}),{expirationTtl:900});
+  return json({ok:false,code:"INVALID_CREDENTIALS",message:"البريد الإلكتروني أو كلمة المرور غير صحيحة."},401);
+ };
+ if(account&&account.status==="active"){
+  const digest=await docsPassword(data.password,account.salt,account.iterations);
+  if(!docsEqual(digest,account.passwordHash))return reject();
+  await env.DOCS_AUTH_KV.delete(throttleKey);
+  const user={id:account.id,name:account.name,loginIdentifier:account.email};
+  return json({ok:true,user,authMode:"independent"},200,{"set-cookie":cookie(await docsIssueSession(env,user))});
+ }
+ if(account?.status==="reserved")return json({ok:false,code:"ACCOUNT_MIGRATION_PENDING",message:"حسابك محفوظ للنقل الآمن. يلزم التحقق من كلمة المرور عبر الحساب القديم مرة واحدة بعد عودة خدمة الذات، ثم سيعمل الدخول مستقلًا."},503);
+ // Legacy login is used only once to prove ownership and migrate the account into independent KV.
+ let legacy;
+ try{legacy=await upstream("/v1/auth/login","POST",data,null,env)}
+ catch{return json({ok:false,code:"LEGACY_MIGRATION_UNAVAILABLE",message:"تعذر التحقق من الحساب القديم حاليًا. سيصبح الدخول مستقلًا بعد نقل بيانات التحقق بطريقة آمنة."},503)}
+ if(legacy.status!==200||legacy.data?.ok!==true||!legacy.data?.user?.id||!legacy.data?.authToken){
+  if(legacy.status===401)return reject();
+  return json({ok:false,code:legacy.data?.code||"LEGACY_MIGRATION_UNAVAILABLE",message:legacy.data?.message||"تعذر إكمال نقل بيانات تسجيل الدخول إلى المستندات."},legacy.status||503);
+ }
+ const user=legacy.data.user;
+ if(!/^usr_[\w-]{10,}$/.test(user.id))return json({ok:false,code:"INVALID_LEGACY_USER"},502);
+ const salt=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
+ const record={id:user.id,email,name:String(user.name||"مستخدم المستندات"),passwordHash:await docsPassword(data.password,salt),salt,iterations:150000,status:"active",migratedAt:new Date().toISOString()};
+ await env.DOCS_AUTH_KV.put(key,JSON.stringify(record));
+ await env.DOCS_AUTH_KV.delete(throttleKey);
+ try{await upstream("/v1/auth/logout","POST",{},legacy.data.authToken,env)}catch{}
+ const safeUser={id:record.id,name:record.name,loginIdentifier:record.email};
+ return json({ok:true,user:safeUser,authMode:"independent",migrated:true},200,{"set-cookie":cookie(await docsIssueSession(env,safeUser))});
+}
+
 export default {async fetch(request,env){
  const url=new URL(request.url),path=url.pathname;
  if(path==="/icon.png"||path==="/favicon.ico"||path==="/apple-touch-icon.png"){const bin=Uint8Array.from(atob(BRAND_ICON),c=>c.charCodeAt(0));return new Response(bin,{headers:{"content-type":"image/png","cache-control":"public, max-age=604800","x-content-type-options":"nosniff"}})}
  if(path==="/peer-sync.js")return new Response(PEER_SYNC,{headers:{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
  if(path==="/health"){
   if(url.searchParams.get("check")==="auth"){
-   try{const r=await upstream("/health","GET",null,null,env);return json({ok:true,authReachable:r.status===200&&r.data?.active===true,app:"ATHAT Docs"},{200:200}[200]);}
-   catch{return json({ok:true,authReachable:false,app:"ATHAT Docs"});}
+   try{await env.DOCS_AUTH_KV.get("health");return json({ok:true,authReachable:true,authMode:"independent-kv",app:"ATHAT Docs"});}
+   catch{return json({ok:true,authReachable:false,authMode:"independent-kv",app:"ATHAT Docs"});}
   }
   return json({ok:true,app:"ATHAT Docs",auth:"email-password",storage:"account-local"});
  }
@@ -28,9 +116,8 @@ export default {async fetch(request,env){
   if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
   const token=cookieValue(request);if(!token)return json({ok:false,code:"UNAUTHORIZED"},401);
   try{
-   const auth=await upstream("/v1/auth/me","GET",null,token,env);
-   if(auth.status!==200||auth.data?.ok===false)return json({ok:false,code:"UNAUTHORIZED",message:"سجّل الدخول بحساب الذات أولًا."},401);
-   const user=auth.data?.user;
+   const user=await docsIdent(request,env);
+   if(!user)return json({ok:false,code:"UNAUTHORIZED",message:"سجّل الدخول بحساب مستندات الذات."},401);
    if(!user||typeof user.id!=="string"||!/^usr_[\w-]{10,}$/.test(user.id))return json({ok:false,code:"UNAUTHORIZED"},401);
    const sampleIds=[
     "direct-a4:attendance:9e8102ef-a739-45af-a8ef-a020bc894bd6",
@@ -53,9 +140,9 @@ export default {async fetch(request,env){
   }
   let uid="";
   try{
-   const auth=await upstream("/v1/auth/me","GET",null,token,env);
-   if(auth.status!==200||auth.data?.ok!==true||!/^usr_[\w-]{10,}$/.test(auth.data?.user?.id||""))return json({ok:false,code:"UNAUTHORIZED",message:"انتهت الجلسة، سجّل الدخول مجددًا."},401);
-   uid=auth.data.user.id;
+   const authUser=await docsIdent(request,env);
+   if(!authUser||!/^usr_[\w-]{10,}$/.test(authUser.id))return json({ok:false,code:"UNAUTHORIZED",message:"انتهت جلسة المستندات، سجّل الدخول مجددًا."},401);
+   uid=authUser.id;
   }catch{return json({ok:false,code:"AUTH_UNAVAILABLE",message:"تعذر التحقق من جلسة الحساب."},503)}
   try{
    const sourceSql="SELECT source_record_id,payload_json FROM athat_import_records WHERE user_id=?1 AND source_table='students' LIMIT 4000";
@@ -227,6 +314,9 @@ export default {async fetch(request,env){
   if(publicAction){
    if(typeof data.loginIdentifier!=="string"||data.loginIdentifier.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.loginIdentifier)||typeof data.password!=="string"||data.password.length<8||data.password.length>1024)return json({ok:false,code:"INVALID_EMAIL_OR_PASSWORD"},400);
    if(path==="/api/auth/register"&&(typeof data.name!=="string"||!data.name.trim()||data.name.length>120))return json({ok:false,code:"INVALID_NAME"},400);
+  }
+  if(path.startsWith("/api/auth/")){
+   try{return await docsKvAuthRoute(request,env,path,data,token)}catch(error){console.error("docs_auth_error",String(error?.message||"unknown"));return json({ok:false,code:"DOCS_AUTH_UNAVAILABLE",message:"تعذرت خدمة حسابات مستندات الذات مؤقتًا."},503)}
   }
   try{
    const res=await upstream(targets[path],request.method,data,publicAction?null:token,env);
