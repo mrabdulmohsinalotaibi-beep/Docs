@@ -109,14 +109,17 @@ test("WebRTC transfers documents with photos between two independent accounts' l
       r.onsuccess=()=>{const d=r.result;const q=d.transaction("documents").objectStore("documents").getAll();q.onsuccess=()=>{d.close();resolve(q.result.length>=2)}};
     })),{timeout:30000});
     const docsA=await getDocs(a),docsB=await getDocs(b);
-    console.log("P2P DEBUG",JSON.stringify({a:docsA.map(d=>d.id),b:docsB.map(d=>d.id),aStatus:await a.locator("#peerStatus").textContent(),bStatus:await b.locator("#peerStatus").textContent(),errors}));
     for(const docSet of [docsA,docsB]){
       assert.equal(docSet.length,2);
       assert.equal(docSet.find(x=>x.id==="a-1")?.photos[0],avatarPng);
       assert.equal(docSet.find(x=>x.id==="b-1")?.photos[0],avatarPng);
     }
     assert.deepEqual(errors,[]);
-    assert.equal(requests.filter(p=>p==="/api/auth/me").length<=6,true,"authentication must not be polled every 3 seconds");
+    // Intentional verification when pairing/sending is allowed; idle session must not poll.
+    const beforeIdle=requests.filter(p=>p==="/api/auth/me").length;
+    await new Promise(resolve=>setTimeout(resolve,4200));
+    const afterIdle=requests.filter(p=>p==="/api/auth/me").length;
+    assert.equal(afterIdle,beforeIdle,"session must not poll authentication in the background");
     assert.equal(requests.some(p=>/upload|documents/.test(p)),false);
     await ctxA.close();await ctxB.close();
   }finally{if(browser)await browser.close();await new Promise(resolve=>http.close(resolve))}
