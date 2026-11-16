@@ -38,6 +38,76 @@ export default {async fetch(request,env){
   }catch{return json({ok:false,code:"SAMPLE_UNAVAILABLE",message:"تعذر قراءة السجلات من الذات."},503)}
  }
 
+
+ if(path==="/api/students"||path==="/api/students/import"||path==="/api/students/360"){
+  const token=cookieValue(request);if(!token)return json({ok:false,code:"UNAUTHORIZED"},401);
+  if(request.method==="POST"){
+   if(request.headers.get("origin")!==url.origin)return json({ok:false,code:"ORIGIN_REQUIRED"},403);
+   if(!(request.headers.get("content-type")||"").toLowerCase().startsWith("application/json"))return json({ok:false,code:"JSON_REQUIRED"},415);
+  }
+  let uid="";
+  try{
+   const auth=await upstream("/v1/auth/me","GET",null,token,env);
+   if(auth.status!==200||auth.data?.ok!==true||!/^usr_[\w-]{10,}$/.test(auth.data?.user?.id||""))return json({ok:false,code:"UNAUTHORIZED",message:"انتهت الجلسة، سجّل الدخول مجددًا."},401);
+   uid=auth.data.user.id;
+  }catch{return json({ok:false,code:"AUTH_UNAVAILABLE",message:"تعذر التحقق من جلسة الحساب."},503)}
+  try{
+   const sourceSql="SELECT source_record_id,payload_json FROM athat_import_records WHERE user_id=?1 AND source_table='students' LIMIT 4000";
+   const readRoster=async()=>{const [orig,extra]=await Promise.all([env.SOURCE_DB.prepare(sourceSql).bind(uid).all(),env.DOCS_DB.prepare("SELECT student_key,name,student_no,national_id,stage,grade,classroom,guardian_name,guardian_phone,nationality,status,health_status,social_status FROM docs_students WHERE user_id=?1 ORDER BY name LIMIT 4000").bind(uid).all()]);const originals=(orig.results||[]).map(r=>{const p=JSON.parse(r.payload_json);return {key:"athat:"+String(r.source_record_id),name:String(p.full_name||p.student_name||""),student_no:String(p.student_no||""),national_id:String(p.national_id||""),stage:String(p.stage||""),grade:String(p.grade||""),classroom:String(p.classroom||""),guardian_name:String(p.guardian_name||""),guardian_phone:String(p.guardian_phone||""),nationality:String(p.nationality||""),status:String(p.status||""),health_status:String(p.health_status||""),social_status:String(p.social_status||""),source:"athat"}}).filter(x=>x.name);const additions=(extra.results||[]).map(p=>({...p,key:p.student_key,source:"docs"}));return {originals,additions,students:[...originals,...additions]}}
+   if(path==="/api/students"){
+    if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+    const {students,originals,additions}=await readRoster();
+    return json({ok:true,students,sourceCount:originals.length,importedCount:additions.length});
+   }
+   if(path==="/api/students/import"){
+    if(request.method!=="POST")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+    const raw=await request.text();if(raw.length>95000)return json({ok:false,code:"BODY_TOO_LARGE"},413);
+    let parsed;try{parsed=JSON.parse(raw)}catch{return json({ok:false,code:"INVALID_JSON"},400)}
+    if(!Array.isArray(parsed?.students)||parsed.students.length<1||parsed.students.length>80)return json({ok:false,code:"INVALID_ROWS"},400);
+    const {students}=await readRoster();
+    const normalize=s=>String(s||"").trim().replace(/\s+/g," ").toLowerCase();
+    const norms={nos:new Set(students.map(x=>normalize(x.student_no)).filter(Boolean)),ids:new Set(students.map(x=>normalize(x.national_id)).filter(Boolean)),compound:new Set(students.map(x=>[x.name,x.grade,x.classroom].map(normalize).join("|")))};
+    let added=0,skipped=0;
+    for(const rawStudent of parsed.students){
+      if(!rawStudent||typeof rawStudent!=="object"||Array.isArray(rawStudent))return json({ok:false,code:"INVALID_ROW"},400);
+      const columns=["name","student_no","national_id","stage","grade","classroom","guardian_name","guardian_phone","nationality","status","health_status","social_status"];
+      const s={};for(const k of columns){if(rawStudent[k]!==undefined&&typeof rawStudent[k]!=="string")return json({ok:false,code:"INVALID_FIELD"},400);s[k]=String(rawStudent[k]||"").trim().slice(0,k==="name"?180:250)}
+      if(!s.name||s.name.length<3){skipped++;continue}
+      const no=normalize(s.student_no),national=normalize(s.national_id),compound=[s.name,s.grade,s.classroom].map(normalize).join("|");
+      if((no&&norms.nos.has(no))||(national&&norms.ids.has(national))||(!no&&!national&&norms.compound.has(compound))){skipped++;continue}
+      const identity=no?"n:"+no:national?"i:"+national:"c:"+compound;
+      const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(identity));const key="docs:"+[...new Uint8Array(digest)].slice(0,20).map(b=>b.toString(16).padStart(2,"0")).join("");
+      const result=await env.DOCS_DB.prepare("INSERT OR IGNORE INTO docs_students (user_id,student_key,name,student_no,national_id,stage,grade,classroom,guardian_name,guardian_phone,nationality,status,health_status,social_status,source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,'import')").bind(uid,key,...columns.map(k=>s[k])).run();
+      if((result.meta?.changes||0)>0){added++;if(no)norms.nos.add(no);if(national)norms.ids.add(national);norms.compound.add(compound)}else skipped++;
+    }
+    return json({ok:true,added,skipped});
+   }
+   if(path==="/api/students/360"){
+    if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+    const key=url.searchParams.get("key")||"";
+    if(key.length>170||!key)return json({ok:false,code:"INVALID_STUDENT"},400);
+    const {students}=await readRoster();
+    const student=students.find(s=>s.key===key);
+    if(!student)return json({ok:false,code:"STUDENT_NOT_FOUND"},404);
+    const id=key.startsWith("athat:")?key.slice(6):"",no=student.student_no;
+    const linkedTables=["attendance","behavior","interviews","counseling_cases","referrals","free_documents","reports","comprehensive_records"];
+    let records=[];
+    if(id||no){
+      const q="SELECT source_table,source_record_id,payload_json FROM athat_import_records WHERE user_id=?1 AND source_table IN ('attendance','behavior','interviews','counseling_cases','referrals','free_documents','reports','comprehensive_records') AND (json_extract(payload_json,'$.student_id')=?2 OR json_extract(payload_json,'$.migration_original.student_id')=?2 OR json_extract(payload_json,'$.student_no')=?3 OR json_extract(payload_json,'$.migration_original.student_no')=?3) LIMIT 200";
+      const rows=await env.SOURCE_DB.prepare(q).bind(uid,id||"\u0001",no||"\u0001").all();
+      const titleFields=["title","topic","name","case_type","observation","reason","comprehensive_title","report_type","action"];
+      for(const r of rows.results||[]){
+       const p=JSON.parse(r.payload_json),base=typeof p.migration_original==="object"&&p.migration_original?p.migration_original:p;
+       const field=titleFields.map(k=>p[k]||base[k]).find(v=>typeof v==="string"&&v.trim())||"سجل مرتبط";
+       const summary=[p.summary,p.notes,p.action,p.content,base.notes,base.action].find(v=>typeof v==="string"&&v.trim())||"";
+       records.push({source_table:r.source_table,record_id:r.source_record_id,section:r.source_table,title:String(field).slice(0,240),summary:String(summary).slice(0,900),date:String(p.idate||p.adate||p.bdate||p.report_date||p.created_at||base.created_at||"").slice(0,30)});
+      }
+    }
+    return json({ok:true,student:{key:student.key,name:student.name},records,limited:records.length>=200});
+   }
+  }catch{return json({ok:false,code:"STUDENT_DATA_UNAVAILABLE",message:"تعذر قراءة دليل الطلاب أو المزامنة. لم تُعدّل بيانات الذات."},503)}
+ }
+
  if(path.startsWith("/api/")){
   const origin=request.headers.get("origin");
   if(request.method==="POST"&&origin!==url.origin)return json({ok:false,code:"ORIGIN_REQUIRED"},403);
