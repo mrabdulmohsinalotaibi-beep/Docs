@@ -53,11 +53,45 @@ export default {async fetch(request,env){
   }catch{return json({ok:false,code:"AUTH_UNAVAILABLE",message:"تعذر التحقق من جلسة الحساب."},503)}
   try{
    const sourceSql="SELECT source_record_id,payload_json FROM athat_import_records WHERE user_id=?1 AND source_table='students' LIMIT 4000";
-   const readRoster=async()=>{const [orig,extra]=await Promise.all([env.SOURCE_DB.prepare(sourceSql).bind(uid).all(),env.DOCS_DB.prepare("SELECT student_key,name,student_no,national_id,stage,grade,classroom,guardian_name,guardian_phone,nationality,status,health_status,social_status FROM docs_students WHERE user_id=?1 ORDER BY name LIMIT 4000").bind(uid).all()]);const originals=(orig.results||[]).map(r=>{const p=JSON.parse(r.payload_json);return {key:"athat:"+String(r.source_record_id),name:String(p.full_name||p.student_name||""),student_no:String(p.student_no||""),national_id:String(p.national_id||""),stage:String(p.stage||""),grade:String(p.grade||""),classroom:String(p.classroom||""),guardian_name:String(p.guardian_name||""),guardian_phone:String(p.guardian_phone||""),nationality:String(p.nationality||""),status:String(p.status||""),health_status:String(p.health_status||""),social_status:String(p.social_status||""),source:"athat"}}).filter(x=>x.name);const additions=(extra.results||[]).map(p=>({...p,key:p.student_key,source:"docs"}));return {originals,additions,students:[...originals,...additions]}}
+   const readRoster=async()=>{const [orig,extra]=await Promise.all([env.SOURCE_DB.prepare(sourceSql).bind(uid).all(),env.DOCS_DB.prepare("SELECT student_key,name,student_no,national_id,stage,grade,classroom,guardian_name,guardian_phone,nationality,status,health_status,social_status FROM docs_students WHERE user_id=?1 ORDER BY name LIMIT 4000").bind(uid).all()]);const originals=(orig.results||[]).map(r=>{const p=JSON.parse(r.payload_json);return {key:"athat:"+String(r.source_record_id),name:String(p.full_name||p.student_name||""),student_no:String(p.student_no||""),national_id:String(p.national_id||""),stage:String(p.stage||""),grade:String(p.grade||""),classroom:String(p.classroom||""),guardian_name:String(p.guardian_name||""),guardian_phone:String(p.guardian_phone||""),nationality:String(p.nationality||""),status:String(p.status||""),health_status:String(p.health_status||""),social_status:String(p.social_status||""),special_care_tags:Array.isArray(p.special_care_tags)?p.special_care_tags.filter(t=>typeof t==="string").slice(0,30):[],source:"athat"}}).filter(x=>x.name);const additions=(extra.results||[]).map(p=>({...p,key:p.student_key,source:"docs"}));return {originals,additions,students:[...originals,...additions]}}
    if(path==="/api/students"){
     if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
     const {students,originals,additions}=await readRoster();
     return json({ok:true,students,sourceCount:originals.length,importedCount:additions.length});
+   }
+   if(path==="/api/students/insights"){
+    if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+    const {students}=await readRoster();
+    const byId=new Map(),byNumber=new Map(),insights={};
+    const keys=["attendance","behavior","interviews","counseling_cases","referrals"];
+    for(const st of students){
+      insights[st.key]={absence:0,late:0,behavior:0,positive:0,cases:0,interviews:0,referrals:0};
+      if(st.key.startsWith("athat:"))byId.set(st.key.slice(6),st.key);
+      if(st.student_no){const number=String(st.student_no).trim();if(byNumber.has(number))byNumber.set(number,null);else byNumber.set(number,st.key)}
+    }
+    const q="SELECT source_table, json_extract(payload_json,'$.student_id') AS sid, json_extract(payload_json,'$.student_no') AS sno, json_extract(payload_json,'$.migration_original.student_id') AS legacy_sid, json_extract(payload_json,'$.migration_original.student_no') AS legacy_sno, json_extract(payload_json,'$.case_type') AS case_type, json_extract(payload_json,'$.observation') AS observation, json_extract(payload_json,'$.behavior_type') AS behavior_type, json_extract(payload_json,'$.is_positive') AS is_positive, json_extract(payload_json,'$.count_days') AS days FROM athat_import_records WHERE user_id=?1 AND source_table IN ('attendance','behavior','interviews','counseling_cases','referrals') LIMIT 4000";
+    const found=(await env.SOURCE_DB.prepare(q).bind(uid).all()).results||[];
+    let linked=0;
+    for(const r of found){
+      const candidates=[String(r.sid||""),String(r.legacy_sid||"")].filter(Boolean).map(x=>byId.get(x)).filter(Boolean);
+      const nos=[String(r.sno||""),String(r.legacy_sno||"")].filter(Boolean).map(x=>byNumber.get(x)).filter(Boolean);
+      const matches=[...new Set([...candidates,...nos])];
+      if(matches.length!==1)continue;
+      const obj=insights[matches[0]];if(!obj)continue;linked++;
+      const type=r.source_table;
+      if(type==="attendance"){
+        const category=String(r.case_type||"");
+        const count=Math.max(1,Math.min(365,Number(r.days)||1));
+        if(/تأخر|تأخير|صباح/.test(category))obj.late+=count;
+        else if(/غياب|absen/i.test(category)||!category)obj.absence+=count;
+      }else if(type==="behavior"){
+        if(r.is_positive===1||r.is_positive==="1"||/إيجابي|تعزيز|تكريم/.test(String(r.behavior_type||"")+" "+String(r.observation||"")))obj.positive++;
+        else obj.behavior++;
+      }else if(type==="interviews")obj.interviews++;
+      else if(type==="counseling_cases")obj.cases++;
+      else if(type==="referrals")obj.referrals++;
+    }
+    return json({ok:true,insights,processed:found.length,linked});
    }
    if(path==="/api/students/import"){
     if(request.method!=="POST")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
