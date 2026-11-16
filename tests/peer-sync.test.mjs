@@ -21,3 +21,12 @@ test('explicit user approval and conflict-safe import',()=>{
  assert.match(peer,/if \(!existing\)/);
  assert.match(peer,/if \(msg\.user!==accountId\)/);
 });
+
+test('blocks transfer until users verify matching WebRTC fingerprints',()=>{
+ assert.match(peer,/async function pairingCode\(\)/);
+ assert.match(peer,/crypto\.subtle\.digest\("SHA-256"/);
+ assert.match(peer,/if\(!paired\)throw Error/);
+ assert.match(peer,/if\(!paired \|\| sending/);
+ assert.match(peer,/el\("peerVerify"\)\.onclick/);
+ assert.match(peer,/paired=true/);
+});
