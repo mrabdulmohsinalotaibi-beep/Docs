@@ -15,3 +15,16 @@ jobs:
       - run: node --check worker.js
       - run: node --check peer-sync.js
       - run: node --test tests/peer-sync.test.mjs
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser harness
+        run: npm install --no-save --ignore-scripts playwright-core@1.58.2
+      - name: Find Chrome
+        run: which google-chrome || which google-chrome-stable
+      - name: WebRTC two-browser smoke test
+        run: node --test tests/p2p-browser.test.mjs
