@@ -1,0 +1,17 @@
+name: Docs peer-sync checks
+on:
+  push:
+    branches: [feature/p2p-sync-after-a4]
+  pull_request:
+    paths: [worker.js, peer-sync.js, tests/peer-sync.test.mjs, .github/workflows/peer-sync-check.yml]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check worker.js
+      - run: node --check peer-sync.js
+      - run: node --test tests/peer-sync.test.mjs
