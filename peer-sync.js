@@ -235,7 +235,7 @@
     // This avoids 28,800 redundant requests per day per open browser tab.
     document.addEventListener("athat-docs-login",event=>{
       const nextId=String(event.detail?.userId||"");
-      if(!/^usr_[\\w-]{10,}$/.test(nextId)){reset();ui.hidden=true;return;}
+      if(!/^usr_[\w-]{10,}$/.test(nextId)){reset();ui.hidden=true;return;}
       if(accountId && nextId!==accountId)reset();
       accountId=nextId;ui.hidden=false;
     });
