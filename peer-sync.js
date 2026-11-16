@@ -89,7 +89,7 @@
   }
   async function pairingCode() {
     if(!pc?.localDescription || !pc?.remoteDescription)throw Error("أكمل تبادل رموز الاتصال أولًا.");
-    const regex=/a=fingerprint:sha-256\\s+([0-9A-F:]+)/i;
+    const regex=/a=fingerprint:sha-256\s+([0-9A-F:]+)/i;
     const local=pc.localDescription.sdp.match(regex)?.[1]?.toUpperCase();
     const remote=pc.remoteDescription.sdp.match(regex)?.[1]?.toUpperCase();
     if(!local || !remote || local===remote)throw Error("تعذر التحقق من هوية اتصال WebRTC.");
