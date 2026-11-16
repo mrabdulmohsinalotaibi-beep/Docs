@@ -222,7 +222,8 @@
   function attach(){
     const main=document.getElementById("appMain");
     if(!main)return;
-    main.appendChild(ui);
+    const hero=main.querySelector(".hero");
+    if(hero)hero.insertAdjacentElement("afterend",ui); else main.appendChild(ui);
     const actions=main.querySelector(".hero .actions");
     if(actions && !document.getElementById("peerOpen")){
       const open=document.createElement("button");
@@ -230,8 +231,17 @@
       open.addEventListener("click",()=>ui.scrollIntoView({behavior:"smooth",block:"start"}));
       actions.appendChild(open);
     }
-    const check=async()=>{try{await identity();ui.hidden=main.hidden;}catch{reset();ui.hidden=true;}};
-    setInterval(check,3000);check();
+    // The main app emits these events on login and logout: no 3-second auth polling.
+    // This avoids 28,800 redundant requests per day per open browser tab.
+    document.addEventListener("athat-docs-login",event=>{
+      const nextId=String(event.detail?.userId||"");
+      if(!/^usr_[\\w-]{10,}$/.test(nextId)){reset();ui.hidden=true;return;}
+      if(accountId && nextId!==accountId)reset();
+      accountId=nextId;ui.hidden=false;
+    });
+    document.addEventListener("athat-docs-logout",()=>{reset();accountId="";ui.hidden=true;});
+    if(!main.hidden)identity().then(()=>{ui.hidden=false;}).catch(()=>{reset();ui.hidden=true;});
+
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",attach);else attach();
 })();
