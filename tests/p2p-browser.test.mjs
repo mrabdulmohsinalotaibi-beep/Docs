@@ -66,6 +66,12 @@ test("WebRTC transfers documents with photos between two independent accounts' l
     a.on("pageerror",e=>errors.push("A:"+e.message));
     b.on("pageerror",e=>errors.push("B:"+e.message));
     for(const page of [a,b]){
+      // Use host-only ICE in CI. The application still uses STUN in production.
+      await page.addInitScript(()=>{
+        const Native=window.RTCPeerConnection;
+        window.RTCPeerConnection=function(cfg){return new Native({...cfg,iceServers:[]});};
+        window.RTCPeerConnection.prototype=Native.prototype;
+      });
       page.on("dialog",async d=>{
         if(d.message().includes("إعادة تحميل الصفحة"))await d.dismiss();
         else await d.accept();
@@ -77,11 +83,13 @@ test("WebRTC transfers documents with photos between two independent accounts' l
     await seed(a,fakeDocument("a-1","مستند الجهاز الأول"));
     await seed(b,fakeDocument("b-1","مستند الجهاز الثاني"));
     await a.locator("#peerOffer").click();
-    await a.waitForFunction(()=>document.querySelector("#peerOutgoing").value.length>50);
+    try{await a.waitForFunction(()=>document.querySelector("#peerOutgoing").value.length>50,null,{timeout:28000});}
+    catch(err){throw Error("Offer failed: "+await a.locator("#peerStatus").textContent()+" / "+errors.join(" | ")+" / "+err.message)}
     const offer=await a.locator("#peerOutgoing").inputValue();
     await b.locator("#peerIncoming").fill(offer);
     await b.locator("#peerAnswer").click();
-    await b.waitForFunction(()=>document.querySelector("#peerOutgoing").value.length>50);
+    try{await b.waitForFunction(()=>document.querySelector("#peerOutgoing").value.length>50,null,{timeout:28000});}
+    catch(err){throw Error("Answer failed: "+await b.locator("#peerStatus").textContent()+" / "+errors.join(" | ")+" / "+err.message)}
     const answer=await b.locator("#peerOutgoing").inputValue();
     await a.locator("#peerIncoming").fill(answer);
     await a.locator("#peerFinish").click();
