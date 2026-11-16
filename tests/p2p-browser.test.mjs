@@ -100,15 +100,21 @@ test("WebRTC transfers documents with photos between two independent accounts' l
     assert.equal(codeA,codeB,"fingerprint confirmation codes must match");
     await a.locator("#peerVerify").click();
     await b.locator("#peerVerify").click();
-    await a.waitForFunction(async()=> (await new Promise(resolve=>{
-      const r=indexedDB.open("athat-docs-unified-v2-"+ "usr_aaaaaaaaaaaaaaaaaaaa");
-      r.onsuccess=()=>{const d=r.result;const q=d.transaction("documents").objectStore("documents").getAll();q.onsuccess=()=>{d.close();resolve(q.result.length>=2)}};
-    })),{timeout:30000});
-    await b.waitForFunction(async()=> (await new Promise(resolve=>{
-      const r=indexedDB.open("athat-docs-unified-v2-"+ "usr_aaaaaaaaaaaaaaaaaaaa");
-      r.onsuccess=()=>{const d=r.result;const q=d.transaction("documents").objectStore("documents").getAll();q.onsuccess=()=>{d.close();resolve(q.result.length>=2)}};
-    })),{timeout:30000});
-    const docsA=await getDocs(a),docsB=await getDocs(b);
+    // Poll both IndexedDB stores from the test process: avoids checking stale
+    // page-render state while the two incoming transactions commit.
+    let docsA=[],docsB=[];
+    const deadline=Date.now()+30000;
+    do{
+      docsA=await getDocs(a);docsB=await getDocs(b);
+      if(docsA.length>=2 && docsB.length>=2)break;
+      await new Promise(resolve=>setTimeout(resolve,300));
+    }while(Date.now()<deadline);
+    if(docsA.length<2||docsB.length<2){
+      throw Error("Incomplete transfer: A="+docsA.map(x=>x.id)+" B="+docsB.map(x=>x.id)+
+        " status A="+await a.locator("#peerStatus").textContent()+
+        " status B="+await b.locator("#peerStatus").textContent()+
+        " errors="+errors.join(" | "));
+    }
     for(const docSet of [docsA,docsB]){
       assert.equal(docSet.length,2);
       assert.equal(docSet.find(x=>x.id==="a-1")?.photos[0],avatarPng);
