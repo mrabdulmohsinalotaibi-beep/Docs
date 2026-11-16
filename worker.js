@@ -39,7 +39,7 @@ export default {async fetch(request,env){
  }
 
 
- if(path==="/api/students"||path==="/api/students/import"||path==="/api/students/360"){
+ if(path==="/api/students"||path==="/api/students/import"||path==="/api/students/360"||path==="/api/students/insights"){
   const token=cookieValue(request);if(!token)return json({ok:false,code:"UNAUTHORIZED"},401);
   if(request.method==="POST"){
    if(request.headers.get("origin")!==url.origin)return json({ok:false,code:"ORIGIN_REQUIRED"},403);
