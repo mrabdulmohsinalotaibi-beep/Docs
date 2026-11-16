@@ -109,6 +109,7 @@ test("WebRTC transfers documents with photos between two independent accounts' l
       r.onsuccess=()=>{const d=r.result;const q=d.transaction("documents").objectStore("documents").getAll();q.onsuccess=()=>{d.close();resolve(q.result.length>=2)}};
     })),{timeout:30000});
     const docsA=await getDocs(a),docsB=await getDocs(b);
+    console.log("P2P DEBUG",JSON.stringify({a:docsA.map(d=>d.id),b:docsB.map(d=>d.id),aStatus:await a.locator("#peerStatus").textContent(),bStatus:await b.locator("#peerStatus").textContent(),errors}));
     for(const docSet of [docsA,docsB]){
       assert.equal(docSet.length,2);
       assert.equal(docSet.find(x=>x.id==="a-1")?.photos[0],avatarPng);
