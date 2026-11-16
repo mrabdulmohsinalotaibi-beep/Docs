@@ -4,7 +4,7 @@
   const STORAGE_PREFIX = "athat-docs-unified-v2-";
   const MAX_BYTES = 32 * 1024 * 1024;
   const CHUNK = 12 * 1024;
-  let pc, channel, accountId = "", received = "", sending = false;
+  let pc, channel, accountId = "", received = "", sending = false, paired = false;
   const ui = document.createElement("section");
   ui.id = "athatPeerSync";
   ui.dir = "rtl";
@@ -12,17 +12,18 @@
   ui.style.cssText = "margin:15px 0;padding:17px;background:#fff;border:1px solid #d9cbb6;border-radius:15px;color:#503821;line-height:1.8";
   ui.innerHTML = '<h2 style="margin:0 0 8px">مزامنة أجهزتي مباشرة</h2>'+
     '<p style="margin:0 0 12px">تظل المستندات والشواهد على الأجهزة فقط. يلزم فتح الموقع على الجهازين، وتسجيل الدخول لنفس الحساب، وتبادل رموز الاتصال يدويًا. لن تُرفع مستنداتك إلى الخادم.</p>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="peerOffer">هذا الجهاز: إنشاء اتصال</button><button type="button" id="peerAnswer">الجهاز الآخر: قبول اتصال</button><button type="button" id="peerFinish">إتمام الاتصال</button><button type="button" id="peerSend" disabled>إرسال مستنداتي للجهاز الآخر</button><button type="button" id="peerClose">قطع الاتصال</button></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="peerOffer">هذا الجهاز: إنشاء اتصال</button><button type="button" id="peerAnswer">الجهاز الآخر: قبول اتصال</button><button type="button" id="peerFinish">إتمام الاتصال</button><button type="button" id="peerVerify" disabled>تأكيد رمز المطابقة على الجهازين</button><button type="button" id="peerSend" disabled>إرسال مستنداتي للجهاز الآخر</button><button type="button" id="peerClose">قطع الاتصال</button></div>'+
     '<label style="display:block;margin-top:12px">رمز الاتصال الوارد من الجهاز الآخر<textarea id="peerIncoming" rows="4" style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #d9cbb6;border-radius:9px;padding:8px" placeholder="الصق رمز الاتصال هنا"></textarea></label>'+
     '<label style="display:block;margin-top:9px">رمز هذا الجهاز<textarea id="peerOutgoing" rows="4" readonly style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #d9cbb6;border-radius:9px;padding:8px"></textarea></label>'+
-    '<button type="button" id="peerCopy">نسخ الرمز</button><p id="peerStatus" role="status" aria-live="polite" style="font-size:13px"></p>'+
+    '<button type="button" id="peerCopy">نسخ الرمز</button><p id="peerFingerprint" style="font-weight:bold"></p><p id="peerStatus" role="status" aria-live="polite" style="font-size:13px"></p>'+
     '<small>المزامنة تضيف المستندات الجديدة وتحفظ النسخ المتعارضة بدل استبدالها. لا تعمل إذا كان أحد الجهازين مغلقًا. بعض الشبكات تتطلب خادم TURN غير مهيأ حاليًا.</small>';
   const el = id => ui.querySelector("#" + id);
   const note = s => { el("peerStatus").textContent = s; };
   function reset() {
     if (channel) { try { channel.close(); } catch {} }
     if (pc) { try { pc.close(); } catch {} }
-    pc = null; channel = null; received = ""; sending = false;
+    pc = null; channel = null; received = ""; sending = false; paired = false;
+    el("peerVerify").disabled = true;el("peerFingerprint").textContent="";
     el("peerSend").disabled = true;
   }
   async function identity() {
@@ -86,22 +87,41 @@
     el("peerOutgoing").value=encode(JSON.stringify(pc.localDescription));
     note("انسخ الرمز وأرسله إلى جهازك الآخر بشكل خاص. لا تشاركه علنًا.");
   }
+  async function pairingCode() {
+    if(!pc?.localDescription || !pc?.remoteDescription)throw Error("أكمل تبادل رموز الاتصال أولًا.");
+    const regex=/a=fingerprint:sha-256\\s+([0-9A-F:]+)/i;
+    const local=pc.localDescription.sdp.match(regex)?.[1]?.toUpperCase();
+    const remote=pc.remoteDescription.sdp.match(regex)?.[1]?.toUpperCase();
+    if(!local || !remote || local===remote)throw Error("تعذر التحقق من هوية اتصال WebRTC.");
+    const material=[local,remote].sort().join("|");
+    const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(material)));
+    const value=((hash[0]<<16)|(hash[1]<<8)|hash[2])%1000000;
+    return String(value).padStart(6,"0");
+  }
+  async function showPairing() {
+    const code=await pairingCode();
+    el("peerFingerprint").textContent="رمز مطابقة الاتصال: "+code+" — تأكد أنه نفسه على الجهازين.";
+    el("peerVerify").disabled=false;
+    el("peerSend").disabled=true;
+    note("تأكد من تطابق الرمز على الجهازين قبل السماح بإرسال المستندات.");
+  }
   function start() {
     reset();
     pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
     pc.onconnectionstatechange=()=>{
       if(pc?.connectionState==="failed") note("فشل الاتصال المباشر؛ قد تتطلب الشبكة خادم TURN.");
-      else if(pc?.connectionState==="connected") note("الجهازان متصلان. اختر إرسال المستندات عند الحاجة.");
+      else if(pc?.connectionState==="connected") showPairing().catch(e=>note(e.message));
       else if(pc?.connectionState==="disconnected") note("انقطع الاتصال بالجهاز الآخر.");
     };
     pc.ondatachannel=event=>configure(event.channel);
   }
   function configure(c) {
     channel=c;c.binaryType="arraybuffer";
-    c.onopen=()=>{el("peerSend").disabled=false;note("تم الاتصال. لن تُرسل المستندات إلا عند الضغط على إرسال.");};
+    c.onopen=()=>{showPairing().catch(e=>note(e.message));};
     c.onclose=()=>{el("peerSend").disabled=true;note("أُغلق الاتصال.");};
     c.onmessage=async event=>{
       try{
+        if(!paired)throw Error("يجب تأكيد رمز المطابقة قبل استقبال المستندات.");
         const msg=JSON.parse(event.data);
         if (msg.type==="begin") {
           if (!Number.isSafeInteger(msg.length)||msg.length<0||msg.length>MAX_BYTES){received="";throw Error("حجم النقل يتجاوز الحد الآمن.");}
@@ -124,7 +144,7 @@
     };
   }
   async function send() {
-    if(sending || !channel || channel.readyState!=="open")throw Error("الجهاز الآخر غير متصل.");
+    if(!paired || sending || !channel || channel.readyState!=="open")throw Error("أكّد رمز المطابقة أولًا وتأكد من اتصال الجهاز الآخر.");
     sending=true;el("peerSend").disabled=true;
     try{
       const docs=await allDocs();
@@ -156,6 +176,13 @@
     const remote=JSON.parse(decode(el("peerIncoming").value));
     if(remote.type!=="answer")throw Error("ألصق رمز الاستجابة من الجهاز الآخر.");
     await pc.setRemoteDescription(remote);note("جارٍ تأسيس القناة المباشرة...");
+  });
+  el("peerVerify").onclick=job(async()=>{
+    const code=await pairingCode();
+    if(!confirm("هل ظهر الرمز "+code+" نفسه على شاشة جهازك الآخر؟ لا توافق إذا اختلف الرقمان."))return;
+    paired=true;el("peerVerify").disabled=true;
+    el("peerSend").disabled=channel?.readyState!=="open";
+    note("تم اعتماد مطابقة الاتصال على هذا الجهاز. تأكد من الاعتماد أيضًا على الجهاز الآخر.");
   });
   el("peerSend").onclick=job(send);
   el("peerClose").onclick=()=>{reset();note("تم قطع الاتصال.");};
