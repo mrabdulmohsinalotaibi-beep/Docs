@@ -30,7 +30,8 @@ test('the editor is mounted before the program button handler is wired',()=>{
 test('local and migrated records can open the same editor without replacing originals',()=>{
  assert.match(appScript,/function edit\(d,t\)/);
  assert.match(appScript,/const editor=\$\('editor'\)/);
- assert.match(appScript,/const existing=docs\.find\(x=>x\.sourceA4===sourceId\)/);
+ assert.match(appScript,/const oldDerived=docs\.find\(x=>x\.sourceA4===sourceId\)/);
+ assert.match(appScript,/sourceA4:sourceId/);
  assert.match(appScript,/await task\('readwrite',store=>store\.put\(row\)\);await refresh\(\)/);
  assert.match(appScript,/sourceA4:previous\?\.sourceA4\|\|null/);
  assert.match(appScript,/\$\('saveDoc'\)\.onclick=\(\)=>docsSaveUpdated\(false\)/);
