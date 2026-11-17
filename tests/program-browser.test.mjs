@@ -65,6 +65,22 @@ test("regional plans and local import work in browser without network upload", {
   assert.equal(stored.length,1);
   assert.ok(stored[0][1].includes("برنامج تجريبي ثان"));
   assert.ok(paths.every(x=>!x.includes("upload")&&!x.includes("/plans/")));
+  // Reports must stay usable even when authenticated statistics are unavailable.
+  await page.locator('#workspaceNav button[data-workspace="reports"]').click();
+  await page.locator('#workspace-reports').waitFor({state:"visible"});
+  assert.equal(await page.locator('#reportsSubnav button').count(),4);
+  await page.locator('#reportsSubnav button[data-report-tab="analytics"]').click();
+  await page.locator('#reportsAnalytics').waitFor({state:"visible"});
+  await page.locator('#reportsSubnav button[data-report-tab="official"]').click();
+  await page.locator('#reportsOfficial').waitFor({state:"visible"});
+  await page.locator('#reportsGenerate').click();
+  assert.match(await page.locator('#reportsDraftStatus').innerText(),/حدّث مصادر التقارير أولاً/);
+  await page.locator('#reportsSubnav button[data-report-tab="export"]').click();
+  await page.locator('#reportsExport').waitFor({state:"visible"});
+  await page.locator('#reportsExportExcel').click();
+  assert.match(await page.locator('#reportsExportStatus').innerText(),/حدّث بيانات التقارير/);
+  await page.locator('#reportsSubnav button[data-report-tab="dashboard"]').click();
+  await page.locator('#reportsDashboard').waitFor({state:"visible"});
   assert.deepEqual(errors,[]);
  }finally{if(browser)await browser.close();await new Promise(ok=>srv.close(ok))}
 });
