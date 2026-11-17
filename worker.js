@@ -37,10 +37,9 @@ async function docsKvSession(env,token){
  return session.user;
 }
 async function docsIdent(request,env){
- const token=cookieValue(request);if(!token)return null;
- if(token.startsWith(DOCS_KV_PREFIX))return docsKvSession(env,token);
- const legacy=await upstream("/v1/auth/me","GET",null,token,env);
- return legacy.status===200&&legacy.data?.ok===true?legacy.data.user:null;
+ const token=cookieValue(request);
+ if(!token||!token.startsWith(DOCS_KV_PREFIX))return null;
+ return docsKvSession(env,token);
 }
 async function docsIssueSession(env,user){
  const token=docsRandom();
@@ -114,7 +113,6 @@ async function docsKvAuthRoute(request,env,path,data,token){
  }
  if(path==="/api/auth/logout"){
   if(token.startsWith(DOCS_KV_PREFIX))await env.DOCS_AUTH_KV.delete("session:"+await docsSha(token));
-  else if(token){try{await upstream("/v1/auth/logout","POST",{},token,env)}catch{}}
   return json({ok:true},200,{"set-cookie":cookie("",true)});
  }
  if(path==="/api/auth/verify")return docsCompleteRegistration(env,data);
@@ -149,7 +147,8 @@ async function docsKvAuthRoute(request,env,path,data,token){
   return json({ok:true,user,authMode:"independent"},200,{"set-cookie":cookie(await docsIssueSession(env,user))});
  }
  if(account?.status==="reserved"&&(email!==DOCS_OWNER_EMAIL||account.id!==DOCS_OWNER_ID))return json({ok:false,code:"ACCOUNT_CONFLICT"},409);
- // Migrate on first valid login by checking legacy credentials on the server.
+ if(email!==DOCS_OWNER_EMAIL)return reject();
+ // Migrate only the protected owner identity on first verified login by checking legacy credentials on the server.
  // This avoids the original authentication Worker and does not copy credentials into responses.
  let legacyUser,cred;
  try{
