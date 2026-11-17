@@ -465,9 +465,11 @@ export default {async fetch(request,env){
     if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
     const sourceId=url.searchParams.get("id")||"";
     if(!sourceId||sourceId.length>250)return json({ok:false,code:"INVALID_RECORD"},400);
-    const row=await env.DOCS_DB.prepare("SELECT source_record_id,student_key,title,kind,status,date_text,payload_json FROM docs_a4_records WHERE user_id=?1 AND source_record_id=?2").bind(uid,sourceId).first();
+    const alias=await env.DOCS_DB.prepare("SELECT canonical_source_id FROM docs_a4_dedupe_aliases WHERE user_id=?1 AND duplicate_source_id=?2").bind(uid,sourceId).first();
+    const resolvedId=alias?.canonical_source_id||sourceId;
+    const row=await env.DOCS_DB.prepare("SELECT source_record_id,student_key,title,kind,status,date_text,payload_json FROM docs_a4_records WHERE user_id=?1 AND source_record_id=?2").bind(uid,resolvedId).first();
     if(!row)return json({ok:false,code:"NOT_FOUND"},404);
-    const prepared=await env.DOCS_DB.prepare("SELECT display_title,fields_json FROM docs_a4_prepared WHERE user_id=?1 AND source_record_id=?2").bind(uid,sourceId).first();
+    const prepared=await env.DOCS_DB.prepare("SELECT display_title,fields_json FROM docs_a4_prepared WHERE user_id=?1 AND source_record_id=?2").bind(uid,resolvedId).first();
     return json({ok:true,record:{source_record_id:row.source_record_id,student_key:row.student_key,title:row.title,kind:row.kind,status:row.status,date_text:row.date_text,payload:JSON.parse(row.payload_json)},prepared:prepared?{title:prepared.display_title,fields:JSON.parse(prepared.fields_json)}:null});
    }
    if(path==="/api/students/a4-sync"){
@@ -502,6 +504,8 @@ export default {async fetch(request,env){
     const writeSql="INSERT INTO docs_a4_records (user_id,source_record_id,student_key,title,kind,status,date_text,source_updated_at,payload_json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(user_id,source_record_id) DO UPDATE SET student_key=excluded.student_key,title=excluded.title,kind=excluded.kind,status=excluded.status,date_text=excluded.date_text,source_updated_at=excluded.source_updated_at,payload_json=excluded.payload_json,copied_at=CURRENT_TIMESTAMP";
     let saved=0;
     for(const r of matches){
+     const duplicate=await env.DOCS_DB.prepare("SELECT 1 FROM docs_a4_dedupe_aliases WHERE user_id=?1 AND duplicate_source_id=?2 LIMIT 1").bind(uid,r.source_record_id).first();
+     if(duplicate)continue;
      const p=JSON.parse(r.payload_json);
      const title=String(p.title||p.template_label||'نموذج A4').slice(0,220);
      const kind=String(p.template_label||p.template_type||p.report_type||'A4').slice(0,130);
