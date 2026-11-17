@@ -47,7 +47,7 @@ test("regional plans and local import work in browser without network upload", {
   const weekChoices=await page.locator("#programChoice option").allTextContents();
   assert.ok(weekChoices.some(x=>x.includes("تعزيز السلوك الإيجابي")));
   assert.ok(weekChoices.some(x=>x.includes("رعاية ودعم الحالات الخاصة")));
-  await page.locator('#workspaceNav button[data-workspace="settings"]').click();
+  await page.locator('#workspaceSettingsLink').click();
   await page.selectOption("#profileDepartment","نجران");
   await page.locator("#saveSchoolProfile").click();
   await page.locator('#workspaceNav button[data-workspace="home"]').click();
