@@ -104,3 +104,26 @@ test('health and special-care filters use only source confirmed care flags',asyn
  assert.equal(sandbox.flags(student).health,false);
  assert.equal(sandbox.flags(student).social,true);
 });
+
+test('student profile has four tabs and exactly one care section',()=>{
+ assert.match(page,/id="studentProfileTabs"/);
+ for(const section of ['basics','care','followup','documents'])assert.match(page,new RegExp('data-s360page="'+section+'"'));
+ assert.equal((page.match(/id="student360CareRecords"/g)||[]).length,1);
+ assert.match(appScript,/activateStudentProfileTab\('basics'\)/);
+ assert.match(appScript,/const CARE_GROUPS=\[/);
+ assert.match(appScript,/let studentInsights=/);
+});
+test('care import is user-scoped and does not create document copies',()=>{
+ const start=worker.indexOf('if(path==="/api/students/care/import"){');
+ const end=worker.indexOf('if(path==="/api/students"){',start);
+ assert.ok(start>0&&end>start);
+ const route=worker.slice(start,end);
+ assert.match(route,/format!=="athat-student-care-v1"/);
+ assert.match(route,/source_record_id/);
+ assert.match(route,/byId\.get\(id\)/);
+ assert.match(route,/byNo\.get\(number\)/);
+ assert.match(route,/INSERT INTO docs_student_care\(user_id,student_key,tags_json,notes/);
+ assert.doesNotMatch(route,/INSERT INTO docs_a4_records|INSERT INTO docs_a4_student_links/);
+ assert.match(appScript,/studentCareImportFile/);
+ assert.match(appScript,/fetch\('\/api\/students\/care\/import'/);
+});
