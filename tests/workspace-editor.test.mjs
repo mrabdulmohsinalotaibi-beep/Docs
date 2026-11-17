@@ -73,7 +73,7 @@ test('duplicate records are not repeated across documents, archives, or student 
 });
 
 test('care records use authenticated student IDs and never guess matches from names',()=>{
- assert.match(worker,/if\(path==="\/api\/students\/care\/import"\|\|path==="\/api\/students\/care"/);
+ assert.match(worker,/if\(path==="\/api\/students\/care\/categories"\|\|path==="\/api\/students\/care\/save"\|\|path==="\/api\/students\/care\/import"/);
  const start=worker.indexOf('if(path==="/api/students/care"){');
  const end=worker.indexOf('if(path==="/api/students/insights"){',start);
  assert.ok(start>0&&end>start);
@@ -126,4 +126,19 @@ test('care import is user-scoped and does not create document copies',()=>{
  assert.doesNotMatch(route,/INSERT INTO docs_a4_records|INSERT INTO docs_a4_student_links/);
  assert.match(appScript,/studentCareImportFile/);
  assert.match(appScript,/fetch\('\/api\/students\/care\/import'/);
+});
+
+test('care categories are selectable, per-account custom, and saved on the original student',()=>{
+ assert.match(appScript,/className='student-care-choice'/);
+ assert.match(appScript,/chip\.setAttribute\('aria-pressed',String\(selected\.has\(label\)\)\)/);
+ assert.match(appScript,/إضافة تصنيف جديد/);
+ assert.match(appScript,/حفظ التصنيفات والرعاية/);
+ assert.match(appScript,/fetch\('\/api\/students\/care\/save'/);
+ const categories=worker.slice(worker.indexOf('if(path==="/api/students/care/categories"){'),worker.indexOf('if(path==="/api/students/care/save"){'));
+ assert.match(categories,/docs_care_categories WHERE user_id=\?1/);
+ assert.match(categories,/INSERT OR IGNORE INTO docs_care_categories\(user_id,category_name,group_name\)/);
+ const save=worker.slice(worker.indexOf('if(path==="/api/students/care/save"){'),worker.indexOf('if(path==="/api/students/care/import"){'));
+ assert.match(save,/students\.some\(s=>s\.key===key\)/);
+ assert.match(save,/INSERT INTO docs_student_care\(user_id,student_key,tags_json,notes,source,updated_at\)/);
+ assert.doesNotMatch(save,/INSERT INTO docs_a4_records|UPDATE docs_a4_records|DELETE FROM docs_a4_records/);
 });
