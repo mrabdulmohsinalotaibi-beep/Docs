@@ -151,13 +151,15 @@ async function docsKvAuthRoute(request,env,path,data,token){
  if(account?.status==="pending_approval")return json({ok:false,code:"ACCOUNT_PENDING_APPROVAL",message:"طلب الحساب بانتظار موافقة مدير مستندات الذات."},403);
  if(account&&account.status==="active"){
   let digest="";
-  if(account.hashScheme==="athat-pbkdf2-sha256-b64url"){
-   const saltB64=String(account.salt||"").replace(/-/g,"+").replace(/_/g,"/");
+  if(account.hashScheme==="athat-pbkdf2-sha256-b64url"||account.hashScheme==="docs-rekeyed-pbkdf2-v1"){
+   const sourceSalt=account.hashScheme==="docs-rekeyed-pbkdf2-v1"?account.legacySalt:account.salt;
+   const saltB64=String(sourceSalt||"").replace(/-/g,"+").replace(/_/g,"/");
    const saltBytes=Uint8Array.from(atob(saltB64.padEnd(Math.ceil(saltB64.length/4)*4,"=")),c=>c.charCodeAt(0));
    const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(data.password),"PBKDF2",false,["deriveBits"]);
    const result=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:saltBytes,iterations:Number(account.iterations)||60000},key,256));
    let raw="";for(const byte of result)raw+=String.fromCharCode(byte);
    digest=btoa(raw).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+   if(account.hashScheme==="docs-rekeyed-pbkdf2-v1")digest=await docsSha("athat-docs-owner-v1:"+digest+":"+account.salt);
   }else digest=await docsPassword(data.password,account.salt,account.iterations);
   if(!docsEqual(digest,account.passwordHash))return reject();
   await env.DOCS_AUTH_KV.delete(throttleKey);
@@ -191,7 +193,7 @@ async function docsKvAuthRoute(request,env,path,data,token){
   return json({ok:false,code:"MFA_CHECK_UNAVAILABLE",message:"تعذر التحقق من إعدادات أمان حسابك. لم تُجرَ عملية نقل."},503);
  }
  if(mfaActive)return json({ok:false,code:"MFA_MIGRATION_UNAVAILABLE",message:"يحتاج حسابك إلى نقل إعدادات التحقق الثنائي بأمان قبل فصل تسجيل الدخول."},409);
- let correct=false;
+ let correct=false,verifiedDerivation="";
  try{
   const saltB64=String(cred.password_salt).replace(/-/g,"+").replace(/_/g,"/");
   const saltBytes=Uint8Array.from(atob(saltB64.padEnd(Math.ceil(saltB64.length/4)*4,"=")),c=>c.charCodeAt(0));
@@ -200,6 +202,7 @@ async function docsKvAuthRoute(request,env,path,data,token){
   let raw="";for(const byte of bits)raw+=String.fromCharCode(byte);
   const computed=btoa(raw).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
   correct=docsEqual(computed,String(cred.password_hash));
+  if(correct)verifiedDerivation=computed;
  }catch(error){
   console.warn("docs_auth_migration_password_verifier",error?.name||"unknown");
   return json({ok:false,code:"MIGRATION_VERIFIER_UNAVAILABLE",message:"تعذّر إكمال التحقق من الحساب القديم."},503);
@@ -208,7 +211,10 @@ async function docsKvAuthRoute(request,env,path,data,token){
  if(account?.status==="reserved"&&legacyUser.id!==account.id)return json({ok:false,code:"ACCOUNT_CONFLICT"},409);
  const owner=legacyUser.id===DOCS_OWNER_ID&&email===DOCS_OWNER_EMAIL;
  const salt=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
- const migrated={id:legacyUser.id,email,name:String(legacyUser.name||"مستخدم المستندات"),role:owner?"owner":"user",emailVerified:true,passwordHash:await docsPassword(data.password,salt),salt,iterations:150000,status:"active",migratedAt:new Date().toISOString()};
+ // Use the password proof already verified against the legacy account, then domain-separate
+ // it with a fresh per-account salt. This avoids a second expensive PBKDF2 on first login.
+ // Only the legacy salt (not its password verifier) is retained for future independent logins.
+ const migrated={id:legacyUser.id,email,name:String(legacyUser.name||"مستخدم المستندات"),role:owner?"owner":"user",emailVerified:true,passwordHash:await docsSha("athat-docs-owner-v1:"+verifiedDerivation+":"+salt),salt,legacySalt:cred.password_salt,hashScheme:"docs-rekeyed-pbkdf2-v1",iterations:Number(cred.iterations),status:"active",migratedAt:new Date().toISOString()};
  // Protect the account against concurrent migration attempts.
  const prior=await env.DOCS_AUTH_KV.get(key,"json");
  if(prior&&prior.id!==migrated.id)return json({ok:false,code:"ACCOUNT_CONFLICT",message:"توجد معلومات حساب مستقلة مختلفة؛ يتطلب الأمر مراجعة آمنة."},409);
