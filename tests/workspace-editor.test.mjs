@@ -175,7 +175,7 @@ test('reports dashboard has four distinct functional sections and no duplicated 
  for(const tab of ['dashboard','analytics','official','export'])assert.match(appScript,new RegExp('data-report-tab="'+tab+'"'));
  assert.match(appScript,/function openReportTab\(name\)/);
  assert.match(appScript,/if\(target==='reports'\)\{refreshReportSummary\(\);loadReportSources\(\)\}/);
- assert.match(appScript,/function reportsRows\(\)/);
+ assert.match(appScript,/function reportsRows\(ignoreFilters=false\)/);
  assert.match(appScript,/nativeA4Rows\(\)/);
  assert.match(appScript,/docsCanonicalKey\(doc\)/);
  assert.match(appScript,/reportsStudentLink\(filter\)/);
