@@ -74,7 +74,15 @@ async function docsKvAuthRoute(request,env,path,data,token){
   return json({ok:false,code:"INVALID_CREDENTIALS",message:"البريد الإلكتروني أو كلمة المرور غير صحيحة."},401);
  };
  if(account&&account.status==="active"){
-  const digest=await docsPassword(data.password,account.salt,account.iterations);
+  let digest="";
+  if(account.hashScheme==="athat-pbkdf2-sha256-b64url"){
+   const saltB64=String(account.salt||"").replace(/-/g,"+").replace(/_/g,"/");
+   const saltBytes=Uint8Array.from(atob(saltB64.padEnd(Math.ceil(saltB64.length/4)*4,"=")),c=>c.charCodeAt(0));
+   const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(data.password),"PBKDF2",false,["deriveBits"]);
+   const result=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:saltBytes,iterations:Number(account.iterations)||60000},key,256));
+   let raw="";for(const byte of result)raw+=String.fromCharCode(byte);
+   digest=btoa(raw).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+  }else digest=await docsPassword(data.password,account.salt,account.iterations);
   if(!docsEqual(digest,account.passwordHash))return reject();
   await env.DOCS_AUTH_KV.delete(throttleKey);
   const user={id:account.id,name:account.name,loginIdentifier:account.email};
