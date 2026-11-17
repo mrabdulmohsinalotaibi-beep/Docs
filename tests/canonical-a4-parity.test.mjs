@@ -51,7 +51,7 @@ test('all 41 original source template field schemas are retained',()=>{
 
 test('existing local copies and original cloud source remain distinct',()=>{
  assert.match(script,/const oldDerived=docs\.find\(x=>x\.sourceA4===sourceId\)/);
- assert.match(script,/oldDerived\?'athat-original-a4:'\+sourceId/);
+ assert.match(script,/if\(oldDerived&&!options\.forceNew\)\{edit\(oldDerived\);return\}/);
  assert.match(script,/a4FieldDefinitions:sourceDefinitions/);
  assert.match(script,/sourceA4:sourceId/);
  assert.match(script,/function originalA4SourceModel\(r,p\)/);
