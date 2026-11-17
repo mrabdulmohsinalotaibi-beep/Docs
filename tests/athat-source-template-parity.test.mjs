@@ -4,12 +4,12 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const raw=readFileSync(new URL('../worker.js',import.meta.url),'utf8');
-const encoded=raw.match(/^const PAGE=("(?:\\.|[^"\\])*");/);
+const encoded=raw.match(/^const PAGE=("(?:\.|[^"\])*");/);
 assert.ok(encoded,'embedded app page');
 const page=JSON.parse(encoded[1]);
-const script=[...page.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g)].map(m=>m[1]).find(s=>s.includes('const A4_REF='));
+const script=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).find(s=>s.includes('const A4_REF='));
 assert.ok(script,'A4 application script');
-const parseLiteral=key=>JSON.parse(script.match(new RegExp('const '+key+'=([^\\n]+);'))[1]);
+const parseLiteral=key=>JSON.parse(script.match(new RegExp('const '+key+'=([^\n]+);'))[1]);
 const source=parseLiteral('IMPORTED_SOURCE_A4_FIELDS');
 const ref=parseLiteral('A4_REF');
 const start=script.indexOf('const catalog=[');
@@ -34,8 +34,8 @@ test('all source blank templates retain exact label, field sequence and kind',()
 
 test('blank A4 previews retain empty fields and existing saved files retain additional fields',()=>{
  assert.match(script,/showEmptyFields:true/);
- assert.match(script,/data\\.showEmptyFields\\|\\|visible\\(f\\.value\\)/);
- assert.match(script,/Object\\.keys\\(d\\?\\.fields\\|\\|\\{\\}\\)/);
- assert.match(script,/d\\?\\.sourceTemplateId&&x\\.sourceTemplateId===d\\.sourceTemplateId/);
+ assert.match(script,/data\.showEmptyFields\|\|visible\(f\.value\)/);
+ assert.match(script,/Object\.keys\(d\?\.fields\|\|\{\}\)/);
+ assert.match(script,/d\?\.sourceTemplateId&&x\.sourceTemplateId===d\.sourceTemplateId/);
  assert.doesNotThrow(()=>new vm.Script(script));
 });
