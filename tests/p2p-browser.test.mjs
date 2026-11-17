@@ -83,7 +83,18 @@ test("WebRTC transfers documents with photos between two independent accounts' l
     }
     await seed(a,fakeDocument("a-1","مستند الجهاز الأول"));
     await seed(b,fakeDocument("b-1","مستند الجهاز الثاني"));
-    await a.locator("#peerOffer").click();
+    // Diagnose workspace visibility before pairing; do not force-click hidden controls.
+    const peerVisibility=await a.evaluate(()=>{
+      const button=document.querySelector('#peerOffer');
+      const ui=document.querySelector('#athatPeerSync');
+      const settings=document.querySelector('#workspace-settings');
+      return {peerVisible:!!ui&&!ui.hidden, settingsHidden:settings?.hidden,
+        buttonRect:button?.getBoundingClientRect().toJSON(),buttonStyle:button?{display:getComputedStyle(button).display,visibility:getComputedStyle(button).visibility}:null,
+        parents:button?[...function*(e){while(e){yield {id:e.id,tag:e.tagName,hidden:e.hidden,display:getComputedStyle(e).display,visibility:getComputedStyle(e).visibility};e=e.parentElement}}(button)]:[],
+        appMainHidden:document.querySelector('#appMain')?.hidden};
+    });
+    console.log('DIAGNOSTIC_PEER_VISIBILITY',JSON.stringify(peerVisibility));
+    await a.locator("#peerOffer").click({timeout:5000});
     try{await a.waitForFunction(()=>document.querySelector("#peerOutgoing").value.length>50,null,{timeout:28000});}
     catch(err){throw Error("Offer failed: "+await a.locator("#peerStatus").textContent()+" / "+errors.join(" | ")+" / "+err.message)}
     const offer=await a.locator("#peerOutgoing").inputValue();
