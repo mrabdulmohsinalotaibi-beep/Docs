@@ -52,5 +52,5 @@ test('opening an original prepopulates documented source fields without inventin
  assert.match(appScript,/attendance:\[\['student_name','اسم الطالب'\]/);
  assert.match(appScript,/programs:\[\['name','اسم البرنامج'\]/);
  assert.match(appScript,/const val=original\[key\]/);
- assert.match(appScript,/if\(oldDerived\)\{edit\(oldDerived\);return\}/);
+ assert.match(appScript,/if\(oldDerived&&!options\.forceNew\)\{edit\(oldDerived\);return\}/);
 });
