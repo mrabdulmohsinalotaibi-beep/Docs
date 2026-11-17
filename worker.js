@@ -13,6 +13,8 @@ async function upstream(path,method,body,token,env){
  try{return{status:r.status,data:JSON.parse(response)}}catch{return{status:502,data:{ok:false,code:"UPSTREAM_INVALID_JSON"}}}
 }
 
+const DOCS_OWNER_EMAIL="mr.abdulmohsinalotaibi@gmail.com";
+const DOCS_OWNER_ID="usr_6a351b83-70aa-46f6-98f1-15bf076d019e";
 const DOCS_KV_PREFIX="dsk_";
 const DOCS_KV_AUTH_TTL=30*24*60*60;
 async function docsSha(input){
@@ -45,6 +47,66 @@ async function docsIssueSession(env,user){
  await env.DOCS_AUTH_KV.put("session:"+await docsSha(token),JSON.stringify({user}),{expirationTtl:DOCS_KV_AUTH_TTL});
  return token;
 }
+
+async function docsSendVerification(env,to,code){
+ const text="رمز التحقق من البريد لإنشاء حساب في مستندات الذات: "+code+"\nالرمز صالح لمدة عشر دقائق. إذا لم تطلب التسجيل، تجاهل هذه الرسالة.";
+ if(env.RESEND_API_KEY&&env.DOCS_FROM_EMAIL){
+   const reply=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"authorization":"Bearer "+env.RESEND_API_KEY,"content-type":"application/json","user-agent":"ATHAT-Docs/1.0"},body:JSON.stringify({from:env.DOCS_FROM_EMAIL,to:[to],subject:"رمز تأكيد البريد | مستندات الذات",text})});
+   if(!reply.ok)throw Error("EMAIL_DELIVERY_FAILED");
+   return;
+ }
+ if(env.DOCS_EMAIL&&env.DOCS_FROM_EMAIL){
+   await env.DOCS_EMAIL.send({from:env.DOCS_FROM_EMAIL,to,subject:"رمز تأكيد البريد | مستندات الذات",text});
+   return;
+ }
+ throw Error("EMAIL_PROVIDER_UNCONFIGURED");
+}
+function docsVerifyCode(code){return /^\d{6}$/.test(String(code||""))}
+async function docsRegisterPending(env,data){
+ const email=docsEmail(data?.loginIdentifier),name=String(data?.name||"").trim(),password=data?.password;
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||name.length<2||name.length>120||typeof password!=="string"||password.length<8||password.length>1024)return json({ok:false,code:"INVALID_REGISTRATION",message:"أدخل الاسم والبريد وكلمة مرور لا تقل عن 8 أحرف."},400);
+ if(email===DOCS_OWNER_EMAIL)return json({ok:false,code:"OWNER_EMAIL_RESERVED",message:"هذا البريد مخصص للمدير الرئيسي. اختر تسجيل الدخول."},409);
+ const accountKey="account:"+await docsSha(email);
+ const account=await env.DOCS_AUTH_KV.get(accountKey,"json");
+ if(account)return json({ok:false,code:"ACCOUNT_EXISTS",message:"البريد مسجل مسبقًا؛ استخدم تسجيل الدخول."},409);
+ const pendingKey="registration:"+await docsSha(email);
+ const last=await env.DOCS_AUTH_KV.get(pendingKey,"json");
+ if(last?.sentAt&&Date.now()-last.sentAt<60000)return json({ok:false,code:"VERIFICATION_COOLDOWN",message:"يمكن طلب رمز جديد بعد دقيقة."},429);
+ const salt=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
+ const code=String(crypto.getRandomValues(new Uint32Array(1))[0]%1000000).padStart(6,"0");
+ const codeHash=await docsSha("docs-verify:"+email+":"+code+":"+salt);
+ const pending={email,name,role:"user",id:"usr_"+crypto.randomUUID(),passwordHash:await docsPassword(password,salt),salt,iterations:150000,codeHash,attempts:0,sentAt:Date.now()};
+ // No account is created without successful email delivery.
+ try{await docsSendVerification(env,email,code)}
+ catch(error){return json({ok:false,code:"EMAIL_DELIVERY_UNAVAILABLE",message:"لم يتم تفعيل إرسال رموز البريد بعد. لا يمكن إنشاء حساب دون تأكيد البريد."},503)}
+ await env.DOCS_AUTH_KV.put(pendingKey,JSON.stringify(pending),{expirationTtl:600});
+ return json({ok:true,requiresVerification:true,email,message:"أرسلنا رمزًا إلى بريدك. أدخله لتفعيل الحساب."});
+}
+async function docsCompleteRegistration(env,data){
+ const email=docsEmail(data?.loginIdentifier),code=String(data?.code||"").trim();
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!docsVerifyCode(code)||email===DOCS_OWNER_EMAIL)return json({ok:false,code:"INVALID_CODE"},400);
+ const pendingKey="registration:"+await docsSha(email);
+ const pending=await env.DOCS_AUTH_KV.get(pendingKey,"json");
+ if(!pending||pending.attempts>=5)return json({ok:false,code:"CODE_EXPIRED",message:"انتهى الرمز أو تجاوزت المحاولات. أعد التسجيل."},410);
+ const hash=await docsSha("docs-verify:"+email+":"+code+":"+pending.salt);
+ if(!docsEqual(hash,pending.codeHash)){pending.attempts++;await env.DOCS_AUTH_KV.put(pendingKey,JSON.stringify(pending),{expirationTtl:Math.max(60,Math.ceil((pending.sentAt+600000-Date.now())/1000))});return json({ok:false,code:"INVALID_CODE",message:"رمز التحقق غير صحيح."},400)}
+ const accountKey="account:"+await docsSha(email);
+ if(await env.DOCS_AUTH_KV.get(accountKey,"json"))return json({ok:false,code:"ACCOUNT_EXISTS"},409);
+ const account={id:pending.id,email,name:pending.name,role:"user",status:"active",emailVerified:true,passwordHash:pending.passwordHash,salt:pending.salt,iterations:pending.iterations,createdAt:new Date().toISOString()};
+ await env.DOCS_AUTH_KV.put(accountKey,JSON.stringify(account));
+ await env.DOCS_AUTH_KV.delete(pendingKey);
+ const user={id:account.id,name:account.name,loginIdentifier:account.email,role:"user"};
+ return json({ok:true,user},200,{"set-cookie":cookie(await docsIssueSession(env,user))});
+}
+async function docsAdminAction(request,env,path){
+ if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+ const actor=await docsIdent(request,env);
+ if(!actor||actor.id!==DOCS_OWNER_ID||docsEmail(actor.loginIdentifier)!==DOCS_OWNER_EMAIL)return json({ok:false,code:"FORBIDDEN"},403);
+ const pages=[],list=await env.DOCS_AUTH_KV.list({prefix:"account:",limit:500});
+ for(const key of list.keys){const item=await env.DOCS_AUTH_KV.get(key.name,"json");if(item)pages.push({email:item.email,name:item.name,role:item.id===DOCS_OWNER_ID?"owner":"user",status:item.status,createdAt:item.createdAt||item.migratedAt||item.reservedAt||""})}
+ return json({ok:true,users:pages,count:pages.length,partial:!!list.list_complete===false});
+}
+
 async function docsKvAuthRoute(request,env,path,data,token){
  if(path==="/api/auth/me"){
   const user=await docsIdent(request,env);
@@ -59,11 +121,8 @@ async function docsKvAuthRoute(request,env,path,data,token){
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof data?.password!=="string"||data.password.length<8||data.password.length>1024)return json({ok:false,code:"INVALID_EMAIL_OR_PASSWORD"},400);
  const key="account:"+await docsSha(email);
  let account=await env.DOCS_AUTH_KV.get(key,"json");
- if(path==="/api/auth/register"){
-  // Existing records must never become claimable via a new unverified account.
-  // New signups are staged until email ownership verification is available.
-  return json({ok:false,code:"EMAIL_VERIFICATION_REQUIRED",message:"إنشاء الحسابات الجديدة يحتاج تحققًا من البريد، وهو غير مفعّل بعد في خدمة المستندات المنفصلة."},503);
- }
+ if(path==="/api/auth/register")return docsRegisterPending(env,data);
+ if(path==="/api/auth/verify")return docsCompleteRegistration(env,data);
  if(path!=="/api/auth/login")return json({ok:false,code:"NOT_FOUND"},404);
  const throttleKey="attempt:"+await docsSha(email);
  const now=Date.now(),state=await env.DOCS_AUTH_KV.get(throttleKey,"json");
@@ -85,10 +144,11 @@ async function docsKvAuthRoute(request,env,path,data,token){
   }else digest=await docsPassword(data.password,account.salt,account.iterations);
   if(!docsEqual(digest,account.passwordHash))return reject();
   await env.DOCS_AUTH_KV.delete(throttleKey);
-  const user={id:account.id,name:account.name,loginIdentifier:account.email};
+  const owner=account.id===DOCS_OWNER_ID&&account.email===DOCS_OWNER_EMAIL;
+  const user={id:account.id,name:account.name,loginIdentifier:account.email,role:owner?"owner":"user"};
   return json({ok:true,user,authMode:"independent"},200,{"set-cookie":cookie(await docsIssueSession(env,user))});
  }
- if(account?.status==="reserved")return json({ok:false,code:"ACCOUNT_MIGRATION_PENDING",message:"حسابك محفوظ للنقل الآمن. يلزم التحقق من كلمة المرور عبر الحساب القديم مرة واحدة بعد عودة خدمة الذات، ثم سيعمل الدخول مستقلًا."},503);
+ if(account?.status==="reserved"&&(email!==DOCS_OWNER_EMAIL||account.id!==DOCS_OWNER_ID))return json({ok:false,code:"ACCOUNT_CONFLICT"},409);
  // Migrate on first valid login by checking legacy credentials on the server.
  // This avoids the original authentication Worker and does not copy credentials into responses.
  let legacyUser,cred;
@@ -127,14 +187,16 @@ async function docsKvAuthRoute(request,env,path,data,token){
   return json({ok:false,code:"MIGRATION_VERIFIER_UNAVAILABLE",message:"تعذّر إكمال التحقق من الحساب القديم."},503);
  }
  if(!correct)return reject();
+ if(account?.status==="reserved"&&legacyUser.id!==account.id)return json({ok:false,code:"ACCOUNT_CONFLICT"},409);
+ const owner=legacyUser.id===DOCS_OWNER_ID&&email===DOCS_OWNER_EMAIL;
  const salt=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
- const migrated={id:legacyUser.id,email,name:String(legacyUser.name||"مستخدم المستندات"),passwordHash:await docsPassword(data.password,salt),salt,iterations:150000,status:"active",migratedAt:new Date().toISOString()};
+ const migrated={id:legacyUser.id,email,name:String(legacyUser.name||"مستخدم المستندات"),role:owner?"owner":"user",emailVerified:true,passwordHash:await docsPassword(data.password,salt),salt,iterations:150000,status:"active",migratedAt:new Date().toISOString()};
  // Protect the account against concurrent migration attempts.
  const prior=await env.DOCS_AUTH_KV.get(key,"json");
  if(prior&&prior.id!==migrated.id)return json({ok:false,code:"ACCOUNT_CONFLICT",message:"توجد معلومات حساب مستقلة مختلفة؛ يتطلب الأمر مراجعة آمنة."},409);
  await env.DOCS_AUTH_KV.put(key,JSON.stringify(migrated));
  await env.DOCS_AUTH_KV.delete(throttleKey);
- const safeUser={id:migrated.id,name:migrated.name,loginIdentifier:migrated.email};
+ const safeUser={id:migrated.id,name:migrated.name,loginIdentifier:migrated.email,role:migrated.role};
  return json({ok:true,user:safeUser,authMode:"independent",migrated:true},200,{"set-cookie":cookie(await docsIssueSession(env,safeUser))});
 }
 
@@ -335,11 +397,11 @@ export default {async fetch(request,env){
  if(path.startsWith("/api/")){
   const origin=request.headers.get("origin");
   if(request.method==="POST"&&origin!==url.origin)return json({ok:false,code:"ORIGIN_REQUIRED"},403);
-  const targets={"/api/auth/login":"/v1/auth/login","/api/auth/register":"/v1/auth/register","/api/auth/me":"/v1/auth/me","/api/auth/logout":"/v1/auth/logout","/api/ai/smart-fill":"/v1/ai/smart-fill","/api/ai/counselor":"/v1/ai/counselor"};
+  const targets={"/api/auth/login":"/v1/auth/login","/api/auth/register":"/v1/auth/register","/api/auth/verify":"/v1/auth/me","/api/auth/me":"/v1/auth/me","/api/auth/logout":"/v1/auth/logout","/api/ai/smart-fill":"/v1/ai/smart-fill","/api/ai/counselor":"/v1/ai/counselor"};
   if(!targets[path])return json({ok:false,code:"NOT_FOUND"},404);
   if(request.method!==(path==="/api/auth/me"?"GET":"POST"))return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
   const token=cookieValue(request);
-  const publicAction=path==="/api/auth/login"||path==="/api/auth/register";
+  const publicAction=path==="/api/auth/login"||path==="/api/auth/register"||path==="/api/auth/verify";
   if(!publicAction&&!token)return json({ok:false,code:"UNAUTHORIZED"},401);
   let data=null;
   if(request.method==="POST"){
@@ -349,10 +411,11 @@ export default {async fetch(request,env){
    try{data=JSON.parse(body)}catch{return json({ok:false,code:"INVALID_JSON"},400)}
    if(!data||typeof data!=="object"||Array.isArray(data))return json({ok:false,code:"INVALID_BODY"},400);
   }
-  if(publicAction){
+  if(publicAction&&path!=="/api/auth/verify"){
    if(typeof data.loginIdentifier!=="string"||data.loginIdentifier.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.loginIdentifier)||typeof data.password!=="string"||data.password.length<8||data.password.length>1024)return json({ok:false,code:"INVALID_EMAIL_OR_PASSWORD"},400);
    if(path==="/api/auth/register"&&(typeof data.name!=="string"||!data.name.trim()||data.name.length>120))return json({ok:false,code:"INVALID_NAME"},400);
   }
+  if(path==="/api/admin/users"){try{return await docsAdminAction(request,env,path)}catch{return json({ok:false,code:"ADMIN_UNAVAILABLE"},503)}}
   if(path.startsWith("/api/auth/")){
    try{return await docsKvAuthRoute(request,env,path,data,token)}catch(error){console.error("docs_auth_error",String(error?.message||"unknown"));return json({ok:false,code:"DOCS_AUTH_UNAVAILABLE",message:"تعذرت خدمة حسابات مستندات الذات مؤقتًا."},503)}
   }
