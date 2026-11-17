@@ -89,22 +89,52 @@ async function docsKvAuthRoute(request,env,path,data,token){
   return json({ok:true,user,authMode:"independent"},200,{"set-cookie":cookie(await docsIssueSession(env,user))});
  }
  if(account?.status==="reserved")return json({ok:false,code:"ACCOUNT_MIGRATION_PENDING",message:"حسابك محفوظ للنقل الآمن. يلزم التحقق من كلمة المرور عبر الحساب القديم مرة واحدة بعد عودة خدمة الذات، ثم سيعمل الدخول مستقلًا."},503);
- // Legacy login is used only once to prove ownership and migrate the account into independent KV.
- let legacy;
- try{legacy=await upstream("/v1/auth/login","POST",data,null,env)}
- catch{return json({ok:false,code:"LEGACY_MIGRATION_UNAVAILABLE",message:"تعذر التحقق من الحساب القديم حاليًا. سيصبح الدخول مستقلًا بعد نقل بيانات التحقق بطريقة آمنة."},503)}
- if(legacy.status!==200||legacy.data?.ok!==true||!legacy.data?.user?.id||!legacy.data?.authToken){
-  if(legacy.status===401)return reject();
-  return json({ok:false,code:legacy.data?.code||"LEGACY_MIGRATION_UNAVAILABLE",message:legacy.data?.message||"تعذر إكمال نقل بيانات تسجيل الدخول إلى المستندات."},legacy.status||503);
+ // Migrate on first valid login by checking legacy credentials on the server.
+ // This avoids the original authentication Worker and does not copy credentials into responses.
+ let legacyUser,cred;
+ try{
+  legacyUser=await env.SOURCE_DB.prepare(
+   "SELECT id,name,login_identifier,status FROM users WHERE login_identifier=?1 LIMIT 1"
+  ).bind(email).first();
+  if(legacyUser?.status!=="active")return reject();
+  cred=await env.SOURCE_DB.prepare(
+   "SELECT password_salt,password_hash,iterations FROM auth_credentials WHERE user_id=?1 LIMIT 1"
+  ).bind(legacyUser.id).first();
+ }catch(error){
+  console.warn("docs_auth_migration_lookup_unavailable",error?.name||"unknown");
+  return json({ok:false,code:"LEGACY_DB_UNAVAILABLE",message:"تعذر قراءة بيانات التحقق القديمة حاليًا. لم تتغير كلمة المرور أو البيانات."},503);
  }
- const user=legacy.data.user;
- if(!/^usr_[\w-]{10,}$/.test(user.id))return json({ok:false,code:"INVALID_LEGACY_USER"},502);
+ if(!cred||!cred.password_salt||!cred.password_hash||!Number.isInteger(Number(cred.iterations)))return reject();
+ let mfaActive=false;
+ try{
+  const record=await env.SOURCE_DB.prepare("SELECT enabled FROM account_mfa WHERE user_id=?1 LIMIT 1").bind(legacyUser.id).first();
+  mfaActive=record?.enabled===1||record?.enabled===true;
+ }catch(error){
+  return json({ok:false,code:"MFA_CHECK_UNAVAILABLE",message:"تعذر التحقق من إعدادات أمان حسابك. لم تُجرَ عملية نقل."},503);
+ }
+ if(mfaActive)return json({ok:false,code:"MFA_MIGRATION_UNAVAILABLE",message:"يحتاج حسابك إلى نقل إعدادات التحقق الثنائي بأمان قبل فصل تسجيل الدخول."},409);
+ let correct=false;
+ try{
+  const saltB64=String(cred.password_salt).replace(/-/g,"+").replace(/_/g,"/");
+  const saltBytes=Uint8Array.from(atob(saltB64.padEnd(Math.ceil(saltB64.length/4)*4,"=")),c=>c.charCodeAt(0));
+  const keyMaterial=await crypto.subtle.importKey("raw",new TextEncoder().encode(data.password),"PBKDF2",false,["deriveBits"]);
+  const bits=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:saltBytes,iterations:Number(cred.iterations)},keyMaterial,256));
+  let raw="";for(const byte of bits)raw+=String.fromCharCode(byte);
+  const computed=btoa(raw).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+  correct=docsEqual(computed,String(cred.password_hash));
+ }catch(error){
+  console.warn("docs_auth_migration_password_verifier",error?.name||"unknown");
+  return json({ok:false,code:"MIGRATION_VERIFIER_UNAVAILABLE",message:"تعذّر إكمال التحقق من الحساب القديم."},503);
+ }
+ if(!correct)return reject();
  const salt=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
- const record={id:user.id,email,name:String(user.name||"مستخدم المستندات"),passwordHash:await docsPassword(data.password,salt),salt,iterations:150000,status:"active",migratedAt:new Date().toISOString()};
- await env.DOCS_AUTH_KV.put(key,JSON.stringify(record));
+ const migrated={id:legacyUser.id,email,name:String(legacyUser.name||"مستخدم المستندات"),passwordHash:await docsPassword(data.password,salt),salt,iterations:150000,status:"active",migratedAt:new Date().toISOString()};
+ // Protect the account against concurrent migration attempts.
+ const prior=await env.DOCS_AUTH_KV.get(key,"json");
+ if(prior&&prior.id!==migrated.id)return json({ok:false,code:"ACCOUNT_CONFLICT",message:"توجد معلومات حساب مستقلة مختلفة؛ يتطلب الأمر مراجعة آمنة."},409);
+ await env.DOCS_AUTH_KV.put(key,JSON.stringify(migrated));
  await env.DOCS_AUTH_KV.delete(throttleKey);
- try{await upstream("/v1/auth/logout","POST",{},legacy.data.authToken,env)}catch{}
- const safeUser={id:record.id,name:record.name,loginIdentifier:record.email};
+ const safeUser={id:migrated.id,name:migrated.name,loginIdentifier:migrated.email};
  return json({ok:true,user:safeUser,authMode:"independent",migrated:true},200,{"set-cookie":cookie(await docsIssueSession(env,safeUser))});
 }
 
