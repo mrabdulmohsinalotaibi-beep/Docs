@@ -81,6 +81,19 @@ test("regional plans and local import work in browser without network upload", {
   assert.match(await page.locator('#reportsExportStatus').innerText(),/حدّث بيانات التقارير/);
   await page.locator('#reportsSubnav button[data-report-tab="dashboard"]').click();
   await page.locator('#reportsDashboard').waitFor({state:"visible"});
+  // Original source fields are integrated into the one native Docs A4 template.
+  await page.locator('#workspaceNav button[data-workspace="documents"]').click();
+  await page.locator('#docsViewSelector button[data-view="templates"]').click();
+  await page.locator('#groups button').filter({hasText:'سجل لجنة التوجيه الطلابي'}).click();
+  await page.locator('#templates button').filter({hasText:'لجنة التوجيه الطلابي'}).first().click();
+  await page.locator('#editor').waitFor({state:'visible'});
+  assert.ok(await page.locator('#officialFields [data-field="مكان الاجتماع"]').count());
+  assert.equal(await page.locator('#docsPreviewCollapse').count(),0);
+  await page.locator('#previewDoc').click();
+  await page.locator('#docsUnifiedPreview').waitFor({state:'visible'});
+  assert.ok(await page.locator('#docsOriginalPreview .doc-a4').count());
+  await page.locator('#docsUnifiedClose').click();
+  assert.equal(await page.locator('#docsUnifiedPreview').evaluate(el=>el.open),false);
   assert.deepEqual(errors,[]);
  }finally{if(browser)await browser.close();await new Promise(ok=>srv.close(ok))}
 });
