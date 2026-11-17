@@ -117,12 +117,12 @@ async function docsKvAuthRoute(request,env,path,data,token){
   else if(token){try{await upstream("/v1/auth/logout","POST",{},token,env)}catch{}}
   return json({ok:true},200,{"set-cookie":cookie("",true)});
  }
+ if(path==="/api/auth/verify")return docsCompleteRegistration(env,data);
  const email=docsEmail(data?.loginIdentifier);
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof data?.password!=="string"||data.password.length<8||data.password.length>1024)return json({ok:false,code:"INVALID_EMAIL_OR_PASSWORD"},400);
  const key="account:"+await docsSha(email);
  let account=await env.DOCS_AUTH_KV.get(key,"json");
  if(path==="/api/auth/register")return docsRegisterPending(env,data);
- if(path==="/api/auth/verify")return docsCompleteRegistration(env,data);
  if(path!=="/api/auth/login")return json({ok:false,code:"NOT_FOUND"},404);
  const throttleKey="attempt:"+await docsSha(email);
  const now=Date.now(),state=await env.DOCS_AUTH_KV.get(throttleKey,"json");
