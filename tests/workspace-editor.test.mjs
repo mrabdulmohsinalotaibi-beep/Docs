@@ -73,7 +73,7 @@ test('duplicate records are not repeated across documents, archives, or student 
 });
 
 test('care records use authenticated student IDs and never guess matches from names',()=>{
- assert.match(worker,/if\(path==="\/api\/students\/care\/categories"\|\|path==="\/api\/students\/care\/save"\|\|path==="\/api\/students\/care\/import"/);
+ assert.match(worker,/if\(path==="\/api\/students\/source-record"\|\|path==="\/api\/students\/care\/categories"\|\|path==="\/api\/students\/care\/save"\|\|path==="\/api\/students\/care\/import"/);
  const start=worker.indexOf('if(path==="/api/students/care"){');
  const end=worker.indexOf('if(path==="/api/students/insights"){',start);
  assert.ok(start>0&&end>start);
@@ -141,4 +141,31 @@ test('care categories are selectable, per-account custom, and saved on the origi
  assert.match(save,/students\.some\(s=>s\.key===key\)/);
  assert.match(save,/INSERT INTO docs_student_care\(user_id,student_key,tags_json,notes,source,updated_at\)/);
  assert.doesNotMatch(save,/INSERT INTO docs_a4_records|UPDATE docs_a4_records|DELETE FROM docs_a4_records/);
+});
+
+test('student timeline links directly to the actual source record with an in-place editor',()=>{
+ assert.match(page,/id="student360RealRecord"/);
+ assert.match(page,/id="s360RealBack"/);
+ assert.match(page,/id="s360RealPrint"/);
+ assert.match(page,/id="s360RealSave"/);
+ assert.match(appScript,/link\.onclick=\(\)=>openRealStudentRecord\(item,link\)/);
+ assert.match(appScript,/open\.onclick=\(\)=>openRealStudentRecord\(item,open\)/);
+ assert.match(appScript,/fetch\('\/api\/students\/source-record\?'/);
+ assert.match(appScript,/window\.print\(\)/);
+ assert.match(appScript,/function returnToStudentRecord\(\)/);
+ assert.match(appScript,/activateStudentProfileTab\('followup'\)/);
+ assert.match(appScript,/window\.scrollTo\(\{top:studentRecordScroll/);
+ assert.doesNotMatch(appScript.slice(appScript.indexOf('async function openRealStudentRecord('),appScript.indexOf("$('s360RealSave').onclick=")),/createNativeFromA4|docs\.push|db\.transaction/);
+});
+test('source record edits are authenticated, scoped to the actual student, and do not rewrite ATHAT originals',()=>{
+ assert.match(worker,/if\(path==="\/api\/students\/source-record"\|\|path==="\/api\/students\/care\/categories"/);
+ const begin=worker.indexOf('if(path==="/api/students/source-record"){');
+ const finish=worker.indexOf('if(path==="/api/students/360"){',begin);
+ assert.ok(begin>0&&finish>begin);
+ const api=worker.slice(begin,finish);
+ assert.match(api,/students\.find\(x=>x\.key===key\)/);
+ assert.match(api,/athat_import_records WHERE user_id=\?1 AND source_table=\?2 AND source_record_id=\?3/);
+ assert.match(api,/RECORD_NOT_LINKED/);
+ assert.match(api,/INSERT INTO docs_student_record_edits\(user_id,student_key,source_table,source_record_id,fields_json/);
+ assert.doesNotMatch(api,/UPDATE athat_import_records|INSERT INTO docs_a4_records|DELETE FROM/);
 });
