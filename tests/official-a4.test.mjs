@@ -23,7 +23,11 @@ test('A4 official header, account profile and preserved evidence',()=>{
  assert.match(page,/id="signaturePad"/);
  assert.match(script,/MOE_OFFICIAL_LOGO/);
  assert.match(script,/hijriToday\(\)/);
- assert.match(script,/signature:signatureData/);
+ assert.match(script,/signers:docsSignerValues\(\)/);
+ assert.match(script,/signature:docsSignerValues\(\)\[0\]/);
+ assert.match(page,/id="manualSigners"/);
+ assert.match(page,/id="schoolName"[^>]+readonly/);
+ assert.match(page,/id="documentNumber" type="hidden"/);
  assert.match(script,/photos:\[\.\.\.photos\]/);
  assert.match(script,/const evidence=/);
  assert.match(script,/function originalA4Dom\(/);
