@@ -6,7 +6,7 @@ const raw=readFileSync(new URL('../worker.js',import.meta.url),'utf8');
 const m=raw.match(/^const PAGE=("(?:\\.|[^"\\])*");/);
 assert.ok(m,'Worker embeds PAGE string');
 const page=JSON.parse(m[1]);
-const script=[...page.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g)].map(match=>match[1]).find(source=>source.includes('const A4_REF='));
+const script=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(match=>match[1]).find(source=>source.includes('const A4_REF='));
 test('inner application script parses',()=>{assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script));});
 test('11 Noor-oriented A4 groups and 18 weekly plans',()=>{
  const data=JSON.parse(readFileSync(new URL('../data/a4-guidance-1448.json',import.meta.url),'utf8'));
