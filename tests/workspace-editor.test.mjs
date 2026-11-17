@@ -63,7 +63,8 @@ test('exactly four primary navigation pages exist and Settings is separate',()=>
 });
 test('duplicate records are not repeated across documents, archives, or student panel',()=>{
  assert.match(appScript,/uniqueLocal=new Map\(\)/);
- assert.match(appScript,/const key=String\(d\.sourceA4\|\|d\.derivedFrom\|\|d\.id\)/);
+ assert.match(appScript,/function docsCanonicalKey\(document\)/);
+ assert.match(appScript,/const key=docsCanonicalKey\(d\)/);
  assert.match(appScript,/filter\(r=>r\.review_group!=='أصل عملي'\)/);
  assert.match(appScript,/const entries=new Map\(\)/);
  assert.match(appScript,/if\(r\.student_key===studentKey&&r\.review_group==='أصل عملي'/);
