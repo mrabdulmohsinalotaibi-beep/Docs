@@ -57,6 +57,7 @@ test("regional plans and local import work in browser without network upload", {
   assert.match(await page.locator("#programSource").innerText(),/لا تتوفر خطة أسبوعية موثقة/);
   await page.selectOption("#programScope","local");
   await page.locator("#localPlanFile").setInputFiles({name:"test.csv",mimeType:"text/csv",buffer:Buffer.from("اسم البرنامج\nبرنامج تجريبي أول\nبرنامج تجريبي ثان")});
+  await page.waitForFunction(()=>document.querySelector("#localProgramText")?.value?.includes("برنامج تجريبي أول"),{timeout:10000});
   assert.match(await page.locator("#localProgramText").inputValue(),/برنامج تجريبي أول/);
   await page.locator("#saveLocalPrograms").click();
   await page.waitForFunction(()=>document.querySelector("#localPlanNotice").textContent.includes("حُفظت"));
