@@ -79,7 +79,7 @@ test("WebRTC transfers documents with photos between two independent accounts' l
       await page.goto("http://127.0.0.1:"+port,{waitUntil:"domcontentloaded"});
       try{await page.locator("#appMain").waitFor({state:"visible",timeout:10000});}
       catch(err){throw Error("App startup failed: errors="+errors.join(" | ")+" authStatus="+await page.locator("#authMsg").textContent().catch(()=>"?")+" peerStatus="+await page.locator("#peerStatus").textContent().catch(()=>"?")+" / "+err.message);}
-      await page.locator("#athatPeerSync").waitFor({state:"visible"});
+      // Peer sync is now intentionally located in the Settings workspace.\n      await page.locator('#workspaceNav button[data-workspace="settings"]').click();\n      await page.locator("#athatPeerSync").waitFor({state:"visible",timeout:10000});
     }
     await seed(a,fakeDocument("a-1","مستند الجهاز الأول"));
     await seed(b,fakeDocument("b-1","مستند الجهاز الثاني"));
