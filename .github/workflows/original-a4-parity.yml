@@ -1,0 +1,25 @@
+name: ATHAT Original A4 Parity
+on:
+  push:
+    paths:
+      - worker.js
+      - data/athat-a4-style-reference.json
+      - tests/official-a4.test.mjs
+      - tests/workspace-editor.test.mjs
+      - tests/canonical-a4-parity.test.mjs
+      - .github/workflows/original-a4-parity.yml
+  pull_request:
+    paths:
+      - worker.js
+      - data/athat-a4-style-reference.json
+      - tests/official-a4.test.mjs
+      - tests/workspace-editor.test.mjs
+      - tests/canonical-a4-parity.test.mjs
+jobs:
+  canonical-a4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check canonical A4 and workspace
+        run: node --test tests/official-a4.test.mjs tests/workspace-editor.test.mjs tests/canonical-a4-parity.test.mjs
