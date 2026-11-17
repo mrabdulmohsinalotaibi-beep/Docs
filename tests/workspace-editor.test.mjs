@@ -169,3 +169,28 @@ test('source record edits are authenticated, scoped to the actual student, and d
  assert.match(api,/INSERT INTO docs_student_record_edits\(user_id,student_key,source_table,source_record_id,fields_json/);
  assert.doesNotMatch(api,/UPDATE athat_import_records|INSERT INTO docs_a4_records|DELETE FROM/);
 });
+
+test('reports dashboard has four distinct functional sections and no duplicated record lists',()=>{
+ for(const id of ['reportsSubnav','reportsDashboard','reportsAnalytics','reportsOfficial','reportsExport','reportsTopMetrics','reportsStudentBars','reportsDraft','reportsExportExcel','reportsPrintSummary'])assert.match(appScript,new RegExp(id));
+ for(const tab of ['dashboard','analytics','official','export'])assert.match(appScript,new RegExp('data-report-tab="'+tab+'"'));
+ assert.match(appScript,/function openReportTab\(name\)/);
+ assert.match(appScript,/if\(target==='reports'\)\{refreshReportSummary\(\);loadReportSources\(\)\}/);
+ assert.match(appScript,/function reportsRows\(\)/);
+ assert.match(appScript,/nativeA4Rows\(\)/);
+ assert.match(appScript,/docsCanonicalKey\(doc\)/);
+ assert.match(appScript,/reportsStudentLink\(filter\)/);
+ assert.match(appScript,/workspaceGoto\('documents'\);openDocsView\('works'\)/);
+});
+test('reports only aggregate private data and exports are derived without new DB records',()=>{
+ assert.match(appScript,/reportsStudentReady\?String\(reportsStudents\.length\):'—'/);
+ assert.match(appScript,/reportsCare\.filter\(r=>Number\(r\.health\|\|0\)>0\)/);
+ assert.match(appScript,/Promise\.allSettled\(paths\.map/);
+ assert.match(appScript,/if\(owner!==activeUser\)return/);
+ assert.match(appScript,/function reportsCsvCell\(value\)/);
+ assert.match(appScript,/textContent=text/);
+ assert.match(appScript,/win\.print\(\)/);
+ assert.match(appScript,/لم يُنشأ مستند أو سجل جديد/);
+ const reporting=appScript.slice(appScript.indexOf('const reportIntro=document.createElement'),appScript.indexOf('workspacePages.students.append(docsStudentsNav'));
+ assert.doesNotMatch(reporting,/INSERT INTO|docs\.push\(|db\.transaction\(|createNativeFromA4\(/);
+ assert.doesNotMatch(reporting,/reportsDownload\([^;]*student\.name/);
+});
