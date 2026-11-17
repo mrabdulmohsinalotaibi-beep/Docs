@@ -71,3 +71,36 @@ test('duplicate records are not repeated across documents, archives, or student 
  assert.match(appScript,/button\.onclick=\(\)=>openMigratedA4\(rec\.source_record_id\)/);
  assert.match(appScript,/docsView='works'/);
 });
+
+test('care records use authenticated student IDs and never guess matches from names',()=>{
+ assert.match(worker,/if\(path==="\/api\/students\/care"\|\|path==="\/api\/students"/);
+ const start=worker.indexOf('if(path==="/api/students/care"){');
+ const end=worker.indexOf('if(path==="/api/students/insights"){',start);
+ assert.ok(start>0&&end>start);
+ const route=worker.slice(start,end);
+ assert.match(route,/matches\.size!==1/);
+ assert.match(route,/byId\.get\(id\)/);
+ assert.match(route,/byNumber\.get\(no\)/);
+ assert.match(route,/source_table='counseling_cases'/);
+ assert.doesNotMatch(route,/\b(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM|\w+\s+SET)\b/);
+ assert.match(page,/id="student360CareRecords"/);
+ assert.match(appScript,/fetch\('\/api\/students\/care\?key='/);
+ assert.match(appScript,/new Set\(studentCareIndex\[studentKey\]\?\.a4_ids\|\|\[\]\)/);
+});
+
+test('health and special-care filters use only source confirmed care flags',async()=>{
+ const start=appScript.indexOf('function s360Flags(s){');
+ const end=appScript.indexOf('function drawStudentFilters()',start);
+ assert.ok(start>=0&&end>start);
+ const vm=await import('node:vm');
+ const sandbox={studentInsights:{},studentCareIndex:{}};
+ vm.runInNewContext(appScript.slice(start,end)+'\nthis.flags=s360Flags',sandbox);
+ const student={key:'athat:test',health_status:'',social_status:'',special_care_tags:[]};
+ assert.equal(sandbox.flags(student).health,false);
+ sandbox.studentCareIndex[student.key]={health:1,special:0};
+ assert.equal(sandbox.flags(student).health,true);
+ assert.equal(sandbox.flags(student).special,true);
+ sandbox.studentCareIndex[student.key]={health:0,special:1};
+ assert.equal(sandbox.flags(student).health,false);
+ assert.equal(sandbox.flags(student).social,true);
+});
