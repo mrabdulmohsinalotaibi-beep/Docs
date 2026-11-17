@@ -73,7 +73,7 @@ test('duplicate records are not repeated across documents, archives, or student 
 });
 
 test('care records use authenticated student IDs and never guess matches from names',()=>{
- assert.match(worker,/if\(path==="\/api\/students\/care\/categories"\|\|path==="\/api\/students\/care\/save"\|\|path==="\/api\/students\/care\/import"/);
+ assert.match(worker,/if\(path==="\/api\/students\/source-record"\|\|path==="\/api\/students\/care\/categories"\|\|path==="\/api\/students\/care\/save"\|\|path==="\/api\/students\/care\/import"/);
  const start=worker.indexOf('if(path==="/api/students/care"){');
  const end=worker.indexOf('if(path==="/api/students/insights"){',start);
  assert.ok(start>0&&end>start);
