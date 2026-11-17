@@ -223,14 +223,7 @@
     const main=document.getElementById("appMain");
     if(!main)return;
     const hero=main.querySelector(".hero");
-    if(hero)hero.insertAdjacentElement("afterend",ui); else main.appendChild(ui);
-    const actions=main.querySelector(".hero .actions");
-    if(actions && !document.getElementById("peerOpen")){
-      const open=document.createElement("button");
-      open.type="button";open.id="peerOpen";open.textContent="⇄ مزامنة أجهزتي";
-      open.addEventListener("click",()=>ui.scrollIntoView({behavior:"smooth",block:"start"}));
-      actions.appendChild(open);
-    }
+    const settingsSlot=document.getElementById("settingsPeerSlot"); if(settingsSlot) settingsSlot.appendChild(ui); else main.appendChild(ui);
     // The main app emits these events on login and logout: no 3-second auth polling.
     // This avoids 28,800 redundant requests per day per open browser tab.
     document.addEventListener("athat-docs-login",event=>{

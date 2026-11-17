@@ -79,11 +79,17 @@ test("WebRTC transfers documents with photos between two independent accounts' l
       await page.goto("http://127.0.0.1:"+port,{waitUntil:"domcontentloaded"});
       try{await page.locator("#appMain").waitFor({state:"visible",timeout:10000});}
       catch(err){throw Error("App startup failed: errors="+errors.join(" | ")+" authStatus="+await page.locator("#authMsg").textContent().catch(()=>"?")+" peerStatus="+await page.locator("#peerStatus").textContent().catch(()=>"?")+" / "+err.message);}
-      await page.locator("#athatPeerSync").waitFor({state:"visible"});
+      // Peer sync is now intentionally located in the Settings workspace.\n      await page.locator('#workspaceNav button[data-workspace="settings"]').click();\n      await page.locator("#athatPeerSync").waitFor({state:"visible",timeout:10000});
     }
     await seed(a,fakeDocument("a-1","مستند الجهاز الأول"));
     await seed(b,fakeDocument("b-1","مستند الجهاز الثاني"));
-    await a.locator("#peerOffer").click();
+    // The app can complete its async login initialization after the first navigation.
+    // Open Settings once all test data is seeded, so sync controls are actually on screen.
+    await a.locator('#workspaceNav button[data-workspace="settings"]').click();
+    await b.locator('#workspaceNav button[data-workspace="settings"]').click();
+    await a.locator('#workspace-settings').waitFor({state:'visible'});
+    await b.locator('#workspace-settings').waitFor({state:'visible'});
+    await a.locator('#peerOffer').click();
     try{await a.waitForFunction(()=>document.querySelector("#peerOutgoing").value.length>50,null,{timeout:28000});}
     catch(err){throw Error("Offer failed: "+await a.locator("#peerStatus").textContent()+" / "+errors.join(" | ")+" / "+err.message)}
     const offer=await a.locator("#peerOutgoing").inputValue();
