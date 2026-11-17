@@ -77,7 +77,13 @@ async function docsRegisterPending(env,data){
  const pending={email,name,role:"user",id:"usr_"+crypto.randomUUID(),passwordHash:await docsPassword(password,salt),salt,iterations:150000,codeHash,attempts:0,sentAt:Date.now()};
  // No account is created without successful email delivery.
  try{await docsSendVerification(env,email,code)}
- catch(error){return json({ok:false,code:"EMAIL_DELIVERY_UNAVAILABLE",message:"لم يتم تفعيل إرسال رموز البريد بعد. لا يمكن إنشاء حساب دون تأكيد البريد."},503)}
+ catch(error){
+  // When email sending is not configured, require manual owner approval.
+  // The requester cannot sign in or access data while pending.
+  const requestAccount={id:pending.id,email,name,role:"user",status:"pending_approval",emailVerified:false,passwordHash:pending.passwordHash,salt:pending.salt,iterations:150000,createdAt:new Date().toISOString()};
+  await env.DOCS_AUTH_KV.put(accountKey,JSON.stringify(requestAccount));
+  return json({ok:true,approvalPending:true,message:"تم إرسال طلب إنشاء الحساب إلى المدير. لا يمكن الدخول قبل موافقته بعد التحقق من هويتك."});
+ }
  await env.DOCS_AUTH_KV.put(pendingKey,JSON.stringify(pending),{expirationTtl:600});
  return json({ok:true,requiresVerification:true,email,message:"أرسلنا رمزًا إلى بريدك. أدخله لتفعيل الحساب."});
 }
@@ -98,9 +104,21 @@ async function docsCompleteRegistration(env,data){
  return json({ok:true,user},200,{"set-cookie":cookie(await docsIssueSession(env,user))});
 }
 async function docsAdminAction(request,env,path){
- if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
+ if(request.method!=="GET"&&request.method!=="POST")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
  const actor=await docsIdent(request,env);
  if(!actor||actor.id!==DOCS_OWNER_ID||docsEmail(actor.loginIdentifier)!==DOCS_OWNER_EMAIL)return json({ok:false,code:"FORBIDDEN"},403);
+ if(request.method==="POST"){
+  if(request.headers.get("origin")!==new URL(request.url).origin)return json({ok:false,code:"INVALID_ORIGIN"},403);
+  if(!(request.headers.get("content-type")||"").startsWith("application/json"))return json({ok:false,code:"JSON_REQUIRED"},415);
+  let data;try{const raw=await request.text();if(raw.length>1000)return json({ok:false,code:"BODY_TOO_LARGE"},413);data=JSON.parse(raw)}catch{return json({ok:false,code:"INVALID_JSON"},400)}
+  const email=docsEmail(data?.email),action=data?.action;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email===DOCS_OWNER_EMAIL||!["approve","reject"].includes(action)||data?.ownerConfirmed!==true)return json({ok:false,code:"INVALID_APPROVAL"},400);
+  const key="account:"+await docsSha(email),account=await env.DOCS_AUTH_KV.get(key,"json");
+  if(!account||account.status!=="pending_approval"||account.id===DOCS_OWNER_ID)return json({ok:false,code:"NOT_PENDING"},409);
+  if(action==="reject")await env.DOCS_AUTH_KV.delete(key);
+  else{account.status="active";account.emailVerified=false;account.approvalMethod="owner_manual";account.approvedAt=new Date().toISOString();account.approvedBy=DOCS_OWNER_ID;await env.DOCS_AUTH_KV.put(key,JSON.stringify(account))}
+  return json({ok:true,email,status:action==="approve"?"active":"rejected"});
+ }
  const pages=[],list=await env.DOCS_AUTH_KV.list({prefix:"account:",limit:500});
  for(const key of list.keys){const item=await env.DOCS_AUTH_KV.get(key.name,"json");if(item)pages.push({email:item.email,name:item.name,role:item.id===DOCS_OWNER_ID?"owner":"user",status:item.status,createdAt:item.createdAt||item.migratedAt||item.reservedAt||""})}
  return json({ok:true,users:pages,count:pages.length,partial:list.list_complete===false});
@@ -130,6 +148,7 @@ async function docsKvAuthRoute(request,env,path,data,token){
   await env.DOCS_AUTH_KV.put(throttleKey,JSON.stringify({failures,until:failures>=7?now+15*60*1000:0}),{expirationTtl:900});
   return json({ok:false,code:"INVALID_CREDENTIALS",message:"البريد الإلكتروني أو كلمة المرور غير صحيحة."},401);
  };
+ if(account?.status==="pending_approval")return json({ok:false,code:"ACCOUNT_PENDING_APPROVAL",message:"طلب الحساب بانتظار موافقة مدير مستندات الذات."},403);
  if(account&&account.status==="active"){
   let digest="";
   if(account.hashScheme==="athat-pbkdf2-sha256-b64url"){
