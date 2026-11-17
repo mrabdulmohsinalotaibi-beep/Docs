@@ -11,12 +11,20 @@ const script=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
  .map(x=>x[1]).find(s=>s.includes('function originalA4Dom('));
 const snapshot=JSON.parse(readFileSync(new URL('../data/athat-a4-style-reference.json',import.meta.url),'utf8'));
 const css=page.match(/<style id="athatOriginalA4CSS">([\s\S]*?)<\/style>/)?.[1]?.replace(/^\n/,'').replace(/\n$/,'');
+const originalTableCSS=readFileSync(new URL('../data/athat-a4-table-reference.css',import.meta.url),'utf8').trim();
+const tableCSS=page.match(/<style id="athatOriginalA4TableCSS">([\s\S]*?)<\/style>/)?.[1];
 
 test('original ATHAT styles are embedded byte-for-byte',()=>{
  assert.equal(css,snapshot.documentTemplateCSS+'\n'+snapshot.officialDocumentStyle);
  assert.equal(snapshot.origin,'mrabdulmohsinalotaibi-beep/AAA');
  assert.ok(snapshot.files['src/DocumentTemplate.tsx']);
  assert.ok(snapshot.files['src/document-template-official-style.ts']);
+});
+
+test('table styling and custom field schema come directly from ATHAT',()=>{
+ assert.equal(tableCSS,originalTableCSS);
+ assert.match(script,/function originalA4SchemaForSource\(p\)/);
+ assert.match(script,/ga4-custom-data-table/);
 });
 
 test('the canonical A4 renderer compiles and uses original document classes',()=>{
