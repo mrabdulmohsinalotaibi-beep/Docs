@@ -580,6 +580,18 @@ export default {async fetch(request,env){
        records.push({source_table:r.source_table,record_id:r.source_record_id,section:r.source_table,title:String(field).slice(0,240),summary:String(summary).slice(0,900),date:String(p.idate||p.adate||p.bdate||p.report_date||p.created_at||base.created_at||"").slice(0,30)});
       }
     }
+    // Apply the saved Docs overlay to the same canonical source IDs in the timeline.
+    const edited=(await env.DOCS_DB.prepare("SELECT source_table,source_record_id,fields_json FROM docs_student_record_edits WHERE user_id=?1 AND student_key=?2 LIMIT 250").bind(uid,key).all()).results||[];
+    const byOriginal=new Map(edited.map(row=>[row.source_table+":"+row.source_record_id,row.fields_json]));
+    for(const entry of records){
+     const saved=byOriginal.get(entry.source_table+":"+entry.record_id);
+     if(!saved)continue;
+     try{const fields=JSON.parse(saved);
+      if(typeof fields.title==="string"&&fields.title.trim())entry.title=fields.title.trim().slice(0,240);
+      if(typeof fields.date==="string"&&fields.date.trim())entry.date=fields.date.trim().slice(0,70);
+      if(typeof fields.summary==="string"&&fields.summary.trim())entry.summary=fields.summary.trim().slice(0,900);
+     }catch{}
+    }
     return json({ok:true,student:{key:student.key,name:student.name},records,limited:records.length>=200});
    }
   }catch{return json({ok:false,code:"STUDENT_DATA_UNAVAILABLE",message:"تعذر قراءة دليل الطلاب أو المزامنة. لم تُعدّل بيانات الذات."},503)}
