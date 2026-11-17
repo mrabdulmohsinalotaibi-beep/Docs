@@ -23,7 +23,7 @@ test('original ATHAT styles are embedded byte-for-byte',()=>{
 
 test('table styling and custom field schema come directly from ATHAT',()=>{
  assert.equal(tableCSS,originalTableCSS);
- assert.match(script,/function originalA4SchemaForSource\(p\)/);
+ assert.match(script,/function importedA4FieldsForSource\(p\)/);
  assert.match(script,/ga4-custom-data-table/);
 });
 
@@ -39,8 +39,8 @@ test('the canonical A4 renderer compiles and uses original document classes',()=
 });
 
 test('all 41 original source template field schemas are retained',()=>{
- const m=script.match(/const ORIGINAL_A4_TEMPLATES=(\[[^\n]+\]);/);
- assert.ok(m,'Original templates are embedded as source data');
+ const m=script.match(/const IMPORTED_SOURCE_A4_FIELDS=(\[[^\n]+\]);/);
+ assert.ok(m,'Legacy fields are retained for old imported records, not as a second catalog');
  const schemas=JSON.parse(m[1]);
  assert.equal(schemas.length,41);
  assert.equal(new Set(schemas.map(s=>s.id)).size,41);
@@ -57,4 +57,19 @@ test('existing local copies and original cloud source remain distinct',()=>{
  assert.match(script,/function originalA4SourceModel\(r,p\)/);
  assert.match(script,/paper\.replaceChildren\(originalA4Dom\(originalA4SourceModel\(r,p\)\)\)/);
  assert.match(script,/function renderOriginalA4Live\(/);
+});
+
+test('original schemas are integrated into the one native Docs template catalog',()=>{
+ const legacy=JSON.parse(script.match(/const IMPORTED_SOURCE_A4_FIELDS=(\[[^\n]+\]);/)[1]);
+ const mapping=JSON.parse(script.match(/const NATIVE_SOURCE_TEMPLATE_MAP=(\{[^\n]+\});/)[1]);
+ assert.equal(Object.keys(mapping).length,legacy.length);
+ for(const schema of legacy)assert.ok(mapping[schema.id],'Unmapped source fields '+schema.id);
+ assert.match(script,/for\(const legacy of IMPORTED_SOURCE_A4_FIELDS\)/);
+ assert.match(script,/if\(!hasField\)template\.fields\.push/);
+ assert.match(script,/template\.officialDefinitions\.push/);
+ assert.doesNotMatch(page,/id="docsPreviewCollapse"|id="docsRestoreOfficialTemplate"|معاينة A4 الرسمية — قالب الذات الأصلي/);
+ assert.match(page,/id="docsUnifiedPreview"/);
+ assert.match(script,/\$\('previewDoc'\)\.onclick=\(\)=>\{\$\('docsUnifiedPreview'\)\.showModal\(\);renderOriginalA4Live\(\)\}/);
+ assert.match(script,/\$\('docsUnifiedPrint'\)\.onclick=\(\)=>\$\('printDoc'\)\.click\(\)/);
+ assert.match(script,/for\(const label of Object\.keys\(d\?\.fields\|\|\{\}\)\)/);
 });
