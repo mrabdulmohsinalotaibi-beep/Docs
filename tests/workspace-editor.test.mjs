@@ -37,3 +37,20 @@ test('local and migrated records can open the same editor without replacing orig
  assert.match(appScript,/\$\('saveDoc'\)\.onclick=\(\)=>docsSaveUpdated\(false\)/);
  assert.match(appScript,/\$\('saveDocCopy'\)\.onclick=\(\)=>docsSaveUpdated\(true\)/);
 });
+
+test('the original-record inventory excludes linked references and generated copies',()=>{
+ assert.match(worker,/review_group/);
+ assert.match(worker,/counselor-rewrite:%/);
+ assert.match(worker,/comprehensive_records/);
+ assert.match(appScript,/if\(r\.review_group!=='أصل عملي'\)continue/);
+ assert.match(appScript,/function docsReviewCounts\(\)/);
+ assert.match(page,/id="docsReliableBreakdown"/);
+ assert.match(page,/id="migratedA4Group"/);
+});
+test('opening an original prepopulates documented source fields without inventing data',()=>{
+ assert.match(appScript,/const original=p\.migration_original/);
+ assert.match(appScript,/attendance:\[\['student_name','اسم الطالب'\]/);
+ assert.match(appScript,/programs:\[\['name','اسم البرنامج'\]/);
+ assert.match(appScript,/const val=original\[key\]/);
+ assert.match(appScript,/if\(oldDerived\)\{edit\(oldDerived\);return\}/);
+});
