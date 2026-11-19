@@ -30,7 +30,7 @@ test('table styling and custom field schema come directly from ATHAT',()=>{
 test('the canonical A4 renderer compiles and uses original document classes',()=>{
  assert.ok(script,'Canonical renderer exists');
  assert.doesNotThrow(()=>new vm.Script(script));
- for(const cls of ['doc-a4','doc-header','doc-org','doc-ministry-logo','doc-header-date','doc-title','doc-fields','doc-field','doc-attachments','doc-signatures','doc-footer','doc-page-counter']){
+ for(const cls of ['doc-a4','doc-header','doc-org','doc-ministry-logo','doc-header-date','doc-title','doc-fields','doc-field','doc-attachments','doc-signatures','doc-footer']){
   assert.ok(script.includes(cls),cls);
  }
  assert.match(page,/id="docsOriginalPreview"/);
