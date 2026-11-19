@@ -59,7 +59,7 @@ test('exactly four primary navigation pages exist and Settings is separate',()=>
  assert.match(appScript,/\['home','الرئيسية'\],\['documents','المستندات'\],\['students','الطلاب'\],\['reports','التقارير'\]/);
  assert.match(appScript,/settingsButton\.onclick=\(\)=>workspaceGoto\('settings'\)/);
  assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,docsGuidancePanel,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
- assert.match(appScript,/workspacePages\.home\.append\(originalHero,homeActions\)/);
+ assert.match(appScript,/workspacePages\.home\.append\(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards\)/);
 });
 test('duplicate records are not repeated across documents, archives, or student panel',()=>{
  assert.match(appScript,/uniqueLocal=new Map\(\)/);
