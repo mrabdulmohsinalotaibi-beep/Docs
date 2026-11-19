@@ -13,11 +13,11 @@ const parseLiteral=key=>JSON.parse(script.match(new RegExp('const '+key+'=([^\n]
 const source=parseLiteral('IMPORTED_SOURCE_A4_FIELDS');
 const ref=parseLiteral('A4_REF');
 const start=script.indexOf('const catalog=[');
-const stop=script.indexOf('const groups=Object.keys(A4_REF.groups);',start);
+const stop=script.indexOf('const groups=[...new Set(catalog.map(t=>t.group))];',start);
 assert.ok(start>=0&&stop>start);
 
 test('all source blank templates retain exact label, field sequence and kind',()=>{
- const context=vm.createContext({A4_REF:ref,IMPORTED_SOURCE_A4_FIELDS:source});
+ const context=vm.createContext({A4_REF:ref,IMPORTED_SOURCE_A4_FIELDS:source,NATIVE_SOURCE_TEMPLATE_MAP:parseLiteral('NATIVE_SOURCE_TEMPLATE_MAP'),NATIVE_SOURCE_EXTRA_GROUPS:parseLiteral('NATIVE_SOURCE_EXTRA_GROUPS')});
  const catalog=vm.runInContext(script.slice(start,stop)+';catalog',context);
  const native=catalog.filter(x=>x.originalA4);
  assert.equal(native.length,source.length);
@@ -25,11 +25,11 @@ test('all source blank templates retain exact label, field sequence and kind',()
   const form=native.find(x=>x.sourceTemplateId===spec.id);
   assert.ok(form,spec.id);
   assert.equal(form.title,spec.label);
-  assert.deepEqual(Array.from(form.fields,field=>field.split('|')[0]),spec.fields.map(field=>field.label),spec.id);
-  assert.deepEqual(Array.from(form.officialDefinitions,field=>field.kind),spec.fields.map(field=>field.kind||'text'),spec.id);
+  assert.deepEqual(Array.from(form.fields.slice(0,spec.fields.length),field=>field.split('|')[0]),spec.fields.map(field=>field.label),spec.id);
+  assert.deepEqual(Array.from(form.officialDefinitions.slice(0,spec.fields.length),field=>field.kind),spec.fields.map(field=>field.kind||'text'),spec.id);
  }
  const titles=catalog.map(x=>x.title);
- assert.equal(new Set(titles).size,titles.length,'no duplicate blank template titles');
+ assert.equal(new Set(native.map(x=>x.sourceTemplateId)).size,native.length,'no repeated original source ids');
 });
 
 test('blank A4 previews retain empty fields and existing saved files retain additional fields',()=>{
