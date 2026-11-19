@@ -23,7 +23,7 @@ test('full local backup covers documents, cloud snapshots, messages and plans wi
  assert.match(page,/docsBackupExtra\('athat-docs-message-center-v1-'/);
  assert.match(page,/docsBackupExtra\('athat-docs-planfiles-v1-'/);
  assert.match(page,/localSettings:docsBackupSettings\(\)/);
- assert.match(page,/backup\.version===2/);
+ assert.match(page,/backup\.version>=2/);
  assert.match(page,/if\(q\.result\)skipped\+\+/);
 });
 
