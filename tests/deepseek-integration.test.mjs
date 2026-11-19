@@ -17,8 +17,12 @@ test('Docs API exclusively handles DeepSeek with account session and same-origin
  assert.match(code,/https:\/\/api\.deepseek\.com\/chat\/completions/);
  assert.doesNotMatch(page,/Bearer\s+[a-zA-Z0-9_-]{24,}/);
 });
-test('AI requires explicit consent and applies only reviewed proposals',()=>{
- assert.match(client,/if\(!\$\('aiConsent'\)\.checked\)/);
+test('compact assistant sends only on generation click and applies reviewed proposals',()=>{
+ assert.match(client,/\$\('aiGenerate'\)\.onclick=async\(\)=>/);
+ assert.match(page,/<h3>مساعد مستندات الذات الذكي<\/h3>/);
+ assert.match(page,/<textarea id="aiBrief" rows="3"/);
+ assert.doesNotMatch(page,/id="aiConsent"|id="aiSignOut"|id="aiConnected"|id="aiLogin"/);
+ assert.doesNotMatch(page,/فصل الاتصال|تعبئة احترافية للمستندات/);
  assert.match(client,/input\[data-ai-label\]:checked/);
  assert.match(client,/field\.dispatchEvent\(new Event\('input'/);
  assert.match(client,/\/api\/ai\/deepseek/);
