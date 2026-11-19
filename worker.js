@@ -175,7 +175,8 @@ async function docsKvAuthRoute(request,env,path,data,token){
   return json({ok:true,user,authMode:"independent"},200,{"set-cookie":cookie(await docsIssueSession(env,user))});
  }
  if(account?.status==="reserved"&&(email!==DOCS_OWNER_EMAIL||account.id!==DOCS_OWNER_ID))return json({ok:false,code:"ACCOUNT_CONFLICT"},409);
- if(email!==DOCS_OWNER_EMAIL)return reject();
+ // Standalone Docs: no legacy ATHAT credential lookup or owner migration.
+ return reject();
  // Migrate only the protected owner identity on first verified login by checking legacy credentials on the server.
  // This avoids the original authentication Worker and does not copy credentials into responses.
  let legacyUser,cred;
@@ -243,6 +244,7 @@ export default {async fetch(request,env){
   return json({ok:true,app:"ATHAT Docs",auth:"email-password",storage:"account-local"});
  }
 
+ if(path==="/api/sample-from-athat")return json({ok:false,code:"SOURCE_CONNECTION_REMOVED"},410);
  if(path==="/api/sample-from-athat"){
   if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
   const token=cookieValue(request);if(!token)return json({ok:false,code:"UNAUTHORIZED"},401);
@@ -312,6 +314,46 @@ export default {async fetch(request,env){
    const authUser=await docsIdent(request,env);
    if(!authUser||!/^usr_[\w-]{10,}$/.test(authUser.id))return json({ok:false,code:"UNAUTHORIZED",message:"انتهت جلسة المستندات، سجّل الدخول مجددًا."},401);
    uid=authUser.id;
+
+   // Standalone Docs: all student and guidance data must come from DOCS_DB only.
+   if(path==='/api/students/a4-sync'||path==='/api/students/source-record')
+     return json({ok:false,code:'SOURCE_CONNECTION_REMOVED',message:'مستندات الذات مستقل، ولم تعد المزامنة مع موقع الذات متاحة.'},410);
+   if(path==='/api/students/360'&&request.method==='GET'){
+     const key=String(url.searchParams.get('key')||'');
+     if(!key||key.length>170)return json({ok:false,code:'INVALID_STUDENT'},400);
+     const row=await env.DOCS_DB.prepare('SELECT student_key,name FROM docs_students WHERE user_id=?1 AND student_key=?2').bind(uid,key).first();
+     if(!row)return json({ok:false,code:'STUDENT_NOT_FOUND'},404);
+     return json({ok:true,student:{key:row.student_key,name:row.name},records:[],limited:false});
+   }
+   if(path==='/api/students/insights'&&request.method==='GET'){
+     const rows=(await env.DOCS_DB.prepare("SELECT l.student_key,l.source_table,e.fields_json FROM docs_guidance_links l JOIN docs_guidance_entries e ON e.user_id=l.user_id AND e.source_table=l.source_table AND e.source_record_id=l.source_record_id WHERE l.user_id=?1").bind(uid).all()).results||[];
+     const insights={};for(const r of rows){
+       const entry=insights[r.student_key]||(insights[r.student_key]={absence:0,late:0,behavior:0,positive:0,cases:0,interviews:0,referrals:0});
+       if(r.source_table==='attendance'){let fields={};try{fields=JSON.parse(r.fields_json||'{}')}catch{}
+         if(/تأخر/.test(String(fields['نوع الواقعة']||'')))entry.late++;else entry.absence++}
+       else if(r.source_table==='interviews')entry.interviews++;
+       else if(r.source_table==='counseling_cases')entry.cases++;
+       else if(r.source_table==='referrals')entry.referrals++;
+     }
+     return json({ok:true,insights,processed:rows.length});
+   }
+   if(path==='/api/students/care'&&request.method==='GET'){
+     const key=String(url.searchParams.get('key')||'');
+     if(key.length>170)return json({ok:false,code:'INVALID_STUDENT'},400);
+     if(key){
+       const student=await env.DOCS_DB.prepare('SELECT student_key FROM docs_students WHERE user_id=?1 AND student_key=?2').bind(uid,key).first();
+       if(!student)return json({ok:false,code:'STUDENT_NOT_FOUND'},404);
+       const care=await env.DOCS_DB.prepare('SELECT tags_json,notes FROM docs_student_care WHERE user_id=?1 AND student_key=?2').bind(uid,key).first();
+       let tags=[];try{const a=JSON.parse(care?.tags_json||'[]');if(Array.isArray(a))tags=a.filter(x=>typeof x==='string')}catch{}
+       return json({ok:true,records:[],profile_tags:tags,profile_notes:care?.notes||''});
+     }
+     const rows=(await env.DOCS_DB.prepare('SELECT c.student_key,c.tags_json,c.notes FROM docs_student_care c INNER JOIN docs_students s ON s.user_id=c.user_id AND s.student_key=c.student_key WHERE c.user_id=?1').bind(uid).all()).results||[];
+     const medical=new Set(['مرض مزمن','السكري','الربو','الصرع','مرض القلب','حساسية شديدة','إعاقة حركية','إعاقة سمعية','إعاقة بصرية','صعوبات تعلم','اضطراب نمائي','احتياج صحي خاص']);
+     const index=rows.map(r=>{let tags=[];try{const a=JSON.parse(r.tags_json||'[]');if(Array.isArray(a))tags=a.filter(x=>typeof x==='string')}catch{}
+       return {student_key:r.student_key,health:tags.some(x=>medical.has(x))?1:0,special:tags.some(x=>!medical.has(x))||!!String(r.notes||'').trim()?1:0,source_ids:[],a4_ids:[],profile:true};
+     }).filter(r=>r.health||r.special);
+     return json({ok:true,index,linked_students:index.length,classified_students:index.length,unlinked_records:0});
+   }
    if(uid==='usr_6a351b83-70aa-46f6-98f1-15bf076d019e'){
      if(path==='/api/students/a4'&&request.method==='GET')return json({ok:true,records:[],count:0});
      if(path==='/api/students/insights'&&request.method==='GET'){
@@ -360,7 +402,7 @@ export default {async fetch(request,env){
   }catch{return json({ok:false,code:"AUTH_UNAVAILABLE",message:"تعذر التحقق من جلسة الحساب."},503)}
   try{
    const sourceSql="SELECT source_record_id,payload_json FROM athat_import_records WHERE user_id=?1 AND source_table='students' LIMIT 4000";
-   const readRoster=async()=>{const [orig,extra,care]=await Promise.all([uid==='usr_6a351b83-70aa-46f6-98f1-15bf076d019e'?Promise.resolve({results:[]}):env.SOURCE_DB.prepare(sourceSql).bind(uid).all(),env.DOCS_DB.prepare("SELECT student_key,name,student_no,national_id,stage,grade,classroom,guardian_name,guardian_phone,nationality,status,health_status,social_status FROM docs_students WHERE user_id=?1 ORDER BY name LIMIT 4000").bind(uid).all(),env.DOCS_DB.prepare("SELECT student_key,tags_json,notes FROM docs_student_care WHERE user_id=?1 LIMIT 4000").bind(uid).all()]);const originals=(orig.results||[]).map(r=>{const p=JSON.parse(r.payload_json);return {key:"athat:"+String(r.source_record_id),name:String(p.full_name||p.student_name||""),student_no:String(p.student_no||""),national_id:String(p.national_id||""),stage:String(p.stage||""),grade:String(p.grade||""),classroom:String(p.classroom||""),guardian_name:String(p.guardian_name||""),guardian_phone:String(p.guardian_phone||""),nationality:String(p.nationality||""),status:String(p.status||""),health_status:String(p.health_status||""),social_status:String(p.social_status||""),special_care_tags:Array.isArray(p.special_care_tags)?p.special_care_tags.filter(t=>typeof t==="string").slice(0,30):[],special_care_notes:String(p.special_care_notes||""),source:"athat"}}).filter(x=>x.name);const additions=(extra.results||[]).map(p=>({...p,key:p.student_key,source:"docs"}));const careMap=new Map((care.results||[]).map(row=>[row.student_key,row]));const students=[...originals,...additions].map(student=>{const row=careMap.get(student.key);if(!row)return student;let tags=[];try{tags=JSON.parse(row.tags_json)}catch{}return {...student,special_care_tags:tags,special_care_notes:String(row.notes||"")}});return {originals,additions,students}}
+   const readRoster=async()=>{const [orig,extra,care]=await Promise.all([Promise.resolve({results:[]}),env.DOCS_DB.prepare("SELECT student_key,name,student_no,national_id,stage,grade,classroom,guardian_name,guardian_phone,nationality,status,health_status,social_status FROM docs_students WHERE user_id=?1 ORDER BY name LIMIT 4000").bind(uid).all(),env.DOCS_DB.prepare("SELECT student_key,tags_json,notes FROM docs_student_care WHERE user_id=?1 LIMIT 4000").bind(uid).all()]);const originals=(orig.results||[]).map(r=>{const p=JSON.parse(r.payload_json);return {key:"athat:"+String(r.source_record_id),name:String(p.full_name||p.student_name||""),student_no:String(p.student_no||""),national_id:String(p.national_id||""),stage:String(p.stage||""),grade:String(p.grade||""),classroom:String(p.classroom||""),guardian_name:String(p.guardian_name||""),guardian_phone:String(p.guardian_phone||""),nationality:String(p.nationality||""),status:String(p.status||""),health_status:String(p.health_status||""),social_status:String(p.social_status||""),special_care_tags:Array.isArray(p.special_care_tags)?p.special_care_tags.filter(t=>typeof t==="string").slice(0,30):[],special_care_notes:String(p.special_care_notes||""),source:"athat"}}).filter(x=>x.name);const additions=(extra.results||[]).map(p=>({...p,key:p.student_key,source:"docs"}));const careMap=new Map((care.results||[]).map(row=>[row.student_key,row]));const students=[...originals,...additions].map(student=>{const row=careMap.get(student.key);if(!row)return student;let tags=[];try{tags=JSON.parse(row.tags_json)}catch{}return {...student,special_care_tags:tags,special_care_notes:String(row.notes||"")}});return {originals,additions,students}}
    if(path==="/api/students/care/categories"){
     if(request.method==="GET"){
      const records=(await env.DOCS_DB.prepare("SELECT category_name name,group_name \"group\" FROM docs_care_categories WHERE user_id=?1 ORDER BY category_name").bind(uid).all()).results||[];
@@ -704,6 +746,7 @@ export default {async fetch(request,env){
   }catch{return json({ok:false,code:"STUDENT_DATA_UNAVAILABLE",message:"تعذر قراءة دليل الطلاب أو المزامنة. لم تُعدّل بيانات الذات."},503)}
  }
 
+ if(path==="/api/ai/smart-fill"||path==="/api/ai/counselor")return json({ok:false,code:"SOURCE_CONNECTION_REMOVED",message:"تم فصل خدمة ذكاء الذات عن مستندات الذات."},410);
  if(path.startsWith("/api/")){
   const origin=request.headers.get("origin");
   if(request.method==="POST"&&origin!==url.origin)return json({ok:false,code:"ORIGIN_REQUIRED"},403);
@@ -743,5 +786,5 @@ export default {async fetch(request,env){
   }catch{return json({ok:false,code:"UPSTREAM_UNAVAILABLE",message:"تعذر الاتصال بنظام حسابات الذات."},503)}
  }
  if(path!=="/"&&path!=="/index.html")return new Response("Not found",{status:404});
- return new Response(PAGE,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=120","content-security-policy":"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https://athat.app; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-src https://drive.google.com; frame-ancestors 'none'; form-action 'none'","x-content-type-options":"nosniff","referrer-policy":"no-referrer","permissions-policy":"camera=(),microphone=(),geolocation=()"}});
+ return new Response(PAGE,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=120","content-security-policy":"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-src https://drive.google.com; frame-ancestors 'none'; form-action 'none'","x-content-type-options":"nosniff","referrer-policy":"no-referrer","permissions-policy":"camera=(),microphone=(),geolocation=()"}});
 }};
