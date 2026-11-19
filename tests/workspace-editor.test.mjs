@@ -58,7 +58,7 @@ test('opening an original prepopulates documented source fields without inventin
 test('exactly four primary navigation pages exist and Settings is separate',()=>{
  assert.match(appScript,/\['home','الرئيسية'\],\['documents','المستندات'\],\['students','الطلاب'\],\['reports','التقارير'\]/);
  assert.match(appScript,/settingsButton\.onclick=\(\)=>workspaceGoto\('settings'\)/);
- assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
+ assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,docsGuidancePanel,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
  assert.match(appScript,/workspacePages\.home\.append\(originalHero,homeActions\)/);
 });
 test('duplicate records are not repeated across documents, archives, or student panel',()=>{
