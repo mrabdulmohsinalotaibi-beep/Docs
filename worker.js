@@ -267,7 +267,7 @@ export default {async fetch(request,env){
 
  if(path==="/api/guidance/records"||path==="/api/guidance/record"){
    const authUser=await docsIdent(request,env).catch(()=>null);
-   if(!authUser||!/^usr_[\\w-]{10,}$/.test(authUser.id))return json({ok:false,code:"UNAUTHORIZED"},401);
+   if(!authUser||typeof authUser.id!=='string'||!authUser.id.startsWith('usr_'))return json({ok:false,code:"UNAUTHORIZED"},401);
    const uid=authUser.id,types=new Set(['attendance','interviews','counseling_cases','referrals','programs','committees','plan_tasks']);
    if(path==="/api/guidance/records"){
      if(request.method!=="GET")return json({ok:false,code:"METHOD_NOT_ALLOWED"},405);
