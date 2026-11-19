@@ -278,7 +278,28 @@ export default {async fetch(request,env){
    if(uid==='usr_6a351b83-70aa-46f6-98f1-15bf076d019e'){
      if(path==='/api/students/a4'&&request.method==='GET')return json({ok:true,records:[],count:0});
      if(path==='/api/students/insights'&&request.method==='GET')return json({ok:true,insights:{}});
-     if(path==='/api/students/care'&&request.method==='GET')return json({ok:true,records:[],cases:[],unlinked:[]});
+     if(path==='/api/students/care'&&request.method==='GET'){
+       // Only owner data stored in Docs is exposed after the source reset.
+       // Never reload historical care records from the separate ATHAT database.
+       const requestedKey=url.searchParams.get('key')||'';
+       if(requestedKey.length>170)return json({ok:false,code:'INVALID_STUDENT'},400);
+       if(requestedKey){
+         const student=await env.DOCS_DB.prepare('SELECT student_key FROM docs_students WHERE user_id=?1 AND student_key=?2').bind(uid,requestedKey).first();
+         if(!student)return json({ok:false,code:'STUDENT_NOT_FOUND'},404);
+         const record=await env.DOCS_DB.prepare('SELECT tags_json,notes FROM docs_student_care WHERE user_id=?1 AND student_key=?2').bind(uid,requestedKey).first();
+         let tags=[];
+         try{const parsed=JSON.parse(record?.tags_json||'[]');if(Array.isArray(parsed))tags=parsed.filter(x=>typeof x==='string')}catch{}
+         return json({ok:true,records:[],profile_tags:tags,profile_notes:String(record?.notes||'')});
+       }
+       const records=(await env.DOCS_DB.prepare('SELECT c.student_key,c.tags_json,c.notes FROM docs_student_care c INNER JOIN docs_students s ON s.user_id=c.user_id AND s.student_key=c.student_key WHERE c.user_id=?1').bind(uid).all()).results||[];
+       const medical=new Set(['مرض مزمن','السكري','الربو','الصرع','مرض القلب','حساسية شديدة','إعاقة حركية','إعاقة سمعية','إعاقة بصرية','صعوبات تعلم','اضطراب نمائي','احتياج صحي خاص']);
+       const index=records.map(row=>{
+         let tags=[];try{const parsed=JSON.parse(row.tags_json||'[]');if(Array.isArray(parsed))tags=parsed.filter(x=>typeof x==='string')}catch{}
+         const note=String(row.notes||'').trim();
+         return {student_key:row.student_key,health:tags.some(t=>medical.has(t))?1:0,special:tags.some(t=>!medical.has(t))||!!note?1:0,source_ids:[],a4_ids:[],profile:true};
+       }).filter(row=>row.health||row.special);
+       return json({ok:true,index,linked_students:index.length,classified_students:index.length,unlinked_records:0});
+     }
      if(path==='/api/students/source-record')return json({ok:false,code:'SOURCE_LINK_DISABLED'},403);
      if(path==='/api/students/a4-sync')return json({ok:false,code:'SOURCE_IMPORT_DISABLED',message:'تم إيقاف إعادة نقل السجلات القديمة إلى هذا الحساب.'},403);
    }
