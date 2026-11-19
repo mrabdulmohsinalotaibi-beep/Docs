@@ -1,0 +1,19 @@
+name: Account local backup protection checks
+on:
+  push:
+    branches:
+      - feature/all-account-local-backup-password-delete-20261119
+  pull_request:
+    paths:
+      - worker.js
+      - tests/local-backup-protection.test.mjs
+      - .github/workflows/account-protection.yml
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/local-backup-protection.test.mjs
