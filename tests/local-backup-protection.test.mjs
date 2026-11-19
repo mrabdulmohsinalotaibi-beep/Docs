@@ -26,3 +26,10 @@ test('full local backup covers documents, cloud snapshots, messages and plans wi
  assert.match(page,/backup\.version===2/);
  assert.match(page,/if\(q\.result\)skipped\+\+/);
 });
+
+test('portable full backups use authenticated encryption rather than plaintext JSON',()=>{
+ assert.match(page,/AES-GCM/);
+ assert.match(page,/PBKDF2/);
+ assert.match(page,/docsExportSecureBackup\(payload,password\)/);
+ assert.match(page,/docsOpenSecureBackup\(backup,password\)/);
+});
