@@ -25,7 +25,7 @@ test('all eleven account-scoped D1 tables and genuine evidence files are mirrore
  for(const table of tables)assert.match(source,new RegExp(table));
  assert.match(page,/docsMirrorAllD1Pages/);
  assert.match(page,/docsMirrorEvidenceFile/);
- assert.match(page,/blob:blob/);
+ assert.match(page,/const blob=await response\.blob\(\)/);
  assert.match(page,/athat-docs-account-mirror-v1-/);
 });
 test('automatic backups preserve seven daily account copies and encrypted export includes files',()=>{
