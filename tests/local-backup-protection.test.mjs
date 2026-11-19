@@ -5,7 +5,7 @@ import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../worker.js',import.meta.url),'utf8');
 const pageMatch=source.match(/^const PAGE=("(?:\\.|[^"\\])*");/);
 const page=JSON.parse(pageMatch[1]);
-test('all inline scripts remain parseable',()=>{
+ const scripts=[...page.matchAll(/<script(?:[^>]*)>([\s\S]*?)<[/]script>/g)];
  const scripts=[...page.matchAll(/<script(?:[^>]*)>([\\s\\S]*?)<\\/script>/g)];
  assert.ok(scripts.length>=4);
  for(const [,script] of scripts)assert.doesNotThrow(()=>new vm.Script(script));
