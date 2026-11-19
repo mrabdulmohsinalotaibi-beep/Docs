@@ -89,6 +89,8 @@ test("regional plans and local import work in browser without network upload", {
   await page.locator('#editor').waitFor({state:'visible'});
   assert.ok(await page.locator('#officialFields [data-field="مكان الاجتماع"]').count());
   assert.equal(await page.locator('#docsPreviewCollapse').count(),0);
+  await page.locator('#editor .a4-steps button').nth(4).click();
+  await page.locator('#previewDoc').waitFor({state:'visible'});
   await page.locator('#previewDoc').click();
   await page.locator('#docsUnifiedPreview').waitFor({state:'visible'});
   assert.ok(await page.locator('#docsOriginalPreview .doc-a4').count());

@@ -18,7 +18,7 @@ test('the editor and its input controls are unique',()=>{
 });
 
 test('the editor is mounted before the program button handler is wired',()=>{
- const mount=appScript.indexOf('workspacePages.documents.append(recordsHeader,selector,originalWorks,originalTemplates,programBundle,originalArchive,review,originalEditor)');
+ const mount=appScript.indexOf('workspacePages.documents.append(recordsHeader,selector,originalWorks,docsGuidancePanel,originalTemplates,programBundle,originalArchive,review,originalEditor)');
  const attachHome=appScript.indexOf('docsMain.prepend(workspacePages.home)',mount);
  const programHandler=appScript.indexOf("$('editorPrograms').onclick=",attachHome);
  assert.ok(mount>=0,'Mount editor once in Documents workspace');
@@ -52,14 +52,14 @@ test('opening an original prepopulates documented source fields without inventin
  assert.match(appScript,/attendance:\[\['student_name','اسم الطالب'\]/);
  assert.match(appScript,/programs:\[\['name','اسم البرنامج'\]/);
  assert.match(appScript,/const val=original\[key\]/);
- assert.match(appScript,/if\(oldDerived&&!options\.forceNew\)\{edit\(oldDerived\);return\}/);
+ assert.match(appScript,/if\(oldDerived&&!options\.forceNew\)\{edit\(await hydrateNativeA4Evidence\(oldDerived,sourceId\)\);return\}/);
 });
 
 test('exactly four primary navigation pages exist and Settings is separate',()=>{
  assert.match(appScript,/\['home','الرئيسية'\],\['documents','المستندات'\],\['students','الطلاب'\],\['reports','التقارير'\]/);
  assert.match(appScript,/settingsButton\.onclick=\(\)=>workspaceGoto\('settings'\)/);
- assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
- assert.match(appScript,/workspacePages\.home\.append\(originalHero,homeActions\)/);
+ assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,docsGuidancePanel,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
+ assert.match(appScript,/workspacePages\.home\.append\(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards\)/);
 });
 test('duplicate records are not repeated across documents, archives, or student panel',()=>{
  assert.match(appScript,/uniqueLocal=new Map\(\)/);

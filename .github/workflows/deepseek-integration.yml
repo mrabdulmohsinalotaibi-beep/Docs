@@ -1,0 +1,19 @@
+name: DeepSeek integration checks
+on:
+  push:
+    branches: [feature/deepseek-document-assistant]
+  pull_request:
+    paths:
+      - worker.js
+      - tests/deepseek-integration.test.mjs
+      - .github/workflows/deepseek-integration.yml
+jobs:
+  deepseek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check worker.js
+      - run: node --test tests/deepseek-integration.test.mjs

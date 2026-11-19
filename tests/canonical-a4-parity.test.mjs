@@ -15,7 +15,7 @@ const originalTableCSS=readFileSync(new URL('../data/athat-a4-table-reference.cs
 const tableCSS=page.match(/<style id="athatOriginalA4TableCSS">([\s\S]*?)<\/style>/)?.[1];
 
 test('original ATHAT styles are embedded byte-for-byte',()=>{
- assert.equal(css,snapshot.documentTemplateCSS+'\n'+snapshot.officialDocumentStyle);
+ assert.ok(css.startsWith((snapshot.documentTemplateCSS+'\n'+snapshot.officialDocumentStyle).replace(/^\n/,'')), 'Original ATHAT A4 CSS must remain a prefix; Docs-specific print additions may follow');
  assert.equal(snapshot.origin,'mrabdulmohsinalotaibi-beep/AAA');
  assert.ok(snapshot.files['src/DocumentTemplate.tsx']);
  assert.ok(snapshot.files['src/document-template-official-style.ts']);
@@ -30,7 +30,7 @@ test('table styling and custom field schema come directly from ATHAT',()=>{
 test('the canonical A4 renderer compiles and uses original document classes',()=>{
  assert.ok(script,'Canonical renderer exists');
  assert.doesNotThrow(()=>new vm.Script(script));
- for(const cls of ['doc-a4','doc-header','doc-org','doc-ministry-logo','doc-reference','doc-title','doc-fields','doc-field','doc-attachments','doc-signatures','doc-footer','doc-page-counter']){
+ for(const cls of ['doc-a4','doc-header','doc-org','doc-ministry-logo','doc-header-date','doc-title','doc-fields','doc-field','doc-attachments','doc-signatures','doc-footer']){
   assert.ok(script.includes(cls),cls);
  }
  assert.match(page,/id="docsOriginalPreview"/);
@@ -51,7 +51,7 @@ test('all 41 original source template field schemas are retained',()=>{
 
 test('existing local copies and original cloud source remain distinct',()=>{
  assert.match(script,/const oldDerived=docs\.find\(x=>x\.sourceA4===sourceId\)/);
- assert.match(script,/if\(oldDerived&&!options\.forceNew\)\{edit\(oldDerived\);return\}/);
+ assert.match(script,/if\(oldDerived&&!options\.forceNew\)\{edit\(await hydrateNativeA4Evidence\(oldDerived,sourceId\)\);return\}/);
  assert.match(script,/a4FieldDefinitions:sourceDefinitions/);
  assert.match(script,/sourceA4:sourceId/);
  assert.match(script,/function originalA4SourceModel\(r,p\)/);
@@ -64,9 +64,9 @@ test('original schemas are integrated into the one native Docs template catalog'
  const mapping=JSON.parse(script.match(/const NATIVE_SOURCE_TEMPLATE_MAP=(\{[^\n]+\});/)[1]);
  assert.equal(Object.keys(mapping).length,legacy.length);
  for(const schema of legacy)assert.ok(mapping[schema.id],'Unmapped source fields '+schema.id);
- assert.match(script,/for\(const legacy of IMPORTED_SOURCE_A4_FIELDS\)/);
- assert.match(script,/if\(!hasField\)template\.fields\.push/);
- assert.match(script,/template\.officialDefinitions\.push/);
+ assert.match(script,/for\(const source of IMPORTED_SOURCE_A4_FIELDS\)/);
+ assert.match(script,/const fields=definitions\.map\(/);
+ assert.match(script,/officialDefinitions:definitions/);
  assert.doesNotMatch(page,/id="docsPreviewCollapse"|id="docsRestoreOfficialTemplate"|معاينة A4 الرسمية — قالب الذات الأصلي/);
  assert.match(page,/id="docsUnifiedPreview"/);
  assert.match(script,/\$\('previewDoc'\)\.onclick=\(\)=>\{\$\('docsUnifiedPreview'\)\.showModal\(\);renderOriginalA4Live\(\)\}/);

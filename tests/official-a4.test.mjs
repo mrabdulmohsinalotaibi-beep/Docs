@@ -14,7 +14,7 @@ test('11 Noor-oriented A4 groups and 18 weekly plans',()=>{
  assert.equal(data.weeklyPrograms.length,18);
  for(const w of data.weeklyPrograms){assert.ok(w.week>=1&&w.week<=18);assert.ok(Array.isArray(w.programs))}
  assert.match(script,/const A4_REF=/);
- assert.match(script,/const groups=Object.keys\(A4_REF.groups\)/);
+ assert.match(script,/const groups=\[\.\.\.new Set\(catalog\.map\(t=>t\.group\)\)\]/);
 });
 test('A4 official header, account profile and preserved evidence',()=>{
  assert.match(page,/id="officialMinistryLogo"/);
