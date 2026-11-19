@@ -29,7 +29,7 @@ function server(){
 const seed=async(page,doc)=>{
   await page.evaluate(async({userId,doc})=>{
     const db=await new Promise((resolve,reject)=>{
-      const r=indexedDB.open("athat-docs-unified-v2-"+userId,1);
+      const r=indexedDB.open("athat-docs-unified-v2-"+userId);
       r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
     });
     await new Promise((resolve,reject)=>{
