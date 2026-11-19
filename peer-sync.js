@@ -184,7 +184,7 @@
   async function sendReady(){
     if(paired && channel?.readyState==="open"){
       channel.send(JSON.stringify({type:"ready",user:accountId}));
-      // Transfer starts only when the original device explicitly approves Send.
+      if(peerReady)await autoSync(); // Both authenticated peers confirmed and can exchange automatically.
     }
   }
   async function autoSync(){
@@ -202,7 +202,8 @@
         if(msg.type==="ready"){
           if(msg.user!==accountId)throw Error("الحساب مختلف.");
           peerReady=true;
-          window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"yellow",message:"اتصال موثق، لم تكتمل المزامنة"}}));note("الاتصال موثق. اضغط إرسال مستنداتي من الجهاز الأصلي ليبدأ النقل.");
+          window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"yellow",message:"اتصال موثق، لم تكتمل المزامنة"}}));note("الاتصال موثق. تبدأ المزامنة تلقائيًا.");
+          if(paired)await autoSync();
           return;
         }
         if(!paired || !peerReady)throw Error("يجب تأكيد رمز المطابقة على الجهازين قبل نقل المستندات.");
@@ -240,7 +241,7 @@
       const docs=await allDocs(),deletions=await deletionMarkers(),snapshots=await allSnapshots();
       const payload=JSON.stringify({documents:docs.filter(d=>!deletions.some(m=>m.id===d.id)),deletions,snapshots});
       if(new TextEncoder().encode(payload).byteLength>MAX_BYTES)throw Error("حجم المستندات يتجاوز 32 ميجابايت في عملية واحدة؛ استخدم نسخة JSON يدوية.");
-      if(!confirm("سيتم إرسال "+docs.length+" مستندًا و"+snapshots.length+" سجل حساب إلى جهازك الآخر. متابعة؟"))return;
+      if(!automatic&&!confirm("سيتم إرسال "+docs.length+" مستندًا و"+snapshots.length+" سجل حساب إلى جهازك الآخر. متابعة؟"))return;
       channel.send(JSON.stringify({type:"begin",user:accountId,length:payload.length}));
       for(let i=0;i<payload.length;i+=CHUNK){
         if(channel.readyState!=="open")throw Error("انقطع الاتصال.");
