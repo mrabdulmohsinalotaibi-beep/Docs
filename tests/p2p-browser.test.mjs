@@ -12,10 +12,28 @@ const avatarPng="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1H
 const fakeDocument=(id,title)=>({id,title,kind:"التقارير الإرشادية",group:"سجل التقارير الإرشادية في نور",fields:{"الأعمال المنفذة":"اختبار بلا بيانات حقيقية"},body:"نموذج اختبار فقط",photos:[avatarPng],status:"مسودة",created:new Date().toISOString(),updated:new Date().toISOString()});
 
 function server(){
-  const requests=[];
+  const requests=[],active=new Map(),mailbox=new Map();
   const http=createServer(async(req,res)=>{
     const url=new URL(req.url,"http://localhost");
     requests.push(url.pathname);
+    if(url.pathname==="/api/device-sync"){
+      const chunks=[];for await(const part of req)chunks.push(part);
+      let data;try{data=JSON.parse(Buffer.concat(chunks).toString("utf8"));}catch{data={};}
+      if(!/^dev_[a-f0-9]{32}$/.test(data.device)){res.writeHead(400);res.end(JSON.stringify({ok:false}));return;}
+      if(data.heartbeat||data.action==="signal")active.set(data.device,Date.now());
+      const peers=[...active].filter(([id,ts])=>id!==data.device&&Date.now()-ts<300000).map(([id])=>({id}));
+      if(data.action==="signal"){
+        const pending=mailbox.get(data.to)||[];
+        pending.push({id:data.id,from:data.device,type:data.type,sdp:data.sdp});
+        mailbox.set(data.to,pending);
+        res.writeHead(200,{"content-type":"application/json"});res.end(JSON.stringify({ok:true}));return;
+      }
+      if(data.action==="poll"){
+        const messages=mailbox.get(data.device)||[];mailbox.delete(data.device);
+        res.writeHead(200,{"content-type":"application/json"});res.end(JSON.stringify({ok:true,peers,messages}));return;
+      }
+      res.writeHead(400);res.end(JSON.stringify({ok:false}));return;
+    }
     if(url.pathname==="/api/auth/me"){
       res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});
       res.end(JSON.stringify({ok:true,user:mockUser}));return;
@@ -29,7 +47,7 @@ function server(){
 const seed=async(page,doc)=>{
   await page.evaluate(async({userId,doc})=>{
     const db=await new Promise((resolve,reject)=>{
-      const r=indexedDB.open("athat-docs-unified-v2-"+userId,1);
+      const r=indexedDB.open("athat-docs-unified-v2-"+userId);
       r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
     });
     await new Promise((resolve,reject)=>{
@@ -136,4 +154,41 @@ test("WebRTC transfers documents with photos between two independent accounts' l
     assert.equal(requests.some(p=>/upload|documents/.test(p)),false);
     await ctxA.close();await ctxB.close();
   }finally{if(browser)await browser.close();await new Promise(resolve=>http.close(resolve))}
+});
+
+test("signed-in devices exchange local sample documents automatically without pairing clicks",{timeout:105000},async()=>{
+ const {http}=server();
+ await new Promise(resolve=>http.listen(0,"127.0.0.1",resolve));
+ const port=http.address().port;
+ let browser;
+ try{
+  browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||"/usr/bin/google-chrome",args:["--no-sandbox","--disable-dev-shm-usage"]});
+  const a=await browser.newPage(), b=await browser.newPage();
+  for(const page of [a,b]){
+   await page.addInitScript(()=>{
+    const Native=window.RTCPeerConnection;
+    window.RTCPeerConnection=function(cfg){return new Native({...cfg,iceServers:[]})};
+    window.RTCPeerConnection.prototype=Native.prototype;
+   });
+  }
+  await a.goto("http://127.0.0.1:"+port,{waitUntil:"domcontentloaded"});
+  await a.locator("#appMain").waitFor({state:"visible",timeout:12000});
+  await seed(a,fakeDocument("auto-a-1","وثيقة تجريبية - جهاز أ"));
+  await b.goto("http://127.0.0.1:"+port,{waitUntil:"domcontentloaded"});
+  await b.locator("#appMain").waitFor({state:"visible",timeout:12000});
+  await seed(b,fakeDocument("auto-b-1","وثيقة تجريبية - جهاز ب"));
+  let docsA=[],docsB=[];
+  const deadline=Date.now()+75000;
+  do{
+   docsA=await getDocs(a);docsB=await getDocs(b);
+   if(docsA.some(x=>x.id==="auto-b-1")&&docsB.some(x=>x.id==="auto-a-1"))break;
+   await new Promise(resolve=>setTimeout(resolve,1000));
+  }while(Date.now()<deadline);
+  assert.ok(docsA.some(x=>x.id==="auto-b-1"),"first device should receive second device document");
+  assert.ok(docsB.some(x=>x.id==="auto-a-1"),"second device should receive first device document");
+  await a.close();await b.close();
+ }finally{
+  if(browser)await browser.close();
+  await new Promise(resolve=>http.close(resolve));
+ }
 });
