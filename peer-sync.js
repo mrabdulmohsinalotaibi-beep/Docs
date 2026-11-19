@@ -16,7 +16,7 @@
     '<label style="display:block;margin-top:12px">رمز الاتصال الوارد من الجهاز الآخر<textarea id="peerIncoming" rows="4" style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #d9cbb6;border-radius:9px;padding:8px" placeholder="الصق رمز الاتصال هنا"></textarea></label>'+
     '<label style="display:block;margin-top:9px">رمز هذا الجهاز<textarea id="peerOutgoing" rows="4" readonly style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #d9cbb6;border-radius:9px;padding:8px"></textarea></label>'+
     '<button type="button" id="peerCopy">نسخ الرمز</button><p id="peerFingerprint" style="font-weight:bold"></p><p id="peerStatus" role="status" aria-live="polite" style="font-size:13px"></p>'+
-    '<small>المزامنة تضيف المستندات الجديدة وتحفظ النسخ المتعارضة بدل استبدالها. لا تعمل إذا كان أحد الجهازين مغلقًا. بعض الشبكات تتطلب خادم TURN غير مهيأ حاليًا.</small>';
+    '<small>المزامنة تتطلب فتح الجهازين وموافقة المرسل والمستقبل؛ تُضاف المستندات الجديدة وتحفظ النسخ المتعارضة دون حذف. لا تعمل إذا كان أحد الجهازين مغلقًا. بعض الشبكات تتطلب خادم TURN غير مهيأ حاليًا.</small>';
   const el = id => ui.querySelector("#" + id);
   const note = s => { el("peerStatus").textContent = s; };
   function reset() {
@@ -38,8 +38,8 @@
   }
   function dbFor(id) {
     return new Promise((resolve,reject)=>{
-      const req = indexedDB.open(STORAGE_PREFIX + id,1);
-      req.onupgradeneeded=()=>{ if(!req.result.objectStoreNames.contains("documents"))req.result.createObjectStore("documents",{keyPath:"id"}); };
+      const req = indexedDB.open(STORAGE_PREFIX + id,3);
+      req.onupgradeneeded=()=>{ if(!req.result.objectStoreNames.contains("documents"))req.result.createObjectStore("documents",{keyPath:"id"});if(!req.result.objectStoreNames.contains("deletions"))req.result.createObjectStore("deletions",{keyPath:"id"});if(!req.result.objectStoreNames.contains("cloudSnapshots"))req.result.createObjectStore("cloudSnapshots",{keyPath:"id"}); };
       req.onsuccess=()=>resolve(req.result);
       req.onerror=()=>reject(req.error);
     });
@@ -57,9 +57,11 @@
     const db = await dbFor(id);
     let added=0,conflicts=0,unchanged=0;
     try {
-      // Import-only; no deletions, and never overwrite differing documents.
+      const removedIds=await new Promise((resolve,reject)=>{const r=db.transaction("deletions").objectStore("deletions").getAll();r.onsuccess=()=>resolve(new Map((r.result||[]).map(x=>[x.id,x.deletedAt])));r.onerror=()=>reject(r.error)});
+      // Never resurrect an older document that was deliberately deleted on this device.
       for (const doc of incoming) {
         if (!doc || typeof doc!=="object" || typeof doc.id!=="string" || doc.id.length>200 || !Array.isArray(doc.photos||[])) continue;
+        if(removedIds.has(doc.id) && String(removedIds.get(doc.id))>=String(doc.updated||doc.created||"")){unchanged++;continue;}
         const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(doc))));
         const checksum = Array.from(digest.slice(0,16), x=>x.toString(16).padStart(2,"0")).join("");
         const conflictId="sync-"+checksum;
@@ -86,6 +88,58 @@
       }
       return {added,conflicts,unchanged};
     } finally { db.close(); }
+  }
+
+  async function allSnapshots(){
+    const db=await dbFor(await identity());
+    try{return await new Promise((ok,no)=>{const r=db.transaction("cloudSnapshots").objectStore("cloudSnapshots").getAll();r.onsuccess=()=>ok(r.result||[]);r.onerror=()=>no(r.error)})}finally{db.close()}
+  }
+  async function addSnapshots(items){
+    if(!Array.isArray(items)||items.length>6000)throw Error("عدد سجلات الحساب غير صالح");
+    const db=await dbFor(await identity());let added=0,unchanged=0,conflicts=0;
+    try{
+      for(const item of items){
+        if(!item||typeof item.id!=="string"||item.id.length>250||!/^(a4:|guidance:|index:)/.test(item.id))continue;
+        await new Promise((ok,no)=>{
+          const tx=db.transaction("cloudSnapshots","readwrite"),store=tx.objectStore("cloudSnapshots"),r=store.get(item.id);
+          r.onsuccess=()=>{let old=r.result;
+            if(!old){store.put(item);added++}
+            else if(JSON.stringify(old)===JSON.stringify(item))unchanged++;
+            else if(String(item.downloadedAt||"")>String(old.downloadedAt||"")){store.put(item);added++}
+            else conflicts++;
+          };tx.oncomplete=ok;tx.onerror=()=>no(tx.error);tx.onabort=()=>no(tx.error);
+        });
+      }
+      return {added,unchanged,conflicts}
+    }finally{db.close()}
+  }
+  async function deletionMarkers(){
+    const db=await dbFor(await identity());
+    try{return await new Promise((resolve,reject)=>{const req=db.transaction("deletions","readonly").objectStore("deletions").getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error);});}
+    finally{db.close();}
+  }
+  async function applyDeletes(markers){
+    const db=await dbFor(await identity());let removed=0,skipped=0;
+    try{
+      for(const marker of markers){
+        if(!marker||typeof marker.id!=="string"||marker.id.length>200||!/^\\d{4}-\\d\\d-\\d\\dT/.test(marker.deletedAt||""))continue;
+        await new Promise((resolve,reject)=>{
+          const tx=db.transaction(["documents","deletions"],"readwrite"),documents=tx.objectStore("documents"),deletions=tx.objectStore("deletions");
+          const d=documents.get(marker.id),previous=deletions.get(marker.id);
+          let doc,old;d.onsuccess=()=>{doc=d.result;};previous.onsuccess=()=>{old=previous.result;};
+          tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+          // Run after both read results, while the transaction is alive.
+          const apply=()=>{if(!d.readyState||d.readyState!=="done"||previous.readyState!=="done")return;
+            const last=String(old?.deletedAt||"");
+            if(last>=marker.deletedAt || (doc && String(doc.updated||doc.created||"")>marker.deletedAt)){skipped++;return}
+            deletions.put({id:marker.id,deletedAt:marker.deletedAt,title:String(marker.title||"").slice(0,180)});
+            if(doc){documents.delete(marker.id);removed++}
+          };
+          d.addEventListener("success",apply);previous.addEventListener("success",apply);
+        });
+      }
+      return {removed,skipped};
+    }finally{db.close()}
   }
   const encode = text => btoa(String.fromCharCode(...new TextEncoder().encode(text))); // SDP short in modern browsers
   const decode = raw => new TextDecoder().decode(Uint8Array.from(atob(raw.trim()),c=>c.charCodeAt(0)));
@@ -121,7 +175,7 @@
     reset();
     pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
     pc.onconnectionstatechange=()=>{
-      if(pc?.connectionState==="failed") note("فشل الاتصال المباشر؛ قد تتطلب الشبكة خادم TURN.");
+      if(pc?.connectionState==="failed") {window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"red",message:"فشل الاتصال"}}));note("فشل الاتصال المباشر؛ قد تتطلب الشبكة خادم TURN.");}
       else if(pc?.connectionState==="connected") showPairing().catch(e=>note(e.message));
       else if(pc?.connectionState==="disconnected") note("انقطع الاتصال بالجهاز الآخر.");
     };
@@ -130,7 +184,7 @@
   async function sendReady(){
     if(paired && channel?.readyState==="open"){
       channel.send(JSON.stringify({type:"ready",user:accountId}));
-      if(peerReady && !autoSent)await autoSync();
+      // Transfer starts only when the original device explicitly approves Send.
     }
   }
   async function autoSync(){
@@ -140,15 +194,15 @@
   }
   function configure(c) {
     channel=c;c.binaryType="arraybuffer";
-    c.onopen=()=>{showPairing().then(sendReady).catch(e=>note(e.message));};
-    c.onclose=()=>{el("peerSend").disabled=true;note("أُغلق الاتصال.");};
+    c.onopen=()=>{window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"yellow",message:"جارٍ التحقق"}}));showPairing().then(sendReady).catch(e=>note(e.message));};
+    c.onclose=()=>{window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"red",message:"الاتصال متوقف"}}));el("peerSend").disabled=true;note("أُغلق الاتصال.");};
     c.onmessage=async event=>{
       try{
         const msg=JSON.parse(event.data);
         if(msg.type==="ready"){
           if(msg.user!==accountId)throw Error("الحساب مختلف.");
           peerReady=true;
-          if(paired && !autoSent)await autoSync();
+          window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"yellow",message:"اتصال موثق، لم تكتمل المزامنة"}}));note("الاتصال موثق. اضغط إرسال مستنداتي من الجهاز الأصلي ليبدأ النقل.");
           return;
         }
         if(!paired || !peerReady)throw Error("يجب تأكيد رمز المطابقة على الجهازين قبل نقل المستندات.");
@@ -161,25 +215,32 @@
           received+=msg.data;
         } else if (msg.type==="end") {
           if(received.length!==msg.length)throw Error("النقل غير مكتمل.");
-          const docs=JSON.parse(received);received="";
-          if(!Array.isArray(docs)||docs.length>3000)throw Error("بيانات النقل غير صالحة.");
-          if(!confirm("وصل "+docs.length+" مستندًا مع المرفقات. هل توافق على إضافتها إلى الأرشيف المحلي لهذا الحساب؟")){note("تم رفض الاستيراد. لم تُحفظ البيانات.");return;}
-          const result=await addDocs(docs);
+          const transfer=JSON.parse(received);received="";
+          const docs=Array.isArray(transfer)?transfer:transfer?.documents;
+          const deletions=Array.isArray(transfer?.deletions)?transfer.deletions:[];
+          const snapshots=Array.isArray(transfer?.snapshots)?transfer.snapshots:[];
+          if(!Array.isArray(docs)||docs.length>3000||deletions.length>3000||snapshots.length>6000)throw Error("بيانات النقل غير صالحة.");
+          if(!confirm("وصل "+docs.length+" مستندًا و"+snapshots.length+" سجل حساب و"+deletions.length+" إشعار حذف. هل توافق على استيراد البيانات وتطبيق الحذف على النسخ المحلية غير المعدلة حديثًا؟")){note("تم رفض الاستيراد. لم تُحفظ البيانات.");return;}
+          const deleted=await applyDeletes(deletions);
+          const result=await addDocs(docs.filter(d=>!deletions.some(m=>m.id===d.id)));
+          const snap=await addSnapshots(snapshots);
+          note("سجلات حساب منقولة: "+snap.added+"؛ تعارضات: "+snap.conflicts+".");
           note("اكتملت المزامنة: "+result.added+" جديد، "+result.conflicts+" نسخة تعارض، "+result.unchanged+" موجود.");
+          window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"green",message:"تم استلام البيانات وحفظها"}}));
           // Existing app owns its IndexedDB connection; reload to refresh its list.
           if(confirm("اكتمل الاستيراد. هل تريد إعادة تحميل الصفحة لعرض المستندات؟")) location.reload();
         }
-      }catch(err){note("تعذّر الاستقبال: "+err.message);}
+      }catch(err){window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"red",message:"فشل نقل البيانات"}}));note("تعذّر الاستقبال: "+err.message);}
     };
   }
   async function send(automatic=false) {
     if(!paired || !peerReady || sending || !channel || channel.readyState!=="open")throw Error("أكّد رمز المطابقة على الجهازين أولًا.");
     sending=true;el("peerSend").disabled=true;
     try{
-      const docs=await allDocs();
-      const payload=JSON.stringify(docs);
-      if(payload.length>MAX_BYTES)throw Error("حجم المستندات يتجاوز 32 ميجابايت في عملية واحدة؛ استخدم نسخة JSON يدوية.");
-      if(!automatic && !confirm("سيتم إرسال "+docs.length+" مستندًا وشواهدها إلى جهازك الآخر. متابعة؟"))return;
+      const docs=await allDocs(),deletions=await deletionMarkers(),snapshots=await allSnapshots();
+      const payload=JSON.stringify({documents:docs.filter(d=>!deletions.some(m=>m.id===d.id)),deletions,snapshots});
+      if(new TextEncoder().encode(payload).byteLength>MAX_BYTES)throw Error("حجم المستندات يتجاوز 32 ميجابايت في عملية واحدة؛ استخدم نسخة JSON يدوية.");
+      if(!confirm("سيتم إرسال "+docs.length+" مستندًا و"+snapshots.length+" سجل حساب إلى جهازك الآخر. متابعة؟"))return;
       channel.send(JSON.stringify({type:"begin",user:accountId,length:payload.length}));
       for(let i=0;i<payload.length;i+=CHUNK){
         if(channel.readyState!=="open")throw Error("انقطع الاتصال.");
