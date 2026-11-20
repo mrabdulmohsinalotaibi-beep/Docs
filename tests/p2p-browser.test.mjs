@@ -99,7 +99,15 @@ test("WebRTC transfers documents with photos between two independent accounts' l
       catch(err){throw Error("App startup failed: errors="+errors.join(" | ")+" authStatus="+await page.locator("#authMsg").textContent().catch(()=>"?")+" peerStatus="+await page.locator("#peerStatus").textContent().catch(()=>"?")+" / "+err.message);}
       // Peer sync is now intentionally located in the Settings workspace.
       await page.locator('#workspaceSettingsLink').click();
-      await page.locator("#athatPeerSync").waitFor({state:"visible",timeout:10000});
+      try{await page.locator("#athatPeerSync").waitFor({state:"visible",timeout:10000});}
+      catch(error){
+        const info=await page.evaluate(()=>{
+          const el=document.querySelector("#athatPeerSync"),items=[];let curr=el;
+          while(curr&&items.length<8){items.push({id:curr.id,hidden:curr.hidden,display:getComputedStyle(curr).display});curr=curr.parentElement;}
+          return {ancestors:items,settingsVisible:!!document.querySelector("#workspace-settings")?.getClientRects().length,appHidden:document.querySelector("#appMain")?.hidden};
+        });
+        throw Error("Peer settings panel hidden: "+JSON.stringify(info)+" / "+error.message);
+      }
     }
     await seed(a,fakeDocument("a-1","مستند الجهاز الأول"));
     await seed(b,fakeDocument("b-1","مستند الجهاز الثاني"));

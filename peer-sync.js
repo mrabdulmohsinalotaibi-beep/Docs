@@ -295,6 +295,11 @@
       accountId=nextId;ui.hidden=false;
     });
     document.addEventListener("athat-docs-logout",()=>{reset();accountId="";ui.hidden=true;});
+    // Restore the pairing panel on explicit Settings navigation, even if login initialization raced the deferred script.
+    document.addEventListener("athat-docs-settings-open",()=>{
+      if(main.hidden){ui.hidden=true;return;}
+      identity().then(()=>{ui.hidden=false;}).catch(()=>{reset();ui.hidden=true;});
+    });
     if(!main.hidden)identity().then(()=>{ui.hidden=false;}).catch(()=>{reset();ui.hidden=true;});
 
   }
