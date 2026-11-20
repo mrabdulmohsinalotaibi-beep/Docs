@@ -52,3 +52,13 @@ test('local completion badge requires all records and discovered binary evidence
  assert.match(page,/for\(const evidence of data\.rows\)\{/);
  assert.doesNotMatch(page,/for\(const evidence of data\.rows\.slice\(0,15\)\)/);
 });
+
+test('completion is withheld until every D1 table has reached its final page',()=>{
+ assert.match(page,/function docsMirrorFullTableCount\(owner\)/);
+ assert.match(page,/docsMirrorTableDoneKey\(owner,table\)/);
+ assert.match(page,/if\(!data\.hasMore\)/);
+ assert.match(page,/localStorage\.removeItem\(docsMirrorTableDoneKey\(owner,table\)\)/);
+ assert.match(page,/completedTables===DOCS_MIRROR_TABLES\.length/);
+ assert.match(page,/data\.offline\|\|!Array\.isArray\(data\.rows\)/);
+ assert.match(page,/!x\.value\?\.offline/);
+});
