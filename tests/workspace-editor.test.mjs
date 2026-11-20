@@ -231,3 +231,8 @@ test('pairing shortcut reveals Sync settings instead of scrolling a hidden panel
  assert.match(appScript,/dsGet\('dsPairOpen'\)\.onclick=\(\)=>\{dsOpenTab\('sync'\)/);
  assert.match(appScript,/athat-docs-settings-open/);
 });
+
+test('read-only save and sync indicators never intercept navigation clicks',()=>{
+ assert.match(page,/\.docs-live-indicators\{position:sticky;top:0;z-index:20;pointer-events:none;/);
+ assert.match(page,/#workspaceNav\{position:fixed!important/);
+});
