@@ -99,6 +99,7 @@ test("WebRTC transfers documents with photos between two independent accounts' l
       catch(err){throw Error("App startup failed: errors="+errors.join(" | ")+" authStatus="+await page.locator("#authMsg").textContent().catch(()=>"?")+" peerStatus="+await page.locator("#peerStatus").textContent().catch(()=>"?")+" / "+err.message);}
       // Peer sync is now intentionally located in the Settings workspace.
       await page.locator('#workspaceSettingsLink').click();
+      await page.locator('[data-ds-tab="sync"]').click();
       await page.locator('#dsPairOpen').click();
       try{await page.locator("#athatPeerSync").waitFor({state:"visible",timeout:10000});}
       catch(error){
