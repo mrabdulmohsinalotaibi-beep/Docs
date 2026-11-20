@@ -194,3 +194,15 @@ test('reports only aggregate private data and exports are derived without new DB
  assert.doesNotMatch(reporting,/INSERT INTO|docs\.push\(|db\.transaction\(|createNativeFromA4\(/);
  assert.doesNotMatch(reporting,/reportsDownload\([^;]*student\.name/);
 });
+
+test('portfolio opens all account records and does not inherit stale filters',()=>{
+ assert.match(appScript,/function activateDocsTab\(nextTab\)/);
+ assert.match(appScript,/if\(tab==='portfolio'\)/);
+ assert.match(appScript,/\$\('search'\)\.value=''/);
+ assert.match(appScript,/\$\('nativeDocsLink'\)\.value='all'/);
+ assert.match(appScript,/\['portfolio','ملف الإنجاز'\]/);
+ assert.match(appScript,/if\(view==='portfolio'\)activateDocsTab\('portfolio'\)/);
+ assert.match(appScript,/loadGuidanceRecords\(\)\.catch/);
+ assert.match(appScript,/جارٍ استرجاع أعمال حسابك لملف الإنجاز/);
+ assert.match(appScript,/تصدير PDF الحالي يضم المستندات المحلية المحددة فقط/);
+});
