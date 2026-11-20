@@ -43,3 +43,12 @@ test('home counts persisted old records rather than only freshly created documen
  assert.match(page,/const limit=Math\.min\(120,items\.length\)/);
  assert.match(page,/docsMirrorCycle\(\)\.catch\(console\.warn\)\},3\*60\*1000/);
 });
+
+test('local completion badge requires all records and discovered binary evidence',()=>{
+ assert.match(page,/async function docsMirrorAudit\(paths\)/);
+ assert.match(page,/const pending=paths\.filter\(path=>!responseIds\.has\(path\)\)/);
+ assert.match(page,/const missingFiles=\[\.\.\.expectedFiles\]\.filter/);
+ assert.match(page,/audit\.complete/);
+ assert.match(page,/for\(const evidence of data\.rows\)\{/);
+ assert.doesNotMatch(page,/for\(const evidence of data\.rows\.slice\(0,15\)\)/);
+});
