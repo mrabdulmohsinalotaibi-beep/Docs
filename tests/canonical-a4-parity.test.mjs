@@ -14,8 +14,10 @@ const css=page.match(/<style id="athatOriginalA4CSS">([\s\S]*?)<\/style>/)?.[1]?
 const originalTableCSS=readFileSync(new URL('../data/athat-a4-table-reference.css',import.meta.url),'utf8').trim();
 const tableCSS=page.match(/<style id="athatOriginalA4TableCSS">([\s\S]*?)<\/style>/)?.[1];
 
-test('original ATHAT styles are embedded byte-for-byte',()=>{
- assert.ok(css.startsWith((snapshot.documentTemplateCSS+'\n'+snapshot.officialDocumentStyle).replace(/^\n/,'')), 'Original ATHAT A4 CSS must remain a prefix; Docs-specific print additions may follow');
+test('original ATHAT print geometry is preserved with Docs palette',()=>{
+ const geometryOnly=code=>code.replace(/#[0-9a-f]{3,8}\b/gi,'#theme-color');
+ const original=(snapshot.documentTemplateCSS+'\n'+snapshot.officialDocumentStyle).replace(/^\n/,'');
+ assert.ok(geometryOnly(css).startsWith(geometryOnly(original)), 'A4 print geometry must stay identical to ATHAT; only branded color values may change');
  assert.equal(snapshot.origin,'mrabdulmohsinalotaibi-beep/AAA');
  assert.ok(snapshot.files['src/DocumentTemplate.tsx']);
  assert.ok(snapshot.files['src/document-template-official-style.ts']);

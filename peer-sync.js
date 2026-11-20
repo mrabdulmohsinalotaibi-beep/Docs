@@ -9,12 +9,12 @@
   ui.id = "athatPeerSync";
   ui.dir = "rtl";
   ui.hidden = true;
-  ui.style.cssText = "margin:15px 0;padding:17px;background:#fff;border:1px solid #d9cbb6;border-radius:15px;color:#503821;line-height:1.8";
+  ui.style.cssText = "margin:15px 0;padding:17px;background:#fff;border:1px solid #D9CCB2;border-radius:15px;color:#514735;line-height:1.8";
   ui.innerHTML = '<h2 style="margin:0 0 8px">مزامنة أجهزتي مباشرة</h2>'+
     '<p style="margin:0 0 12px">تظل المستندات والشواهد على الأجهزة فقط. يلزم فتح الموقع على الجهازين، وتسجيل الدخول لنفس الحساب، وتبادل رموز الاتصال يدويًا. لن تُرفع مستنداتك إلى الخادم.</p>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="peerOffer">هذا الجهاز: إنشاء اتصال</button><button type="button" id="peerAnswer">الجهاز الآخر: قبول اتصال</button><button type="button" id="peerFinish">إتمام الاتصال</button><button type="button" id="peerVerify" disabled>تأكيد رمز المطابقة على الجهازين</button><button type="button" id="peerSend" disabled>إرسال مستنداتي للجهاز الآخر</button><button type="button" id="peerClose">قطع الاتصال</button></div>'+
-    '<label style="display:block;margin-top:12px">رمز الاتصال الوارد من الجهاز الآخر<textarea id="peerIncoming" rows="4" style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #d9cbb6;border-radius:9px;padding:8px" placeholder="الصق رمز الاتصال هنا"></textarea></label>'+
-    '<label style="display:block;margin-top:9px">رمز هذا الجهاز<textarea id="peerOutgoing" rows="4" readonly style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #d9cbb6;border-radius:9px;padding:8px"></textarea></label>'+
+    '<label style="display:block;margin-top:12px">رمز الاتصال الوارد من الجهاز الآخر<textarea id="peerIncoming" rows="4" style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #D9CCB2;border-radius:9px;padding:8px" placeholder="الصق رمز الاتصال هنا"></textarea></label>'+
+    '<label style="display:block;margin-top:9px">رمز هذا الجهاز<textarea id="peerOutgoing" rows="4" readonly style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #D9CCB2;border-radius:9px;padding:8px"></textarea></label>'+
     '<button type="button" id="peerCopy">نسخ الرمز</button><p id="peerFingerprint" style="font-weight:bold"></p><p id="peerStatus" role="status" aria-live="polite" style="font-size:13px"></p>'+
     '<small>المزامنة تتطلب فتح الجهازين وموافقة المرسل والمستقبل؛ تُضاف المستندات الجديدة وتحفظ النسخ المتعارضة دون حذف. لا تعمل إذا كان أحد الجهازين مغلقًا. بعض الشبكات تتطلب خادم TURN غير مهيأ حاليًا.</small>';
   const el = id => ui.querySelector("#" + id);

@@ -55,8 +55,11 @@ test('opening an original prepopulates documented source fields without inventin
  assert.match(appScript,/if\(oldDerived&&!options\.forceNew\)\{edit\(await hydrateNativeA4Evidence\(oldDerived,sourceId\)\);return\}/);
 });
 
-test('exactly four primary navigation pages exist and Settings is separate',()=>{
- assert.match(appScript,/\['home','الرئيسية'\],\['documents','المستندات'\],\['students','الطلاب'\],\['reports','التقارير'\]/);
+test('five primary navigation pages exist and Settings is separate',()=>{
+ assert.match(appScript,/\['home','الرئيسية'\],\['documents','المستندات'\],\['students','الطلاب'\],\['reports','التقارير'\],\['messages','الرسائل'\]/);
+ assert.match(page,/#workspaceNav\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+ assert.match(page,/#workspaceNav\{position:fixed!important;[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+ assert.match(appScript,/workspacePages\.messages/);
  assert.match(appScript,/settingsButton\.onclick=\(\)=>workspaceGoto\('settings'\)/);
  assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,docsGuidancePanel,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
  assert.match(appScript,/workspacePages\.home\.append\(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards\)/);
