@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "provider": "n8n-cloud",
+  "instanceOrigin": "https://abdulmo7sin.app.n8n.cloud",
+  "assistantUrl": "https://abdulmo7sin.app.n8n.cloud/assistant",
+  "integrationEnabled": false,
+  "workflowName": "مستندات الذات – إشعار جاهزية مسودة (تجريبي)",
+  "payloadPolicy": "metadata-only-no-student-data",
+  "authentication": "headerAuth-required",
+  "productionWebhookConfigured": false,
+  "notes": "Non-secret n8n origin configuration. Webhook path and credentials must be configured by the account owner in n8n and in backend secrets; never put secrets in GitHub or frontend."
+}

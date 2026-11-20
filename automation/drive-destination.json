@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "provider": "google-drive",
+  "destinationFolderId": "1bqQD2ESgKTSWS0QL_6A3WODPot2zsiNp",
+  "destinationName": "مستندات الذات – الأرشيف المعتمد",
+  "uploadPolicy": "explicit-approval-only",
+  "storeOriginalLocally": true,
+  "automationEnabled": false,
+  "requireRestrictedFolderPermissions": true,
+  "requireOAuthBeforeUpload": true,
+  "requireVerifiedDriveFileMetadata": true,
+  "note": "Non-secret intended folder configuration only. Never upload until public writer access is removed, account-scoped OAuth is established and approval gate is wired."
+}
