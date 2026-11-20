@@ -150,7 +150,7 @@ test('student timeline links directly to the actual source record with an in-pla
  assert.match(page,/id="s360RealSave"/);
  assert.match(appScript,/link\.onclick=\(\)=>openRealStudentRecord\(item,link\)/);
  assert.match(appScript,/open\.onclick=\(\)=>openRealStudentRecord\(item,open\)/);
- assert.match(appScript,/fetch\('\/api\/students\/source-record\?'/);
+ assert.match(appScript,/await openGuidanceRecord\(type,id\)/);
  assert.match(appScript,/window\.print\(\)/);
  assert.match(appScript,/function returnToStudentRecord\(\)/);
  assert.match(appScript,/activateStudentProfileTab\('followup'\)/);
@@ -204,7 +204,7 @@ test('portfolio opens all account records and does not inherit stale filters',()
  assert.match(appScript,/if\(view==='portfolio'\)activateDocsTab\('portfolio'\)/);
  assert.match(appScript,/loadGuidanceRecords\(\)\.catch/);
  assert.match(appScript,/جارٍ استرجاع أعمال حسابك لملف الإنجاز/);
- assert.match(appScript,/تصدير PDF الحالي يضم المستندات المحلية المحددة فقط/);
+ assert.match(appScript,/اختر الأعمال التي تريد إضافتها إلى ملف الإنجاز أولًا/);
 });
 
 test('legacy account controls no longer call removed ATHAT APIs',()=>{
