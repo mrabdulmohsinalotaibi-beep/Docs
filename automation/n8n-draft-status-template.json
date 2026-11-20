@@ -1,0 +1,89 @@
+{
+  "name": "مستندات الذات | استقبال حالة مسودة تجريبية - دون ملفات",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "athat-docs-draft-status-v1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "trigger-1",
+      "name": "استقبال حالة المسودة",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ],
+      "webhookId": "athat-docs-draft-status-v1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $input.first().json.body || {}; const allowed = ['eventType','documentRef','revision','status','createdAt']; const result = {}; for (const key of allowed) { if (typeof incoming[key] === 'string' && incoming[key].length <= 120) result[key] = incoming[key]; } const valid = result.eventType === 'draft_ready' && /^[A-Za-z0-9_-]{8,120}$/.test(result.documentRef || '') && /^\\d{1,6}$/.test(result.revision || '') && result.status === 'pending_review'; if (!valid) throw new Error('Invalid or incomplete metadata; no document payload accepted'); return [{json:{ok:true,accepted:true,documentRef:result.documentRef,revision:result.revision,notice:'Metadata only. No PDF, names, signatures, or student records are accepted.'}}];"
+      },
+      "id": "validate-2",
+      "name": "تدقيق بيانات الإشعار",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "response-3",
+      "name": "تأكيد الاستقبال دون رفع",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        790,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "استقبال حالة المسودة": {
+      "main": [
+        [
+          {
+            "node": "تدقيق بيانات الإشعار",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "تدقيق بيانات الإشعار": {
+      "main": [
+        [
+          {
+            "node": "تأكيد الاستقبال دون رفع",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
