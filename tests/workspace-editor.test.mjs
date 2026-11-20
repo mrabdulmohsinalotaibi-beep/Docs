@@ -55,8 +55,11 @@ test('opening an original prepopulates documented source fields without inventin
  assert.match(appScript,/if\(oldDerived&&!options\.forceNew\)\{edit\(await hydrateNativeA4Evidence\(oldDerived,sourceId\)\);return\}/);
 });
 
-test('exactly four primary navigation pages exist and Settings is separate',()=>{
- assert.match(appScript,/\['home','الرئيسية'\],\['documents','المستندات'\],\['students','الطلاب'\],\['reports','التقارير'\]/);
+test('five primary navigation pages exist and Settings is separate',()=>{
+ assert.match(appScript,/\['home','الرئيسية'\],\['documents','المستندات'\],\['students','الطلاب'\],\['reports','التقارير'\],\['messages','الرسائل'\]/);
+ assert.match(page,/#workspaceNav\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+ assert.match(page,/#workspaceNav\{position:fixed!important;[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+ assert.match(appScript,/workspacePages\.messages/);
  assert.match(appScript,/settingsButton\.onclick=\(\)=>workspaceGoto\('settings'\)/);
  assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,docsGuidancePanel,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
  assert.match(appScript,/workspacePages\.home\.append\(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards\)/);
@@ -222,4 +225,14 @@ test('portfolio exports imported and local selected records into the official A4
  assert.match(appScript,/if\(failed\)\{/);
  assert.match(appScript,/preparedWindow\|\|window\.open/);
  assert.match(appScript,/\$\('backupBtn'\)\.onclick=\(\)=>\{workspaceGoto\('settings'\)/);
+});
+
+test('pairing shortcut reveals Sync settings instead of scrolling a hidden panel',()=>{
+ assert.match(appScript,/dsGet\('dsPairOpen'\)\.onclick=\(\)=>\{dsOpenTab\('sync'\)/);
+ assert.match(appScript,/athat-docs-settings-open/);
+});
+
+test('read-only save and sync indicators never intercept navigation clicks',()=>{
+ assert.match(page,/\.docs-live-indicators\{position:sticky;top:0;z-index:20;pointer-events:none;/);
+ assert.match(page,/#workspaceNav\{position:fixed!important/);
 });

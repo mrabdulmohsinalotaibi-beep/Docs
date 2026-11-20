@@ -65,3 +65,8 @@ test('Worker serves peer client same-origin with strict no-store',async()=>{
  assert.equal(await res.text(),peer);
  assert.equal(res.headers.get('cache-control'),'no-store');
 });
+
+test('pairing panel rechecks authenticated identity when Settings opens',()=>{
+ assert.match(peer,/athat-docs-settings-open/);
+ assert.match(worker,/athat-docs-settings-open/);
+});
