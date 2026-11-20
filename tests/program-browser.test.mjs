@@ -33,6 +33,7 @@ test("regional plans and local import work in browser without network upload", {
   // School identity now lives in Settings; program catalog lives in Programs workspace.
   await page.locator('#workspaceSettingsLink').click();
   await page.locator('#workspace-settings').waitFor({state:'visible'});
+  await page.locator('[data-ds-tab="account"]').click();
   await page.selectOption("#profileDepartment","مكة المكرمة");
   await page.selectOption("#profileStage","متوسط");
   await page.locator("#saveSchoolProfile").click();
@@ -48,6 +49,7 @@ test("regional plans and local import work in browser without network upload", {
   assert.ok(weekChoices.some(x=>x.includes("تعزيز السلوك الإيجابي")));
   assert.ok(weekChoices.some(x=>x.includes("رعاية ودعم الحالات الخاصة")));
   await page.locator('#workspaceSettingsLink').click();
+  await page.locator('[data-ds-tab="account"]').click();
   await page.selectOption("#profileDepartment","نجران");
   await page.locator("#saveSchoolProfile").click();
   await page.locator('#workspaceNav button[data-workspace="home"]').click();
