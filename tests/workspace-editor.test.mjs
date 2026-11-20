@@ -226,3 +226,8 @@ test('portfolio exports imported and local selected records into the official A4
  assert.match(appScript,/preparedWindow\|\|window\.open/);
  assert.match(appScript,/\$\('backupBtn'\)\.onclick=\(\)=>\{workspaceGoto\('settings'\)/);
 });
+
+test('pairing shortcut reveals Sync settings instead of scrolling a hidden panel',()=>{
+ assert.match(appScript,/dsGet\('dsPairOpen'\)\.onclick=\(\)=>\{dsOpenTab\('sync'\)/);
+ assert.match(appScript,/athat-docs-settings-open/);
+});
