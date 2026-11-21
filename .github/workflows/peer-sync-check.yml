@@ -3,7 +3,7 @@ on:
   push:
     branches: [feature/p2p-sync-after-a4]
   pull_request:
-    paths: [worker.js, peer-sync.js, tests/peer-sync.test.mjs, .github/workflows/peer-sync-check.yml]
+    paths: [worker.js, peer-sync.js, tests/peer-sync.test.mjs, tests/offline-readiness.test.mjs, tests/offline-browser.test.mjs, .github/workflows/peer-sync-check.yml]
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -14,7 +14,7 @@ jobs:
           node-version: '22'
       - run: node --check worker.js
       - run: node --check peer-sync.js
-      - run: node --test tests/peer-sync.test.mjs
+      - run: node --test tests/peer-sync.test.mjs tests/offline-readiness.test.mjs
   browser:
     runs-on: ubuntu-latest
     steps:
@@ -26,6 +26,8 @@ jobs:
         run: npm install --no-save --ignore-scripts playwright-core@1.58.2
       - name: Find Chrome
         run: which google-chrome || which google-chrome-stable
+      - name: Offline startup and local unlock browser test
+        run: node --test tests/offline-browser.test.mjs
       - name: WebRTC two-browser smoke test
         run: node --test tests/p2p-browser.test.mjs
       - name: Department catalog browser test
