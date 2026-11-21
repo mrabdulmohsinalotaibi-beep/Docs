@@ -88,3 +88,29 @@ test('saved student grades are available in the reports center',()=>{
  assert.match(script,/gradesReportLink\.querySelector\('#gradeReportsPrint'\)\.onclick/);
  assert.match(script,/gradeShowPrintPreview\(\)/);
 });
+
+test('reports center refreshes stored exams automatically and opens the selected exam',()=>{
+ assert.match(script,/reportsNavButton\.addEventListener\('click',\(\)=>\{gradeReportsRefresh\(\)/);
+ assert.match(script,/gradesReportLink\.querySelector\('#gradeReportsOpen'\)\.onclick=async/);
+ assert.match(script,/await refreshSaved\(id\)/);
+ assert.match(script,/if\(id&&state\.imports\.some\(x=>x\.id===id\)\)\{loadSaved\(id\)\}/);
+});
+test('two saved periods are matched by student and subject before comparison',()=>{
+ assert.match(script,/function gradeCompareKey\(record\)/);
+ assert.match(script,/function gradeCompareImports\(first,second\)/);
+ assert.match(script,/const before=previous\.get\(key\)/);
+ assert.match(script,/el\('gradeCompareRun'\)\.onclick/);
+ assert.match(script,/el\('gradeCompareExport'\)\.onclick/);
+ const begin=script.indexOf('function gradeCompareKey(');
+ const end=script.indexOf("el('gradeCompareRun').onclick",begin);
+ assert.ok(begin>=0&&end>begin);
+ const source=script.slice(begin,end)+'globalThis.compare=gradeCompareImports;';
+ const sandbox={norm:v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase()};
+ runInNewContext(source,sandbox);
+ const previous={records:[{id:'1',name:'أحمد',grade:'الأول',cls:'1',subject:'العلوم',pct:40},{id:'1',name:'أحمد',grade:'الأول',cls:'1',subject:'الرياضيات',pct:50}]};
+ const next={records:[{id:'1',name:'أحمد',grade:'الأول',cls:'1',subject:'العلوم',pct:70},{id:'1',name:'أحمد',grade:'الأول',cls:'1',subject:'الرياضيات',pct:45},{id:'2',name:'سعيد',grade:'الأول',cls:'1',subject:'العلوم',pct:90}]};
+ const results=sandbox.compare(previous,next);
+ assert.equal(results.length,2);
+ assert.equal(results[0].change,-5);
+ assert.equal(results[1].change,30);
+});
