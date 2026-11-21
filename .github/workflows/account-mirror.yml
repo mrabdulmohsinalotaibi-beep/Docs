@@ -8,7 +8,8 @@ on:
       - worker.js
       - tests/account-auto-mirror.test.mjs
       - tests/unified-account-work.test.mjs
-      - tests/archive-audit.test.mjs
+      - tests/archive-audit.test.mjs tests/account-integrity-panel.test.mjs
+      - tests/account-integrity-panel.test.mjs
       - .github/workflows/account-mirror.yml
 jobs:
   verify:
