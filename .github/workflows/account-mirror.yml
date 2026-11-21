@@ -11,6 +11,7 @@ on:
       - tests/archive-audit.test.mjs
       - tests/account-integrity-panel.test.mjs
       - tests/safe-multi-backup-restore.test.mjs
+      - tests/audit-device-recovery.test.mjs
       - .github/workflows/account-mirror.yml
 jobs:
   verify:
