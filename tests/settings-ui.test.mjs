@@ -41,3 +41,21 @@ test('responsive settings layout keeps original data actions and status events',
   ]) assert.ok(page.includes(token), 'Missing UI or handler marker: ' + token);
   assert.ok(page.includes('@media(max-width:900px)'), 'Responsive tablet styles must exist');
 });
+
+
+test('six navigation destinations stay visible together on tablet and phone', () => {
+ const page=extractPage();
+ const jsStart=page.indexOf('/* DOCS_SIX_TAB_NAV_START');
+ const jsEnd=page.indexOf('/* DOCS_SIX_TAB_NAV_END */');
+ assert.ok(jsStart>0 && jsEnd>jsStart,'Navigation enhancement is installed in workspace');
+ const code=page.slice(jsStart,jsEnd);
+ for(const id of ['home','documents','students','grades','reports','messages']){
+  assert.ok(code.includes("'"+id+"'"),'Missing nav destination: '+id);
+ }
+ assert.ok(code.includes('button.replaceChildren(icon,caption)'), 'Each tab has an icon and a concise label');
+ assert.ok(code.includes("button.setAttribute('aria-label',accessible)"),'Accessible full labels retained');
+ assert.ok(page.includes('DOCS_RESPONSIVE_SIX_TAB_NAV'),'Six-tab responsive CSS exists');
+ assert.match(page,/#workspaceNav\s*\{[\s\S]*?grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+ assert.match(page,/@media screen and \(max-width:520px\)/);
+ assert.match(page,/#appMain\{padding-bottom:calc\(100px \+ env\(safe-area-inset-bottom\)\)!important\}/);
+});
