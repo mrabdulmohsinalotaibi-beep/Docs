@@ -85,6 +85,6 @@ test('saved student grades are available in the reports center',()=>{
  assert.match(script,/reportIntro\.append\(gradesReportLink\)/);
  assert.match(script,/async function gradeReportsRefresh\(\)/);
  assert.match(script,/await queryStore\('getAll'\)/);
- assert.match(script,/gradeReportsLink\.querySelector\('#gradeReportsPrint'\)\.onclick/);
+ assert.match(script,/gradesReportLink\.querySelector\('#gradeReportsPrint'\)\.onclick/);
  assert.match(script,/gradeShowPrintPreview\(\)/);
 });
