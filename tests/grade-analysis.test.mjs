@@ -7,9 +7,14 @@ const worker=readFileSync(new URL('../worker.js',import.meta.url),'utf8');
 const match=worker.match(/^const PAGE=("(?:\\.|[^"\\])*");/);
 assert.ok(match,'Worker has its embedded HTML');
 const page=JSON.parse(match[1]);
-const embedded=page.match(/<script id="docs-grade-analysis">([\s\S]*?)<\/script>/);
-assert.ok(embedded,'Grade analysis script is inside the authenticated website');
-const script=embedded[1];
+const matchStart='/* DOCS_GRADE_MODULE_START */';
+const matchEnd='/* DOCS_GRADE_MODULE_END */';
+const start=page.indexOf(matchStart),end=page.indexOf(matchEnd);
+assert.ok(start>0&&end>start,'Grade analysis is integrated in the original workspace script');
+const script=page.slice(start+matchStart.length,end);
+const mainStart=page.indexOf('<script>\n(()=>{\'use strict\';');
+const workspaceCatch=page.indexOf('}catch(workspaceError){');
+assert.ok(mainStart>=0&&start>mainStart&&end<workspaceCatch,'The grade analyzer executes within the workspace scope');
 
 test('grade analysis script parses and is reachable from site navigation',()=>{
  assert.doesNotThrow(()=>new Script(script));
