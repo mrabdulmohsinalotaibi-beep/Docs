@@ -62,13 +62,18 @@ test('long result tables compute per-subject averages and flags without a pass/f
 });
 
 
-test('A4 grade printing opens an isolated print document from a direct click',()=>{
- assert.match(script,/function gradePreparePrintDocument\(doc,rows\)/);
- assert.match(script,/window\.open\('','_blank'\)/);
- assert.match(script,/printWindow\.document,rows/);
- assert.match(script,/doc\.getElementById\('doPrint'\)\.addEventListener\('click',\(\)=>doc\.defaultView\.print\(\)\)/);
- assert.match(script,/el\('gradePrintable'\)\.cloneNode\(true\)/);
- assert.match(script,/@page\{size:A4 portrait;margin:14mm\}/);
+test('A4 print report is composed completely BEFORE opening a browsing context',()=>{
+ assert.match(script,/function gradeBuildPrintHtml\(rows\)/);
+ assert.match(script,/const original=el\('gradePrintable'\)/);
+ assert.match(script,/const summary=original\.cloneNode\(true\)/);
+ assert.match(script,/return '<!doctype html>/);
  assert.match(script,/const candidates=rows\.filter\(r=>r\.pct<low\)/);
- assert.doesNotMatch(script,/el\('gradePrintBtn'\)\.onclick=\(\)=>\{[^}]*window\.print\(\)/);
+ assert.match(script,/@page\{size:A4 portrait;margin:14mm\}/);
+ assert.match(script,/html=gradeBuildPrintHtml\(filtered\(\)\)/);
+ const build=script.indexOf('html=gradeBuildPrintHtml(filtered())');
+ const open=script.indexOf("const printWindow=window.open('','_blank')");
+ assert.ok(build>0&&open>build,'Report must be ready before window.open');
+ assert.match(script,/printWindow\.document\.write\(html\)/);
+ assert.doesNotMatch(script,/printWindow\.document,rows/,'No origin document access after opening print view');
+ assert.doesNotMatch(script,/report\.append\(el\('gradePrintable'\)\.cloneNode\(true\)\)/);
 });
