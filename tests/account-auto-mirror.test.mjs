@@ -39,7 +39,8 @@ test('automatic backups preserve seven daily account copies and encrypted export
 test('home counts persisted old records rather than only freshly created documents',()=>{
  assert.match(page,/الأعمال المحفوظة بالجهاز/);
  assert.match(page,/docsMirrorGetAll\('responses'\)/);
- assert.match(page,/premiumValues\[2\]\.textContent=String\(docs\.length\+keys\.size\)/);
+ assert.match(page,/premiumValues\[2\]\.textContent=unique\.size\|\|hasIndex\?String\(unique\.size\):'—'/);
+ assert.doesNotMatch(page,/docs\.length\+keys\.size/);
  assert.match(page,/const limit=Math\.min\(120,items\.length\)/);
  assert.match(page,/docsMirrorCycle\(\)\.catch\(console\.warn\)\},3\*60\*1000/);
 });
