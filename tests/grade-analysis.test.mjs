@@ -80,3 +80,11 @@ test('A4 print CSS only displays the preview content',()=>{
  assert.match(page,/body\.grade-preview-active #gradePrintOverlay \.grade-print-toolbar\{display:none!important\}/);
  assert.match(page,/body\.grade-preview-active > \*:not\(#gradePrintOverlay\)\{display:none!important\}/);
 });
+
+test('saved student grades are available in the reports center',()=>{
+ assert.match(script,/reportIntro\.append\(gradesReportLink\)/);
+ assert.match(script,/async function gradeReportsRefresh\(\)/);
+ assert.match(script,/await queryStore\('getAll'\)/);
+ assert.match(script,/gradesReportLink\.querySelector\('#gradeReportsPrint'\)\.onclick/);
+ assert.match(script,/gradeShowPrintPreview\(\)/);
+});
