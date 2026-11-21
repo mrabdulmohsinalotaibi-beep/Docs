@@ -14,7 +14,7 @@ test('audit is account-scoped, covers A4 and guidance records and does not remov
  assert.match(text,/guidanceLoadedUser===activeUser/);
  assert.match(text,/guidanceRecords/);
  assert.match(text,/source:'a4:'\+id/);
- assert.match(text,/const originals=/);
+ assert.match(text,/const contentKeys=new Map\(\),metadataKeys=new Map\(\),out=\[\]/);
  assert.doesNotMatch(text,/\.delete\(|\.clear\(|indexedDB\.deleteDatabase/);
 });
 test('missing content means no actual body fields, photos or signature',()=>{
