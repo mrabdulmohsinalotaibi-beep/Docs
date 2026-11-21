@@ -2,9 +2,9 @@ name: Student grade analysis
 on:
   push:
     branches: [main, feature/student-grade-analysis-1448]
-    paths: [worker.js, tests/grade-analysis.test.mjs, .github/workflows/grade-analysis.yml]
+    paths: [worker.js, tests/grade-analysis.test.mjs, tests/grade-followup.test.mjs, .github/workflows/grade-analysis.yml]
   pull_request:
-    paths: [worker.js, tests/grade-analysis.test.mjs, .github/workflows/grade-analysis.yml]
+    paths: [worker.js, tests/grade-analysis.test.mjs, tests/grade-followup.test.mjs, .github/workflows/grade-analysis.yml]
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,4 +14,4 @@ jobs:
         with:
           node-version: '22'
       - run: node --check worker.js
-      - run: node --test tests/grade-analysis.test.mjs
+      - run: node --test tests/grade-analysis.test.mjs tests/grade-followup.test.mjs
