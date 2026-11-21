@@ -10,6 +10,7 @@ on:
       - tests/unified-account-work.test.mjs
       - tests/archive-audit.test.mjs
       - tests/account-integrity-panel.test.mjs
+      - tests/safe-multi-backup-restore.test.mjs
       - .github/workflows/account-mirror.yml
 jobs:
   verify:
@@ -19,4 +20,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/account-auto-mirror.test.mjs tests/unified-account-work.test.mjs tests/archive-audit.test.mjs tests/account-integrity-panel.test.mjs
+      - run: node --test tests/account-auto-mirror.test.mjs tests/unified-account-work.test.mjs tests/archive-audit.test.mjs tests/account-integrity-panel.test.mjs tests/safe-multi-backup-restore.test.mjs
