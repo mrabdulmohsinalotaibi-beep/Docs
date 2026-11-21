@@ -4,7 +4,7 @@
   const STORAGE_PREFIX = "athat-docs-unified-v2-";
   const MAX_BYTES = 32 * 1024 * 1024;
   const CHUNK = 12 * 1024;
-  let pc, channel, accountId = "", received = "", sending = false, paired = false, peerReady = false, autoSent = false;
+  let pc, channel, accountId = "", received = "", sending = false, paired = false, peerReady = false, autoSent = false, recoveryPending = false, recoveryIncoming = false;
   const ui = document.createElement("section");
   ui.id = "athatPeerSync";
   ui.dir = "rtl";
@@ -12,7 +12,7 @@
   ui.style.cssText = "margin:15px 0;padding:17px;background:#fff;border:1px solid #D9CCB2;border-radius:15px;color:#514735;line-height:1.8";
   ui.innerHTML = '<h2 style="margin:0 0 8px">مزامنة أجهزتي مباشرة</h2>'+
     '<p style="margin:0 0 12px">تظل المستندات والشواهد على الأجهزة فقط. يلزم فتح الموقع على الجهازين، وتسجيل الدخول لنفس الحساب، وتبادل رموز الاتصال يدويًا. لن تُرفع مستنداتك إلى الخادم.</p>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="peerOffer">هذا الجهاز: إنشاء اتصال</button><button type="button" id="peerAnswer">الجهاز الآخر: قبول اتصال</button><button type="button" id="peerFinish">إتمام الاتصال</button><button type="button" id="peerVerify" disabled>تأكيد رمز المطابقة على الجهازين</button><button type="button" id="peerSend" disabled>إرسال مستنداتي للجهاز الآخر</button><button type="button" id="peerClose">قطع الاتصال</button></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="peerOffer">هذا الجهاز: إنشاء اتصال</button><button type="button" id="peerAnswer">الجهاز الآخر: قبول اتصال</button><button type="button" id="peerFinish">إتمام الاتصال</button><button type="button" id="peerVerify" disabled>تأكيد رمز المطابقة على الجهازين</button><button type="button" id="peerSend" disabled>إرسال مستنداتي للجهاز الآخر</button><button type="button" id="peerRecover" disabled>استعادة الناقص من الجهاز الآخر</button><button type="button" id="peerClose">قطع الاتصال</button></div>'+
     '<label style="display:block;margin-top:12px">رمز الاتصال الوارد من الجهاز الآخر<textarea id="peerIncoming" rows="4" style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #D9CCB2;border-radius:9px;padding:8px" placeholder="الصق رمز الاتصال هنا"></textarea></label>'+
     '<label style="display:block;margin-top:9px">رمز هذا الجهاز<textarea id="peerOutgoing" rows="4" readonly style="display:block;width:100%;direction:ltr;text-align:left;border:1px solid #D9CCB2;border-radius:9px;padding:8px"></textarea></label>'+
     '<button type="button" id="peerCopy">نسخ الرمز</button><p id="peerFingerprint" style="font-weight:bold"></p><p id="peerStatus" role="status" aria-live="polite" style="font-size:13px"></p>'+
@@ -22,9 +22,9 @@
   function reset() {
     if (channel) { try { channel.close(); } catch {} }
     if (pc) { try { pc.close(); } catch {} }
-    pc = null; channel = null; received = ""; sending = false; paired = false; peerReady = false; autoSent = false;
+    pc = null; channel = null; received = ""; sending = false; paired = false; peerReady = false; autoSent = false; recoveryPending = false; recoveryIncoming = false;
     el("peerVerify").disabled = true;el("peerFingerprint").textContent="";
-    el("peerSend").disabled = true;
+    el("peerSend").disabled = true;el("peerRecover").disabled=true;
   }
   async function identity() {
     const response = await fetch("/api/auth/me", {credentials:"same-origin",cache:"no-store"});
@@ -168,7 +168,7 @@
     const code=await pairingCode();
     el("peerFingerprint").textContent="رمز مطابقة الاتصال: "+code+" — تأكد أنه نفسه على الجهازين.";
     el("peerVerify").disabled=false;
-    el("peerSend").disabled=true;
+    el("peerSend").disabled=true;el("peerRecover").disabled=true;
     note("تأكد من تطابق الرمز على الجهازين قبل السماح بإرسال المستندات.");
   }
   function start() {
@@ -192,10 +192,66 @@
     autoSent=true;
     try{await send(true);}catch(e){autoSent=false;note("المزامنة التلقائية لم تكتمل: "+e.message);}
   }
+
+  // Recovery uses a separate, explicitly requested, add-only protocol.
+  // A source inventory contains identifiers only, never student data.
+  async function recoveryInventory(){
+    const [docs,snapshots,deleted]=await Promise.all([allDocs(),allSnapshots(),deletionMarkers()]);
+    const tombstones=new Set(deleted.map(x=>String(x.id)));
+    return {documents:docs.filter(x=>typeof x?.id==="string"&&!tombstones.has(x.id)).map(x=>x.id).slice(0,3000),
+      snapshots:snapshots.filter(x=>typeof x?.id==="string"&&/^(a4:|guidance:|index:)/.test(x.id)).map(x=>x.id).slice(0,6000)};
+  }
+  async function recoverySaveMissing(docs,snapshots){
+    const id=await identity(),database=await dbFor(id);
+    let restored=0,skipped=0;
+    try{
+      const deleted=await new Promise((resolve,reject)=>{const q=database.transaction("deletions").objectStore("deletions").getAll();q.onsuccess=()=>resolve(new Set((q.result||[]).map(x=>String(x.id))));q.onerror=()=>reject(q.error)});
+      const groups=[
+        {name:"documents",items:docs.filter(x=>x&&typeof x.id==="string"&&x.id.length<=200&&Array.isArray(x.photos||[])&&!deleted.has(x.id))},
+        {name:"cloudSnapshots",items:snapshots.filter(x=>x&&typeof x.id==="string"&&x.id.length<=250&&/^(a4:|guidance:|index:)/.test(x.id))}
+      ];
+      for(const group of groups){
+        for(const row of group.items){
+          // add(), unlike put(), cannot overwrite documents changed after preview.
+          await new Promise((resolve,reject)=>{
+            const tx=database.transaction(group.name,"readwrite");
+            const q=tx.objectStore(group.name).add(row);
+            q.onerror=e=>{if(q.error?.name==="ConstraintError"){e.preventDefault();e.stopPropagation();skipped++}};
+            q.onsuccess=()=>{restored++};
+            tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+          });
+        }
+      }
+    }finally{database.close()}
+    return {restored,skipped};
+  }
+  async function sendRecoveryData(ids){
+    if(sending||channel?.readyState!=="open")throw Error("النقل مشغول أو الاتصال مغلق");
+    const own=await recoveryInventory();
+    if(!Array.isArray(ids.documents)||!Array.isArray(ids.snapshots)||ids.documents.length>3000||ids.snapshots.length>6000)throw Error("طلب استعادة غير صالح");
+    const allowedDocs=new Set(own.documents),allowedSnapshots=new Set(own.snapshots);
+    const docIds=new Set(ids.documents.filter(x=>typeof x==="string"&&allowedDocs.has(x)));
+    const snapIds=new Set(ids.snapshots.filter(x=>typeof x==="string"&&allowedSnapshots.has(x)));
+    const [localDocs,localSnapshots]=await Promise.all([allDocs(),allSnapshots()]);
+    const payload=JSON.stringify({documents:localDocs.filter(x=>docIds.has(x.id)),snapshots:localSnapshots.filter(x=>snapIds.has(x.id))});
+    if(new TextEncoder().encode(payload).byteLength>MAX_BYTES)throw Error("البيانات المطلوبة تتجاوز 32 ميجابايت؛ يلزم نقلها على دفعات أو تصدير نسخة محلية");
+    if(!confirm("الجهاز الآخر يطلب "+docIds.size+" مستندًا و"+snapIds.size+" سجلًا ناقصًا. هل توافق على إرسالها مباشرة دون حذف أو استبدال؟"))return;
+    sending=true;
+    try{
+      channel.send(JSON.stringify({type:"recovery-begin",user:accountId,length:payload.length}));
+      for(let i=0;i<payload.length;i+=CHUNK){
+        if(channel?.readyState!=="open")throw Error("انقطع الاتصال أثناء الاستعادة");
+        while(channel.bufferedAmount>512*1024)await new Promise(resolve=>setTimeout(resolve,50));
+        channel.send(JSON.stringify({type:"chunk",data:payload.slice(i,i+CHUNK)}));
+      }
+      channel.send(JSON.stringify({type:"recovery-end",length:payload.length}));
+      note("أُرسلت العناصر المطلوبة، وسيؤكد الجهاز الآخر حفظها.");
+    }finally{sending=false}
+  }
   function configure(c) {
     channel=c;c.binaryType="arraybuffer";
     c.onopen=()=>{window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"yellow",message:"جارٍ التحقق"}}));showPairing().then(sendReady).catch(e=>note(e.message));};
-    c.onclose=()=>{window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"red",message:"الاتصال متوقف"}}));el("peerSend").disabled=true;note("أُغلق الاتصال.");};
+    c.onclose=()=>{window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"red",message:"الاتصال متوقف"}}));el("peerSend").disabled=true;el("peerRecover").disabled=true;note("أُغلق الاتصال.");};
     c.onmessage=async event=>{
       try{
         const msg=JSON.parse(event.data);
@@ -207,6 +263,50 @@
           return;
         }
         if(!paired || !peerReady)throw Error("يجب تأكيد رمز المطابقة على الجهازين قبل نقل المستندات.");
+        if(msg.type==="recovery-list-request"){
+          if(msg.user!==accountId)throw Error("الحساب مختلف");
+          const inventory=await recoveryInventory();
+          channel.send(JSON.stringify({type:"recovery-list",user:accountId,inventory}));
+          return;
+        }
+        if(msg.type==="recovery-list"){
+          if(!recoveryPending||msg.user!==accountId)throw Error("فهرس استعادة غير مطلوب");
+          recoveryPending=false;
+          const inventory=msg.inventory;
+          if(!Array.isArray(inventory?.documents)||!Array.isArray(inventory?.snapshots)||inventory.documents.length>3000||inventory.snapshots.length>6000)throw Error("فهرس الجهاز الآخر غير صالح");
+          const [ours,deleted]=await Promise.all([recoveryInventory(),deletionMarkers()]);
+          const existingDocs=new Set(ours.documents),existingSnapshots=new Set(ours.snapshots),removed=new Set(deleted.map(x=>String(x.id)));
+          const ids={documents:[...new Set(inventory.documents.filter(id=>typeof id==="string"&&id.length<=200&&!existingDocs.has(id)&&!removed.has(id)))],
+            snapshots:[...new Set(inventory.snapshots.filter(id=>typeof id==="string"&&id.length<=250&&/^(a4:|guidance:|index:)/.test(id)&&!existingSnapshots.has(id)))]};
+          const total=ids.documents.length+ids.snapshots.length;
+          note("المعاينة: "+ids.documents.length+" مستندًا و"+ids.snapshots.length+" سجلًا ناقصًا. العناصر الموجودة لن تُمس.");
+          if(!total)return;
+          if(confirm("معاينة الاستعادة من الجهاز الآخر: "+ids.documents.length+" مستندًا و"+ids.snapshots.length+" سجلًا غير موجود. طلب استعادة الناقص فقط؟")){
+            channel.send(JSON.stringify({type:"recovery-data-request",user:accountId,ids}));
+            note("بانتظار موافقة الجهاز الآخر على إرسال العناصر الناقصة.");
+          }
+          return;
+        }
+        if(msg.type==="recovery-data-request"){
+          if(msg.user!==accountId)throw Error("الحساب مختلف");
+          await sendRecoveryData(msg.ids||{});
+          return;
+        }
+        if(msg.type==="recovery-begin"){
+          if(msg.user!==accountId||!Number.isSafeInteger(msg.length)||msg.length<0||msg.length>MAX_BYTES)throw Error("طلب نقل غير صالح");
+          received="";recoveryIncoming=true;note("جارٍ استقبال العناصر الناقصة فقط…");return;
+        }
+        if(msg.type==="recovery-end"){
+          if(!recoveryIncoming||received.length!==msg.length)throw Error("استعادة غير مكتملة");
+          recoveryIncoming=false;
+          const transfer=JSON.parse(received);received="";
+          if(!Array.isArray(transfer?.documents)||!Array.isArray(transfer?.snapshots)||transfer.documents.length>3000||transfer.snapshots.length>6000)throw Error("محتوى الاستعادة غير صالح");
+          if(!confirm("تأكيد حفظ "+transfer.documents.length+" مستندًا و"+transfer.snapshots.length+" سجلًا ناقصًا فقط، دون حذف أو استبدال؟")){note("أُلغيت الاستعادة دون تغيير.");return}
+          const result=await recoverySaveMissing(transfer.documents,transfer.snapshots);
+          note("اكتملت الاستعادة الآمنة: "+result.restored+" عنصرًا أُضيف؛ "+result.skipped+" موجود لم يُستبدل. حدّث صفحة الجرد للتحقق.");
+          window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"green",message:"استعادة الناقص: "+result.restored+" عنصرًا"}}));
+          return;
+        }
         if (msg.type==="begin") {
           if (!Number.isSafeInteger(msg.length)||msg.length<0||msg.length>MAX_BYTES){received="";throw Error("حجم النقل يتجاوز الحد الآمن.");}
           if (msg.user!==accountId) {reset();throw Error("الحساب على الجهاز الآخر مختلف.");}
@@ -272,11 +372,12 @@
     const code=await pairingCode();
     if(!confirm("هل ظهر الرمز "+code+" نفسه على شاشة جهازك الآخر؟ لا توافق إذا اختلف الرقمان."))return;
     paired=true;el("peerVerify").disabled=true;
-    el("peerSend").disabled=channel?.readyState!=="open";
+    el("peerSend").disabled=channel?.readyState!=="open";el("peerRecover").disabled=channel?.readyState!=="open";
     note("تم اعتماد مطابقة الاتصال. ستبدأ المزامنة عندما يؤكد الجهاز الآخر الرمز نفسه.");
     await sendReady();
   });
   el("peerSend").onclick=job(send);
+  el("peerRecover").onclick=job(async()=>{if(!paired||!peerReady||channel?.readyState!=="open")throw Error("أكّد الاتصال على الجهازين أولًا");recoveryPending=true;channel.send(JSON.stringify({type:"recovery-list-request",user:accountId}));note("جارٍ طلب فهرس البيانات من الجهاز الآخر للمعاينة؛ لم تُنقل المستندات بعد.");});
   el("peerClose").onclick=()=>{reset();note("تم قطع الاتصال.");};
   el("peerCopy").onclick=job(async()=>{await navigator.clipboard.writeText(el("peerOutgoing").value);note("نُسخ الرمز. انقله إلى جهازك الآخر بطريقة خاصة.");});
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&channel?.readyState==="open")note("أبقِ التطبيقين مفتوحين أثناء النقل.");});
