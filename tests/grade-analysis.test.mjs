@@ -60,3 +60,15 @@ test('long result tables compute per-subject averages and flags without a pass/f
  assert.equal(totals.high,1);
  assert.equal(totals.subjects.find(s=>s.name==='الرياضيات').average,40);
 });
+
+
+test('A4 grade printing opens an isolated print document from a direct click',()=>{
+ assert.match(script,/function gradePreparePrintDocument\(doc,rows\)/);
+ assert.match(script,/window\.open\('','_blank'\)/);
+ assert.match(script,/printWindow\.document,rows/);
+ assert.match(script,/doc\.getElementById\('doPrint'\)\.addEventListener\('click',\(\)=>doc\.defaultView\.print\(\)\)/);
+ assert.match(script,/el\('gradePrintable'\)\.cloneNode\(true\)/);
+ assert.match(script,/@page\{size:A4 portrait;margin:14mm\}/);
+ assert.match(script,/const candidates=rows\.filter\(r=>r\.pct<low\)/);
+ assert.doesNotMatch(script,/el\('gradePrintBtn'\)\.onclick=\(\)=>\{[^}]*window\.print\(\)/);
+});
