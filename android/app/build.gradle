@@ -12,3 +12,6 @@ android {
     buildTypes { release { minifyEnabled false } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
+
+// Google Play handles authenticated, in-place updates for Play-installed builds.
+dependencies { implementation 'com.google.android.play:app-update:2.1.0' }
