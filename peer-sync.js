@@ -363,6 +363,7 @@
           const responses=await mirrorAddOnly("responses",responseRows);
           const total=result.restored+files.added+responses.added;
           note("اكتملت الاستعادة: "+total+" عنصرًا جديدًا، منها "+files.added+" مرفقًا تم التحقق من بصمته و"+responses.added+" فهرسًا. لم يُستبدل أي موجود.");
+          document.dispatchEvent(new CustomEvent("athat-docs-data-restored",{detail:{userId:accountId,source:"peer-recovery",restored:total}}));
           window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"green",message:"استعادة الناقص: "+total+" عنصرًا"}}));
           return;
         }
@@ -386,6 +387,7 @@
           const snap=await addSnapshots(snapshots);
           note("سجلات حساب منقولة: "+snap.added+"؛ تعارضات: "+snap.conflicts+".");
           note("اكتملت المزامنة: "+result.added+" جديد، "+result.conflicts+" نسخة تعارض، "+result.unchanged+" موجود.");
+          document.dispatchEvent(new CustomEvent("athat-docs-data-restored",{detail:{userId:accountId,source:"peer-sync",restored:result.added+snap.added}}));
           window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"green",message:"تم استلام البيانات وحفظها"}}));
           // Existing app owns its IndexedDB connection; reload to refresh its list.
           if(confirm("اكتمل الاستيراد. هل تريد إعادة تحميل الصفحة لعرض المستندات؟")) location.reload();
