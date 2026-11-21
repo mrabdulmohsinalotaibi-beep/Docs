@@ -195,11 +195,60 @@
 
   // Recovery uses a separate, explicitly requested, add-only protocol.
   // A source inventory contains identifiers only, never student data.
+
+  function mirrorDatabase(){
+    return new Promise((resolve,reject)=>{
+      if(!accountId)return reject(Error("لا يوجد حساب نشط"));
+      const request=indexedDB.open("athat-docs-account-mirror-v1-"+accountId,1);
+      request.onupgradeneeded=()=>{for(const name of ["responses","files","dailyBackups"])if(!request.result.objectStoreNames.contains(name))request.result.createObjectStore(name,{keyPath:"id"})};
+      request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+    });
+  }
+  async function mirrorRows(storeName){
+    const database=await mirrorDatabase();
+    try{return await new Promise((resolve,reject)=>{const request=database.transaction(storeName,"readonly").objectStore(storeName).getAll();request.onsuccess=()=>resolve(request.result||[]);request.onerror=()=>reject(request.error)})}
+    finally{database.close()}
+  }
+  const MIRROR_MAX_FILES=2500, MIRROR_MAX_RESPONSES=3500, MIRROR_MAX_FILE_SIZE=12*1024*1024;
+  async function sha256(bytes){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),n=>n.toString(16).padStart(2,"0")).join("")}
+  async function packFiles(rows){
+    const packed=[];
+    for(const item of rows){
+      if(!(item.blob instanceof Blob)||item.blob.size>MIRROR_MAX_FILE_SIZE)continue;
+      const buffer=await item.blob.arrayBuffer();
+      const bytes=new Uint8Array(buffer);let binary="";
+      for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      packed.push({id:item.id,name:String(item.name||"مرفق").slice(0,200),type:String(item.type||item.blob.type||"application/octet-stream").slice(0,150),base64:btoa(binary),size:bytes.byteLength,sha256:await sha256(buffer)});
+    }
+    return packed;
+  }
+  async function unpackFiles(files){
+    const out=[];
+    for(const item of files){
+      if(!item||typeof item.id!=="string"||!/^\/api\//.test(item.id)||item.id.length>1000||typeof item.base64!=="string"||item.base64.length>17*1024*1024||!Number.isSafeInteger(item.size)||item.size<0||item.size>MIRROR_MAX_FILE_SIZE||!/^[a-f0-9]{64}$/.test(item.sha256||""))throw Error("بيانات المرفق أو بصمته غير صالحة");
+      let bytes;
+      try{bytes=Uint8Array.from(atob(item.base64),c=>c.charCodeAt(0))}catch{throw Error("ترميز المرفق تالف")}
+      if(bytes.byteLength!==item.size||await sha256(bytes)!==item.sha256)throw Error("فشل التحقق من سلامة المرفق المنقول");
+      out.push({id:item.id,blob:new Blob([bytes],{type:String(item.type||"application/octet-stream").slice(0,150)}),name:String(item.name||"مرفق").slice(0,200),type:String(item.type||"application/octet-stream").slice(0,150),updatedAt:new Date().toISOString()});
+    }
+    return out;
+  }
+  async function mirrorAddOnly(name,rows){
+    const database=await mirrorDatabase();let added=0,skipped=0;
+    try{for(const item of rows)await new Promise((resolve,reject)=>{
+      const tx=database.transaction(name,"readwrite"),q=tx.objectStore(name).add(item);
+      q.onsuccess=()=>{added++};q.onerror=event=>{if(q.error?.name==="ConstraintError"){event.preventDefault();event.stopPropagation();skipped++}};
+      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+    })}finally{database.close()}
+    return {added,skipped};
+  }
   async function recoveryInventory(){
-    const [docs,snapshots,deleted]=await Promise.all([allDocs(),allSnapshots(),deletionMarkers()]);
+    const [docs,snapshots,deleted,files,responses]=await Promise.all([allDocs(),allSnapshots(),deletionMarkers(),mirrorRows("files"),mirrorRows("responses")]);
     const tombstones=new Set(deleted.map(x=>String(x.id)));
     return {documents:docs.filter(x=>typeof x?.id==="string"&&!tombstones.has(x.id)).map(x=>x.id).slice(0,3000),
-      snapshots:snapshots.filter(x=>typeof x?.id==="string"&&/^(a4:|guidance:|index:)/.test(x.id)).map(x=>x.id).slice(0,6000)};
+      snapshots:snapshots.filter(x=>typeof x?.id==="string"&&/^(a4:|guidance:|index:)/.test(x.id)).map(x=>x.id).slice(0,6000),
+      files:files.filter(x=>typeof x?.id==="string"&&x.id.startsWith("/api/")&&x.blob instanceof Blob&&x.blob.size<=MIRROR_MAX_FILE_SIZE).map(x=>x.id).slice(0,MIRROR_MAX_FILES),
+      responses:responses.filter(x=>typeof x?.id==="string"&&x.id.startsWith("/api/")&&x.payload?.ok===true).map(x=>x.id).slice(0,MIRROR_MAX_RESPONSES)};
   }
   async function recoverySaveMissing(docs,snapshots){
     const id=await identity(),database=await dbFor(id);
@@ -228,14 +277,16 @@
   async function sendRecoveryData(ids){
     if(sending||channel?.readyState!=="open")throw Error("النقل مشغول أو الاتصال مغلق");
     const own=await recoveryInventory();
-    if(!Array.isArray(ids.documents)||!Array.isArray(ids.snapshots)||ids.documents.length>3000||ids.snapshots.length>6000)throw Error("طلب استعادة غير صالح");
-    const allowedDocs=new Set(own.documents),allowedSnapshots=new Set(own.snapshots);
+    if(!Array.isArray(ids.documents)||!Array.isArray(ids.snapshots)||!Array.isArray(ids.files)||!Array.isArray(ids.responses)||ids.documents.length>3000||ids.snapshots.length>6000||ids.files.length>MIRROR_MAX_FILES||ids.responses.length>MIRROR_MAX_RESPONSES)throw Error("طلب استعادة غير صالح");
+    const allowedDocs=new Set(own.documents),allowedSnapshots=new Set(own.snapshots),allowedFiles=new Set(own.files),allowedResponses=new Set(own.responses);
     const docIds=new Set(ids.documents.filter(x=>typeof x==="string"&&allowedDocs.has(x)));
     const snapIds=new Set(ids.snapshots.filter(x=>typeof x==="string"&&allowedSnapshots.has(x)));
-    const [localDocs,localSnapshots]=await Promise.all([allDocs(),allSnapshots()]);
-    const payload=JSON.stringify({documents:localDocs.filter(x=>docIds.has(x.id)),snapshots:localSnapshots.filter(x=>snapIds.has(x.id))});
+    const fileIds=new Set(ids.files.filter(x=>typeof x==="string"&&allowedFiles.has(x))),responseIds=new Set(ids.responses.filter(x=>typeof x==="string"&&allowedResponses.has(x)));
+    const [localDocs,localSnapshots,localFiles,localResponses]=await Promise.all([allDocs(),allSnapshots(),mirrorRows("files"),mirrorRows("responses")]);
+    const packedFiles=await packFiles(localFiles.filter(x=>fileIds.has(x.id)));
+    const payload=JSON.stringify({documents:localDocs.filter(x=>docIds.has(x.id)),snapshots:localSnapshots.filter(x=>snapIds.has(x.id)),files:packedFiles,responses:localResponses.filter(x=>responseIds.has(x.id))});
     if(new TextEncoder().encode(payload).byteLength>MAX_BYTES)throw Error("البيانات المطلوبة تتجاوز 32 ميجابايت؛ يلزم نقلها على دفعات أو تصدير نسخة محلية");
-    if(!confirm("الجهاز الآخر يطلب "+docIds.size+" مستندًا و"+snapIds.size+" سجلًا ناقصًا. هل توافق على إرسالها مباشرة دون حذف أو استبدال؟"))return;
+    if(!confirm("الجهاز الآخر يطلب "+docIds.size+" مستندًا و"+snapIds.size+" سجلًا، و"+packedFiles.length+" مرفقًا و"+responseIds.size+" فهرسًا ناقصًا. هل توافق على إرسالها مباشرة دون حذف أو استبدال؟"))return;
     sending=true;
     try{
       channel.send(JSON.stringify({type:"recovery-begin",user:accountId,length:payload.length}));
@@ -273,15 +324,17 @@
           if(!recoveryPending||msg.user!==accountId)throw Error("فهرس استعادة غير مطلوب");
           recoveryPending=false;
           const inventory=msg.inventory;
-          if(!Array.isArray(inventory?.documents)||!Array.isArray(inventory?.snapshots)||inventory.documents.length>3000||inventory.snapshots.length>6000)throw Error("فهرس الجهاز الآخر غير صالح");
+          if(!Array.isArray(inventory?.documents)||!Array.isArray(inventory?.snapshots)||!Array.isArray(inventory?.files)||!Array.isArray(inventory?.responses)||inventory.documents.length>3000||inventory.snapshots.length>6000||inventory.files.length>MIRROR_MAX_FILES||inventory.responses.length>MIRROR_MAX_RESPONSES)throw Error("فهرس الجهاز الآخر غير صالح");
           const [ours,deleted]=await Promise.all([recoveryInventory(),deletionMarkers()]);
-          const existingDocs=new Set(ours.documents),existingSnapshots=new Set(ours.snapshots),removed=new Set(deleted.map(x=>String(x.id)));
+          const existingDocs=new Set(ours.documents),existingSnapshots=new Set(ours.snapshots),existingFiles=new Set(ours.files),existingResponses=new Set(ours.responses),removed=new Set(deleted.map(x=>String(x.id)));
           const ids={documents:[...new Set(inventory.documents.filter(id=>typeof id==="string"&&id.length<=200&&!existingDocs.has(id)&&!removed.has(id)))],
-            snapshots:[...new Set(inventory.snapshots.filter(id=>typeof id==="string"&&id.length<=250&&/^(a4:|guidance:|index:)/.test(id)&&!existingSnapshots.has(id)))]};
-          const total=ids.documents.length+ids.snapshots.length;
-          note("المعاينة: "+ids.documents.length+" مستندًا و"+ids.snapshots.length+" سجلًا ناقصًا. العناصر الموجودة لن تُمس.");
+            snapshots:[...new Set(inventory.snapshots.filter(id=>typeof id==="string"&&id.length<=250&&/^(a4:|guidance:|index:)/.test(id)&&!existingSnapshots.has(id)))],
+            files:[...new Set(inventory.files.filter(id=>typeof id==="string"&&id.length<=1000&&id.startsWith("/api/")&&!existingFiles.has(id)))],
+            responses:[...new Set(inventory.responses.filter(id=>typeof id==="string"&&id.length<=1000&&id.startsWith("/api/")&&!existingResponses.has(id)))]};
+          const total=ids.documents.length+ids.snapshots.length+ids.files.length+ids.responses.length;
+          note("المعاينة: "+ids.documents.length+" مستندًا و"+ids.snapshots.length+" سجلًا و"+ids.files.length+" مرفقًا و"+ids.responses.length+" فهرسًا ناقصًا. العناصر الموجودة لن تُمس.");
           if(!total)return;
-          if(confirm("معاينة الاستعادة من الجهاز الآخر: "+ids.documents.length+" مستندًا و"+ids.snapshots.length+" سجلًا غير موجود. طلب استعادة الناقص فقط؟")){
+          if(confirm("طلب استعادة الناقص فقط: "+ids.documents.length+" مستندًا و"+ids.snapshots.length+" سجلًا و"+ids.files.length+" مرفقًا و"+ids.responses.length+" فهرسًا؟")){
             channel.send(JSON.stringify({type:"recovery-data-request",user:accountId,ids}));
             note("بانتظار موافقة الجهاز الآخر على إرسال العناصر الناقصة.");
           }
@@ -300,11 +353,17 @@
           if(!recoveryIncoming||received.length!==msg.length)throw Error("استعادة غير مكتملة");
           recoveryIncoming=false;
           const transfer=JSON.parse(received);received="";
-          if(!Array.isArray(transfer?.documents)||!Array.isArray(transfer?.snapshots)||transfer.documents.length>3000||transfer.snapshots.length>6000)throw Error("محتوى الاستعادة غير صالح");
-          if(!confirm("تأكيد حفظ "+transfer.documents.length+" مستندًا و"+transfer.snapshots.length+" سجلًا ناقصًا فقط، دون حذف أو استبدال؟")){note("أُلغيت الاستعادة دون تغيير.");return}
+          if(!Array.isArray(transfer?.documents)||!Array.isArray(transfer?.snapshots)||!Array.isArray(transfer?.files)||!Array.isArray(transfer?.responses)||transfer.documents.length>3000||transfer.snapshots.length>6000||transfer.files.length>MIRROR_MAX_FILES||transfer.responses.length>MIRROR_MAX_RESPONSES)throw Error("محتوى الاستعادة غير صالح");
+          if(!confirm("تأكيد حفظ "+transfer.documents.length+" مستندًا و"+transfer.snapshots.length+" سجلًا و"+transfer.files.length+" مرفقًا و"+transfer.responses.length+" فهرسًا ناقصًا فقط؟")){note("أُلغيت الاستعادة دون تغيير.");return}
+          // Verify all file hashes before any file writes. Invalid files abort the transfer.
+          const unpacked=await unpackFiles(transfer.files);
           const result=await recoverySaveMissing(transfer.documents,transfer.snapshots);
-          note("اكتملت الاستعادة الآمنة: "+result.restored+" عنصرًا أُضيف؛ "+result.skipped+" موجود لم يُستبدل. حدّث صفحة الجرد للتحقق.");
-          window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"green",message:"استعادة الناقص: "+result.restored+" عنصرًا"}}));
+          const files=await mirrorAddOnly("files",unpacked);
+          const responseRows=transfer.responses.filter(x=>x&&typeof x.id==="string"&&x.id.startsWith("/api/")&&x.id.length<=1000&&x.payload?.ok===true);
+          const responses=await mirrorAddOnly("responses",responseRows);
+          const total=result.restored+files.added+responses.added;
+          note("اكتملت الاستعادة: "+total+" عنصرًا جديدًا، منها "+files.added+" مرفقًا تم التحقق من بصمته و"+responses.added+" فهرسًا. لم يُستبدل أي موجود.");
+          window.dispatchEvent(new CustomEvent("docs:peer-status",{detail:{state:"green",message:"استعادة الناقص: "+total+" عنصرًا"}}));
           return;
         }
         if (msg.type==="begin") {
