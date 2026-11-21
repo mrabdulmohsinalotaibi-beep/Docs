@@ -7,6 +7,7 @@ on:
     paths:
       - worker.js
       - tests/account-auto-mirror.test.mjs
+      - tests/unified-account-work.test.mjs
       - .github/workflows/account-mirror.yml
 jobs:
   verify:
@@ -16,4 +17,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/account-auto-mirror.test.mjs
+      - run: node --test tests/account-auto-mirror.test.mjs tests/unified-account-work.test.mjs
