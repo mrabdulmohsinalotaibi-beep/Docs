@@ -1,6 +1,12 @@
 package app.athat.docs;
 
 import android.app.Activity;
+import android.content.pm.PackageManager;
+import com.google.android.play.core.appupdate.AppUpdateManager;
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
+import com.google.android.play.core.appupdate.AppUpdateOptions;
+import com.google.android.play.core.install.model.AppUpdateType;
+import com.google.android.play.core.install.model.UpdateAvailability;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
@@ -29,6 +35,10 @@ import android.os.Build;
 public class MainActivity extends Activity {
     private static final String START_URL = "https://docs.athat.app/";
     private static final int FILE_REQUEST = 2147;
+    private static final int PLAY_UPDATE_REQUEST = 2148;
+    private static final long UPDATE_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
+    private AppUpdateManager playUpdateManager;
+    private long lastUpdateCheckAt = 0L;
     private WebView web;
     private ValueCallback<Uri[]> pendingFiles;
 
@@ -105,6 +115,10 @@ public class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PLAY_UPDATE_REQUEST) {
+            // A canceled update leaves the current installation and its local data intact.
+            return;
+        }
         if (requestCode == FILE_REQUEST && pendingFiles != null) {
             pendingFiles.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
             pendingFiles = null;
@@ -123,7 +137,51 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().flush();
         super.onPause();
     }
-    @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
+    /**
+     * Only Google Play installations are eligible for Play Core in-app updates.
+     * Sideloaded debug APKs must never pretend to have automatic native updates.
+     * No local WebView/IndexedDB data is cleared during an app update.
+     */
+    private boolean installedFromGooglePlay() {
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                String installer = getPackageManager().getInstallSourceInfo(getPackageName()).getInstallingPackageName();
+                return "com.android.vending".equals(installer);
+            }
+            return "com.android.vending".equals(getPackageManager().getInstallerPackageName(getPackageName()));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void checkForPlayUpdate() {
+        if (!installedFromGooglePlay()) return;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (lastUpdateCheckAt != 0 && now - lastUpdateCheckAt < UPDATE_CHECK_INTERVAL_MS) return;
+        lastUpdateCheckAt = now;
+        if (playUpdateManager == null) playUpdateManager = AppUpdateManagerFactory.create(this);
+        playUpdateManager.getAppUpdateInfo().addOnSuccessListener(info -> {
+            if (isFinishing() || isDestroyed()) return;
+            int availability = info.updateAvailability();
+            if ((availability == UpdateAvailability.UPDATE_AVAILABLE
+                    || availability == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS)
+                    && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
+                try {
+                    playUpdateManager.startUpdateFlowForResult(
+                        info, this, AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build(),
+                        PLAY_UPDATE_REQUEST);
+                } catch (Exception ignored) {
+                    // The user can continue working offline; updates are retried at a later launch.
+                }
+            }
+        });
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (web != null) web.onResume();
+        checkForPlayUpdate();
+    }
     @Override protected void onDestroy() {
         CookieManager.getInstance().flush();
         if (web != null) { web.destroy(); web = null; }
