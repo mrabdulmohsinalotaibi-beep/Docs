@@ -62,18 +62,21 @@ test('long result tables compute per-subject averages and flags without a pass/f
 });
 
 
-test('A4 print report is composed completely BEFORE opening a browsing context',()=>{
- assert.match(script,/function gradeBuildPrintHtml\(rows\)/);
- assert.match(script,/const original=el\('gradePrintable'\)/);
- assert.match(script,/const summary=original\.cloneNode\(true\)/);
- assert.match(script,/return '<!doctype html>/);
- assert.match(script,/const candidates=rows\.filter\(r=>r\.pct<low\)/);
- assert.match(script,/@page\{size:A4 portrait;margin:14mm\}/);
- assert.match(script,/html=gradeBuildPrintHtml\(filtered\(\)\)/);
- const build=script.indexOf('html=gradeBuildPrintHtml(filtered())');
- const open=script.indexOf("const printWindow=window.open('','_blank')");
- assert.ok(build>0&&open>build,'Report must be ready before window.open');
- assert.match(script,/printWindow\.document\.write\(html\)/);
- assert.doesNotMatch(script,/printWindow\.document,rows/,'No origin document access after opening print view');
- assert.doesNotMatch(script,/report\.append\(el\('gradePrintable'\)\.cloneNode\(true\)\)/);
+test('A4 grade preview has working in-app print and back actions',()=>{
+ assert.match(script,/function gradeShowPrintPreview\(\)/);
+ assert.match(script,/function gradeExitPreview\(\)/);
+ assert.match(script,/goBack\.onclick=gradeExitPreview/);
+ assert.match(script,/print\.onclick=\(\)=>\{try\{window\.print\(\)\}/);
+ assert.match(script,/htmlDownload\.onclick=gradePrintDownloadHtml/);
+ assert.match(script,/const paper=|paper=gradePrintReport\(filtered\(\)\)/);
+ assert.match(script,/overlay\.append\(toolbar,wrapper\)/);
+ assert.match(script,/document\.body\.append\(overlay\)/);
+ assert.match(script,/el\('gradePrintBtn'\)\.onclick=gradeShowPrintPreview/);
+ assert.doesNotMatch(script,/window\.open\('','_blank'\)/,'Avoid Android PWA popup navigation');
+ assert.doesNotMatch(script,/document\.write\(/,'No cross-window DOM writes');
+});
+test('A4 print CSS only displays the preview content',()=>{
+ assert.match(page,/<style id="gradePrinterStyles">/);
+ assert.match(page,/body\.grade-preview-active #gradePrintOverlay \.grade-print-toolbar\{display:none!important\}/);
+ assert.match(page,/body\.grade-preview-active > \*:not\(#gradePrintOverlay\)\{display:none!important\}/);
 });
