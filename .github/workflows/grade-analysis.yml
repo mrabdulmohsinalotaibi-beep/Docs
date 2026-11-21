@@ -1,0 +1,17 @@
+name: Student grade analysis
+on:
+  push:
+    branches: [main, feature/student-grade-analysis-1448]
+    paths: [worker.js, tests/grade-analysis.test.mjs, .github/workflows/grade-analysis.yml]
+  pull_request:
+    paths: [worker.js, tests/grade-analysis.test.mjs, .github/workflows/grade-analysis.yml]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check worker.js
+      - run: node --test tests/grade-analysis.test.mjs
