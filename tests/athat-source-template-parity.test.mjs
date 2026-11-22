@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const raw=readFileSync(new URL('../worker.js',import.meta.url),'utf8');
-const encoded=raw.match(/^const PAGE=("(?:\.|[^"\])*");/);
+const encoded=raw.match(/^const PAGE=("(?:\\.|[^"\\])*");/);
 assert.ok(encoded,'embedded app page');
 const page=JSON.parse(encoded[1]);
 const script=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).find(s=>s.includes('const A4_REF='));
