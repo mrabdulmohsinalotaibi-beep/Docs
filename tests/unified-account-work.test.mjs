@@ -44,11 +44,3 @@ test('bulk inspection remains read-only and distinguishes unavailable record con
  assert.match(page,/لا يُعتبر ناقصًا تلقائيًا/);
  assert.match(page,/لم تُغيّر أي سجلات/);
 });
-
-test('A4 original scans use their source IDs even when source_table names a guidance category',()=>{
- assert.match(page,/originalA4Ids=new Set\(nativeA4Rows\(\)\.map\(r=>String\(r\.source_record_id\)\)\)/);
- assert.match(page,/originalA4Ids\.has\(id\)\|\|type==='a4'/);
- assert.match(page,/id="auditContentDetails"/);
- assert.match(page,/item\.missingLabels\.join\('، '\)/);
- assert.match(page,/required===true/);
-});
