@@ -2,6 +2,7 @@ name: Account local mirror checks
 on:
   push:
     branches:
+      - main
       - feature/account-local-mirror-auto-20261119
   pull_request:
     paths:
