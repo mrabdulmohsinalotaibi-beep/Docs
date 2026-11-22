@@ -26,3 +26,11 @@ test('reports load from owner-scoped local mirror if internet is down',()=>{
  assert.match(page,/if\(result\.status!=='fulfilled'\|\|!result\.value\?\.ok\)/);
  assert.match(page,/async function docsMirrorCachedResponse\(path\)/);
 });
+
+test('unverified account indices are not mislabeled as incomplete records',()=>{
+ assert.match(page,/\['لم توسم مكتملًا \(لم يُفحص المحتوى\)',/);
+ assert.match(page,/الاكتمال غير معروف: أصل A4 مفهرس/);
+ assert.match(page,/الاكتمال غير معروف: فهرس سجل الحساب/);
+ assert.match(page,/عدم وجود وسم مكتمل لا يعني نقص السجل/);
+ assert.doesNotMatch(page,/\['تحتاج مراجعة',reportsSourcesReady&&guidanceLoadedUser===activeUser\?unverified/);
+});
