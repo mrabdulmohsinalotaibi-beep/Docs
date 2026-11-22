@@ -34,3 +34,13 @@ test('unverified account indices are not mislabeled as incomplete records',()=>{
  assert.match(page,/عدم وجود وسم مكتمل لا يعني نقص السجل/);
  assert.doesNotMatch(page,/\['تحتاج مراجعة',reportsSourcesReady&&guidanceLoadedUser===activeUser\?unverified/);
 });
+
+test('bulk inspection remains read-only and distinguishes unavailable record content',()=>{
+ assert.match(page,/id=\\"auditScanContent\\"/);
+ assert.match(page,/function docsContentClassify\(record,kind\)/);
+ assert.match(page,/classification:'unavailable'/);
+ assert.match(page,/await Promise\.all\(Array\.from\(\{length:Math\.min\(3,total\)\}/);
+ assert.match(page,/token!==docsContentScanToken/);
+ assert.match(page,/لا يُعتبر ناقصًا تلقائيًا/);
+ assert.match(page,/لم تُغيّر أي سجلات/);
+});
