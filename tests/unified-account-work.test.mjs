@@ -36,7 +36,7 @@ test('unverified account indices are not mislabeled as incomplete records',()=>{
 });
 
 test('bulk inspection remains read-only and distinguishes unavailable record content',()=>{
- assert.match(page,/id=\\"auditScanContent\\"/);
+ assert.match(page,/id="auditScanContent"/);
  assert.match(page,/function docsContentClassify\(record,kind\)/);
  assert.match(page,/classification:'unavailable'/);
  assert.match(page,/await Promise\.all\(Array\.from\(\{length:Math\.min\(3,total\)\}/);
