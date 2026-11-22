@@ -1,0 +1,19 @@
+name: Docs source and storage checks
+on:
+  pull_request:
+    paths: ['src/**', 'scripts/**', 'worker.js', 'tests/storage-safety-browser.test.mjs', '.github/workflows/source-build.yml']
+  push:
+    branches: [main]
+    paths: ['src/**', 'scripts/**', 'worker.js', 'tests/storage-safety-browser.test.mjs', '.github/workflows/source-build.yml']
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/build-worker.mjs --check
+      - run: node --check worker.js
+      - run: npm install --no-save --ignore-scripts playwright-core@1.58.2
+      - run: CHROME_PATH=$(which google-chrome || which google-chrome-stable) node --test tests/*.test.mjs
