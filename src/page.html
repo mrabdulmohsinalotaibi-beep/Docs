@@ -5175,7 +5175,9 @@ async function docsMsBuildPayload(owner){
   docsBackupExtra('athat-docs-account-mirror-v1-'+owner,'files')
  ]);
  if(owner!==activeUser)throw Error('تغير الحساب أثناء تجهيز النسخة');
- const mirrorComplete=docsMirrorFullTableCount(owner)===DOCS_MIRROR_TABLES.length;
+ const mirrorAudit=await docsMirrorAudit(['/api/students','/api/students/care/categories','/api/students/a4','/api/guidance/records']).catch(()=>({complete:false}));
+ if(owner!==activeUser)throw Error('تغير الحساب أثناء فحص سلامة النسخة');
+ const mirrorComplete=mirrorAudit.complete===true;
  return {payload:{app:'ATHAT-DOCS-LOCAL-FULL',version:3,accountId:owner,createdAt:new Date().toISOString(),documents,snapshots,deletions,messages,planFiles,mirrorResponses,mirrorFiles,localSettings:docsBackupSettings()},mirrorComplete};
 }
 function docsMsHex(bytes){return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')}
