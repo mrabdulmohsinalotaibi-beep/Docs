@@ -1155,7 +1155,7 @@ body[data-docs-theme=mono] .docs-admin-header-tools button{background:#fff;color
 @media(max-width:650px){.docs-admin-header-tools{width:100%;justify-content:flex-start}.docs-admin-header-tools button{font-size:12px;padding:8px}}
 }
 </style></head><body><script>(function(){var key='athat-docs-ui-theme-v3',allowed=['terracotta','mono'],v;try{v=localStorage.getItem(key)}catch(e){}v=allowed.includes(v)?v:'terracotta';document.addEventListener('DOMContentLoaded',function(){document.body.dataset.docsTheme=v;var themeMeta=document.querySelector('meta[name="theme-color"]');if(themeMeta)themeMeta.setAttribute('content',v==='mono'?'#111111':'#514735');var el=document.getElementById('docsThemeSelect');if(el){el.value=v;el.addEventListener('change',function(){if(!allowed.includes(el.value))return;document.body.dataset.docsTheme=el.value;if(themeMeta)themeMeta.setAttribute('content',el.value==='mono'?'#111111':'#514735');try{localStorage.setItem(key,el.value)}catch(e){}})}})})();</script>
-<header class="top"><div class="brand"><div class="logo"><img src="/brand.svg?v=10" alt="شعار مستندات الذات الأصلي DOCS ATHAT" width="88" height="88"></div><div><b>مستندات الذات</b><small>ATHAT Docs · أعمالك وشواهدك</small></div></div><div class="docs-theme-picker"><label for="docsThemeSelect">المظهر</label><select id="docsThemeSelect" aria-label="اختيار ثيم الموقع"><option value="terracotta">الذهبي الملكي</option><option value="mono">الأسود والأبيض</option></select></div><div id="sessionPanel" hidden><small id="accountName"></small><button id="logoutDocs" type="button">تسجيل خروج</button></div></header><div id="docsLiveIndicators" class="docs-live-indicators" hidden aria-label="حالة الحفظ والمزامنة"><span id="docsLocalIndicator" class="docs-live-indicator" data-state="yellow" role="status"><i></i><span>الحفظ بالجهاز: جارٍ التحقق</span></span><span id="docsPeerIndicator" class="docs-live-indicator" data-state="red" role="status"><i></i><span>مزامنة الأجهزة: غير متصل</span></span></div>
+<header class="top"><div class="brand"><div class="logo"><img src="/brand.svg?v=10" alt="شعار مستندات الذات الأصلي DOCS ATHAT" width="88" height="88"></div><div><b>مستندات الذات</b><small>ATHAT Docs · أعمالك وشواهدك</small></div></div><div class="docs-theme-picker"><label for="docsThemeSelect">المظهر</label><select id="docsThemeSelect" aria-label="اختيار ثيم الموقع"><option value="terracotta">الذهبي الملكي</option><option value="mono">الأسود والأبيض</option></select></div><div id="sessionPanel" hidden><small id="accountName"></small><button id="logoutDocs" type="button">تسجيل خروج</button></div></header><div id="docsLiveIndicators" class="docs-live-indicators" hidden aria-label="حالة الحفظ والمزامنة"><span id="docsLocalIndicator" class="docs-live-indicator" data-state="yellow" role="status"><i></i><span>الحفظ بالجهاز: جارٍ التحقق</span></span><span id="docsPeerIndicator" class="docs-live-indicator" data-state="red" role="status"><i></i><span>مزامنة الأجهزة: غير متصل</span></span><span id="docsOneDriveIndicator" class="docs-live-indicator" data-state="red" role="status"><i></i><span>OneDrive: غير مرتبط</span></span></div>
 <section id="authGate" aria-label="تسجيل الدخول">
 <div class="auth-card"><h1>مستندات الذات</h1><p>ادخل مرة واحدة، وسيبقى حسابك مفتوحًا على هذا الجهاز حتى تختار تسجيل الخروج.</p>
 <div class="auth-tabs"><button id="tabLogin" type="button" class="selected">تسجيل الدخول</button><button id="tabRegister" type="button">إنشاء حساب</button></div>
@@ -5027,6 +5027,16 @@ docsMirrorPanel.querySelector('#docsMirrorFilesToggle').onclick=async()=>{
  }catch(e){root.textContent='تعذّر عرض الشواهد: '+e.message}
 };
 settingsHub.appendChild(docsMirrorPanel);
+
+// OneDrive setup is deliberately disabled until a verified Microsoft OAuth app
+// and encrypted upload/restore workflow exist. Do not imply a cloud backup exists.
+const docsOneDrivePanel=document.createElement('section');
+docsOneDrivePanel.className='ds-card';
+docsOneDrivePanel.id='docsOneDrivePanel';
+docsOneDrivePanel.setAttribute('aria-labelledby','docsOneDriveHeading');
+docsOneDrivePanel.innerHTML='<h3 id="docsOneDriveHeading">النسخ الاحتياطي المشفر إلى OneDrive</h3><p>الحفظ على هذا الجهاز يعمل بصورة مستقلة عن OneDrive. ربط Microsoft والرفع التلقائي لم يفعّلا بعد.</p><p id="docsOneDriveSetupStatus" role="status">الحالة: OneDrive غير مرتبط. لا توجد نسخة سحابية مؤكدة.</p><button id="docsOneDriveConnect" type="button" class="btn" disabled>ربط OneDrive — بانتظار إعداد Microsoft الآمن</button><p class="muted">بعد تفعيل الربط الرسمي، ستكون علامة OneDrive خضراء فقط عند التحقق من رفع نسخة مشفرة مكتملة، وليست عند حفظ المستند على الجهاز.</p>';
+settingsHub.appendChild(docsOneDrivePanel);
+
 dsGet('dsAutosave').onchange=e=>{if(!activeUser)return;localStorage.setItem(docsDevicePermissionKey(),e.target.checked?'yes':'no');window.dispatchEvent(new CustomEvent('docs:local-status',{detail:e.target.checked?{state:'yellow',message:'الحفظ التلقائي مفعل؛ بانتظار أول عملية حفظ'}:{state:'red',message:'الحفظ التلقائي متوقف على هذا الجهاز'}}));say(e.target.checked?'الحفظ التلقائي مفعل لهذا الجهاز':'تم إيقاف الحفظ التلقائي')};
 
 async function dsStoreItems(name){
@@ -6011,6 +6021,7 @@ for(const [id,label,accessible,pathData] of docsTabItems){
  const observer=new MutationObserver(show);const panel=document.getElementById('sessionPanel');if(panel)observer.observe(panel,{attributes:true,attributeFilter:['hidden']});show();
  window.addEventListener('docs:local-status',e=>{const d=e.detail||{};set(local,d.state||'red','الحفظ بالجهاز: '+(d.message||'متوقف'))});
  window.addEventListener('docs:peer-status',e=>{const d=e.detail||{};set(peer,d.state||'red','مزامنة الأجهزة: '+(d.message||'غير متصل'))});
+ window.addEventListener('docs:onedrive-status',e=>{const d=e.detail||{};set(document.getElementById('docsOneDriveIndicator'),d.state||'red','OneDrive: '+(d.message||'غير مرتبط'))});
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')show()});
 })();
 </script><script src="/peer-sync.js" defer></script><script src="/auto-sync.js" defer></script><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(r=>{if(navigator.onLine)r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)r.update().catch(()=>{})})}).catch(()=>{}))}</script><style id="docs-grade-styles">
