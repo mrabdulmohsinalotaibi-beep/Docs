@@ -3562,6 +3562,8 @@ $('studentExportCsv').onclick=()=>{const columns=['name','student_no','national_
 async function enterDocs(user){
  const owner=user?.role==='owner'&&user?.id==='usr_6a351b83-70aa-46f6-98f1-15bf076d019e'&&String(user?.loginIdentifier||'').trim().toLowerCase()==='mr.abdulmohsinalotaibi@gmail.com';
  if(typeof adminPanel!=='undefined'&&adminPanel)adminPanel.hidden=!owner;
+ const adminNav=document.getElementById('workspaceAdminLink');if(adminNav)adminNav.hidden=!owner;
+ if(!owner&&activeWorkspace==='admin')workspaceGoto('home');
  const adminTools=document.getElementById('docsAdminHeaderTools');
  if(adminTools)adminTools.hidden=!owner;
  if(owner){
@@ -3837,7 +3839,7 @@ docsMain.prepend(docsStudentPanel);docsMain.prepend(docsStudentsNav);
 
 workspaceNav=document.createElement('nav');workspaceNav.id='workspaceNav';workspaceNav.className='workspace-nav';workspaceNav.setAttribute('aria-label','أقسام مستندات الذات');
 workspacePages={};
-for(const id of ['home','documents','students','reports','messages','settings']){
+for(const id of ['home','documents','students','reports','messages','settings','admin']){
  const section=document.createElement('section');section.id='workspace-'+id;section.className='workspace-page workspace-'+id;section.hidden=id!=='home';workspacePages[id]=section;
 }
 const originalHero=docsMain.querySelector('.hero'),originalMetrics=docsMain.querySelector('.metrics'),originalTemplates=$('templatesPanel'),originalWorks=$('worksPanel'),originalArchive=$('migratedA4Library'),originalProfile=$('accountSchoolPanel'),originalEditor=$('editor'),originalPrograms=$('regionalProgramPanel'),originalLocalPlan=$('localPlanPanel'),originalSample=$('sampleMigrationPanel');
@@ -3863,6 +3865,7 @@ workspaceGoto=function(target){
 };
 for(const [id,label] of navLabels){const btn=document.createElement('button');btn.type='button';btn.dataset.workspace=id;btn.textContent=label;btn.onclick=()=>{workspaceGoto(id);if(id==='students')refreshStudentDirectory().then(()=>refreshStudentInsights()).then(()=>refreshStudentCareIndex()).then(()=>loadMigratedA4()).catch(e=>say(e.message))};workspaceNav.append(btn)}
 const settingsButton=document.createElement('button');settingsButton.type='button';settingsButton.id='workspaceSettingsLink';settingsButton.textContent='⚙ الإعدادات';settingsButton.onclick=()=>workspaceGoto('settings');
+const adminWorkspaceButton=document.createElement('button');adminWorkspaceButton.type='button';adminWorkspaceButton.id='workspaceAdminLink';adminWorkspaceButton.dataset.workspace='admin';adminWorkspaceButton.textContent='🛡 إدارة الموقع';adminWorkspaceButton.hidden=true;adminWorkspaceButton.onclick=()=>{if(activeUser?.role==='owner')workspaceGoto('admin')};
 const recordsHeader=document.createElement('section');recordsHeader.className='panel';recordsHeader.innerHTML='<h2>المستندات</h2><p class="muted">جميع الأصول هنا، والإصدارات محفوظة ضمن كل مستند. اختر عرضًا واحدًا فقط دون تكرار.</p>';
 const settingsHeader=document.createElement('section');settingsHeader.className='panel';settingsHeader.innerHTML='<h2>إعدادات الحساب</h2><p class="muted">بيانات المدرسة، والنسخ الاحتياطي، والمزامنة.</p>';
 adminPanel=document.createElement('section');adminPanel.className='panel';adminPanel.id='docsAdminPanel';adminPanel.hidden=true;
@@ -4377,8 +4380,7 @@ adminNotificationsPanel.innerHTML='<div class="row"><div><h3>مركز تنبيه
 adminPanel.prepend(adminNotificationsPanel);
 let docsAdminNotificationBusy=false;
 function docsAdminNavigate(){
- workspaceGoto('settings');
- adminPanel.hidden=false;
+ workspaceGoto('admin');
  adminPanel.scrollIntoView({behavior:'smooth',block:'start'});
 }
 const goAdminBtn=adminHeaderTools.querySelector('#docsGoAdmin');
@@ -5216,7 +5218,7 @@ dsModern.innerHTML=
 '<button type="button" class="ds-nav-btn" role="tab" data-ds-tab="privacy" aria-controls="dsPanelPrivacy"><span class="ds-nav-icon">◇</span>الخصوصية والأمان</button></nav>'+
 '<div class="ds-content">'+
 '<section id="dsPanelOverview" class="ds-pane" role="tabpanel"><h3 class="ds-pane-title">نظرة عامة</h3><p class="ds-pane-desc">تابع بياناتك المحلية وانتقل للإعداد الذي تحتاجه فقط.</p><div class="ds-overview-actions"><button type="button" class="ds-shortcut" data-ds-open="storage"><span><strong>الحفظ والنسخ الاحتياطي</strong><small>تصدير نسخة مشفرة أو استعادتها</small></span><span class="ds-arrow">‹</span></button><button type="button" class="ds-shortcut" data-ds-open="sync"><span><strong>الأجهزة والمزامنة</strong><small>إدارة الاتصال ونقل البيانات بين الأجهزة</small></span><span class="ds-arrow">‹</span></button></div><p class="ds-notice">مهم: النسخة المحفوظة داخل المتصفح قد تتأثر بمسح بيانات الموقع أو حذف التطبيق. احتفظ بنسخة احتياطية مشفرة خارج المتصفح.</p></section>'+
-'<section id="dsPanelAccount" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">المدرسة والحساب</h3><p class="ds-pane-desc">تعديل بيانات المدرسة والموجّه وإدارة الحسابات حسب الصلاحية.</p></section>'+
+'<section id="dsPanelAccount" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">المدرسة والحساب</h3><p class="ds-pane-desc">تعديل بيانات المدرسة والموجّه وإعدادات حسابك الشخصي فقط.</p></section>'+
 '<section id="dsPanelStorage" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">الحفظ والنسخ الاحتياطي</h3><p class="ds-pane-desc">النسخ المشفرة والاستعادة وضبط الحفظ المحلي على هذا الجهاز.</p></section>'+
 '<section id="dsPanelSync" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">الأجهزة والمزامنة</h3><p class="ds-pane-desc">افحص اتصال أجهزتك وابدأ النقل حسب الإمكانات المتاحة.</p></section>'+
 '<section id="dsPanelPrivacy" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">الخصوصية والأمان</h3><p class="ds-pane-desc">إعدادات الخصوصية وإدارة حذف البيانات المحلية بأمان.</p></section>'+
@@ -5228,7 +5230,7 @@ const dsPrivacyCard=dsGet('dsAccount').closest('.ds-card');
 const dsTransferCard=dsGet('dsTransfer').closest('.ds-card');
 const dsPeerCard=dsGet('dsPairOpen').closest('.ds-card');
 dsPanel('Overview').append(docsMirrorPanel);
-dsPanel('Account').append(originalProfile,adminPanel);
+dsPanel('Account').append(originalProfile);
 dsPanel('Storage').append(dsBackupCard);
 const dsTransferFold=document.createElement('details');dsTransferFold.className='ds-storage-extra';dsTransferFold.innerHTML='<summary>استرداد بيانات سابقة ونقلها إلى هذا الجهاز</summary>';
 dsTransferFold.append(dsTransferCard);
@@ -5307,8 +5309,9 @@ document.addEventListener('athat-docs-login',()=>{
 });
 dsOpenTab('overview');
 workspacePages.settings.append(settingsHub);
+workspacePages.admin.append(adminPanel);
 
-docsMain.prepend(workspacePages.settings);docsMain.prepend(workspacePages.reports);docsMain.prepend(workspacePages.students);docsMain.prepend(workspacePages.documents);docsMain.prepend(workspacePages.home);docsMain.prepend(workspaceNav);workspaceNav.after(settingsButton);
+docsMain.prepend(workspacePages.admin);docsMain.prepend(workspacePages.settings);docsMain.prepend(workspacePages.reports);docsMain.prepend(workspacePages.students);docsMain.prepend(workspacePages.documents);docsMain.prepend(workspacePages.home);docsMain.prepend(workspaceNav);workspaceNav.after(settingsButton,adminWorkspaceButton);
 originalHero.after($('docsStorageSummary'));
 
 const messagePage=workspacePages.messages;messagePage.innerHTML="\n<section class=\"panel msg-center\">\n <div class=\"msg-head\"><div><h2>مركز الرسائل</h2><p class=\"muted\">رسائل أولياء الأمور والمنشورات · إعداد محلي وإرسال يدوي عبر واتساب</p></div><div class=\"msg-head-actions\"><button id=\"msgExport\" type=\"button\" class=\"btn\">تصدير الأرشيف</button><button id=\"msgNew\" type=\"button\" class=\"primary\">＋ رسالة جديدة</button></div></div>\n <nav class=\"msg-tabs\" aria-label=\"أقسام مركز الرسائل\"><button type=\"button\" data-msg-tab=\"compose\">إنشاء رسالة</button><button type=\"button\" data-msg-tab=\"parents\">أرشيف أولياء الأمور</button><button type=\"button\" data-msg-tab=\"posts\">أرشيف المنشورات</button></nav>\n <p id=\"msgNotice\" class=\"msg-notice\" role=\"status\" aria-live=\"polite\">الرسائل تحفظ محليًا على هذا الجهاز. لا يُرسَل شيء تلقائيًا.</p>\n <section id=\"msgCompose\">\n <div class=\"msg-two\"><label>نوع الرسالة<select id=\"msgKind\"><option value=\"parents\">رسالة لأولياء الأمور</option><option value=\"posts\">منشور أو تعميم</option></select></label>\n <label>نموذج الرسالة<select id=\"msgTemplate\"><option value=\"\">رسالة جديدة</option><option value=\"absence\">تنبيه بشأن المواظبة</option><option value=\"meeting\">دعوة لقاء ولي الأمر</option><option value=\"praise\">إشادة وتقدير</option><option value=\"followup\">متابعة تربوية</option><option value=\"announcement\">إعلان مدرسي</option></select></label></div>\n <div class=\"msg-fields\"><label>عنوان الرسالة<input id=\"msgTitle\" maxlength=\"120\" placeholder=\"مثال: متابعة المواظبة أو دعوة ولي الأمر\"></label></div>\n <section class=\"msg-compose-ai\" aria-label=\"مساعد صياغة الرسائل الذكي\">\n <div class=\"msg-compose-ai-heading\"><strong>مساعد صياغة الرسائل الذكي</strong><small>اكتب الفكرة أو النقاط أو التعليمات التي تريد تحويلها إلى رسالة واتساب رسمية.</small></div>\n <label class=\"msg-agree\"><input id=\"msgSiteContext\" type=\"checkbox\" checked> الاستفادة من اسم المدرسة وإدارة التعليم والمرحلة في الصياغة.</label>\n <label class=\"msg-agree\"><input id=\"msgAIPrivacy\" type=\"checkbox\"> أتأكد أن التعليمات لا تتضمن بيانات شخصية أو حساسة عن الطلاب أو أولياء الأمور.</label>\n <label class=\"msg-ai-instructions\" for=\"msgBrief\">اكتب ما تريد من الذكاء الاصطناعي صياغته\n <textarea id=\"msgBrief\" rows=\"5\" maxlength=\"1600\" placeholder=\"مثال: اكتب رسالة لأولياء الأمور عن أهمية الحضور المبكر، بصياغة رسمية مختصرة، مع شكر الأسرة على تعاونها.\"></textarea></label>\n <div class=\"msg-ai-generate\"><button type=\"button\" class=\"primary\" id=\"msgAI\">✦ توليد الرسالة</button><small>سيظهر النص المقترح في حقل الرسالة أدناه، ويمكنك تعديله قبل الإرسال.</small></div>\n </section>\n <label>نص الرسالة القابل للتعديل<textarea id=\"msgText\" rows=\"7\" maxlength=\"3500\" placeholder=\"اكتب رسالة واتساب هنا، أو استخدم المساعد الذكي لصياغتها.\"></textarea></label>\n <div id=\"msgRecipients\" class=\"msg-recipients\"><h3>تحديد المستلمين</h3>\n <div class=\"msg-two\"><label>طريقة التوجيه<select id=\"msgAudience\"><option value=\"individual\">أشخاص محددون</option><option value=\"classroom\">فصل كامل</option><option value=\"grade\">صف كامل</option><option value=\"care\">فئة الرعاية الخاصة (رسالة عامة فقط)</option><option value=\"all\">جميع أولياء الأمور</option></select></label><label>بحث عن الطلاب<input id=\"msgSearch\" placeholder=\"اسم الطالب أو الفصل\" type=\"search\"></label></div>\n <div class=\"msg-two\"><label>الصف<select id=\"msgGrade\"><option value=\"\">اختر الصف</option></select></label><label>الفصل<select id=\"msgClass\"><option value=\"\">اختر الفصل</option></select></label></div>\n <p id=\"msgRosterStatus\" class=\"muted\">يُحمّل دليل الطلاب عند فتح المركز.</p>\n <button class=\"btn\" type=\"button\" id=\"msgRefreshRoster\">تحديث دليل الطلاب</button>\n <div class=\"msg-recipient-grid\"><div><div class=\"msg-roster-head\"><b>المستلمون المتاحون</b><span id=\"msgCount\">0</span></div><div id=\"msgRoster\" class=\"msg-roster\"></div><button type=\"button\" class=\"btn\" id=\"msgMore\" hidden>عرض المزيد</button></div>\n <div class=\"msg-selected\"><b>معاينة المستلمين</b><p id=\"msgSelected\" class=\"muted\">لم يُحدّد مستلم بعد.</p><p class=\"muted\">لا تُعدّ أرقام الاتصال صحيحة ما لم تتحقق منها. تُفتح محادثة منفصلة لكل ولي أمر.</p><label>رقم يدوي لرسالة فردية (اختياري)<input id=\"msgManualPhone\" inputmode=\"tel\" dir=\"ltr\" placeholder=\"05xxxxxxxx أو +9665xxxxxxxx\"></label></div></div></div>\n <div class=\"msg-actions\"><button id=\"msgSave\" class=\"btn\" type=\"button\">حفظ في الأرشيف</button><button id=\"msgPrepare\" type=\"button\" class=\"primary\">تجهيز واتساب</button><button id=\"msgShare\" type=\"button\" class=\"btn\">مشاركة منشور في واتساب</button></div>\n <section id=\"msgDispatch\" class=\"msg-dispatch\" hidden><h3>قائمة الإرسال عبر واتساب</h3><p class=\"muted\">افتح المحادثة المطلوبة واضغط إرسال داخل واتساب بنفسك. فتح المحادثة لا يعني أن الرسالة أُرسلت.</p><div id=\"msgDispatchItems\"></div></section>\n </section>\n <section id=\"msgArchive\" hidden><div class=\"msg-archive-bar\"><h3 id=\"msgArchiveHeading\">أرشيف الرسائل</h3><input id=\"msgArchiveSearch\" type=\"search\" placeholder=\"البحث في العناوين والنصوص\"></div><div id=\"msgArchiveItems\"></div></section>\n</section>";
