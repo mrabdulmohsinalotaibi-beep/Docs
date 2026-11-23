@@ -3851,6 +3851,7 @@ const navLabels=[['home','الرئيسية'],['documents','المستندات'],
 activeWorkspace='home';
 workspaceGoto=function(target){
  if(!workspacePages[target])target='home';
+ if(target==='admin'&&document.getElementById('docsAdminHeaderTools')?.hidden)return;
  activeWorkspace=target;
  for(const [id,node] of Object.entries(workspacePages))node.hidden=id!==target;
  docsStudentPanel.hidden=target!=='students';
@@ -3865,20 +3866,19 @@ workspaceGoto=function(target){
 };
 for(const [id,label] of navLabels){const btn=document.createElement('button');btn.type='button';btn.dataset.workspace=id;btn.textContent=label;btn.onclick=()=>{workspaceGoto(id);if(id==='students')refreshStudentDirectory().then(()=>refreshStudentInsights()).then(()=>refreshStudentCareIndex()).then(()=>loadMigratedA4()).catch(e=>say(e.message))};workspaceNav.append(btn)}
 const settingsButton=document.createElement('button');settingsButton.type='button';settingsButton.id='workspaceSettingsLink';settingsButton.textContent='⚙ الإعدادات';settingsButton.onclick=()=>workspaceGoto('settings');
-const adminWorkspaceButton=document.createElement('button');adminWorkspaceButton.type='button';adminWorkspaceButton.id='workspaceAdminLink';adminWorkspaceButton.dataset.workspace='admin';adminWorkspaceButton.textContent='🛡 إدارة الموقع';adminWorkspaceButton.hidden=true;adminWorkspaceButton.onclick=()=>{if(activeUser?.role==='owner')workspaceGoto('admin')};
+const adminWorkspaceButton=document.createElement('button');adminWorkspaceButton.type='button';adminWorkspaceButton.id='workspaceAdminLink';adminWorkspaceButton.dataset.workspace='admin';adminWorkspaceButton.textContent='🛡 إدارة الموقع';adminWorkspaceButton.hidden=true;adminWorkspaceButton.onclick=()=>docsAdminNavigate('overview');
 const recordsHeader=document.createElement('section');recordsHeader.className='panel';recordsHeader.innerHTML='<h2>المستندات</h2><p class="muted">جميع الأصول هنا، والإصدارات محفوظة ضمن كل مستند. اختر عرضًا واحدًا فقط دون تكرار.</p>';
-const settingsHeader=document.createElement('section');settingsHeader.className='panel';settingsHeader.innerHTML='<h2>إعدادات الحساب</h2><p class="muted">بيانات المدرسة، والنسخ الاحتياطي، والمزامنة.</p>';
 adminPanel=document.createElement('section');adminPanel.className='panel';adminPanel.id='docsAdminPanel';adminPanel.hidden=true;
-const adminHeading=document.createElement('h2');adminHeading.textContent='إدارة حسابات مستندات الذات';
-const adminCaption=document.createElement('p');adminCaption.className='muted';adminCaption.textContent='حساب المدير الرئيسي مستقل عن حسابات موقع الذات. يمكن للمدير الاطلاع على المستخدمين دون كلمات مرورهم أو مستنداتهم.';
+const adminHeading=document.createElement('h2');adminHeading.textContent='إدارة الموقع';
+const adminCaption=document.createElement('p');adminCaption.className='muted';adminCaption.textContent='إدارة الحسابات والاشتراكات والتنبيهات، دون عرض كلمات المرور أو محتوى مستندات المستخدمين.';
 const adminRefresh=document.createElement('button');adminRefresh.type='button';adminRefresh.className='btn';adminRefresh.textContent='تحديث قائمة الحسابات';
 const adminResults=document.createElement('div');adminResults.id='docsAdminResults';adminResults.className='student-roster';
 refreshAdminUsers=async function(){
  adminResults.textContent='جارٍ جلب الحسابات…';
  try{const reply=await fetch('/api/admin/users',{credentials:'same-origin',cache:'no-store'}),payload=await reply.json();if(!reply.ok||!payload.ok)throw Error(payload.message||'تعذر جلب الحسابات');adminResults.replaceChildren();
-  const count=document.createElement('p');count.textContent='الحسابات المسجلة: '+payload.count;adminResults.append(count);
+  const count=document.createElement('p');count.className='muted';count.textContent='الحسابات المسجلة: '+payload.count;adminResults.append(count);
   for(const user of payload.users||[]){
-   const c=document.createElement('div');c.style.cssText='border:1px solid #D9CCB2;padding:12px;border-radius:12px;overflow-wrap:anywhere';
+   const c=document.createElement('article');c.className='admin-user-card';
    const h=document.createElement('strong'),small=document.createElement('p');h.textContent=user.name||user.email;small.className='muted';small.textContent=[user.email,user.role==='owner'?'مدير رئيسي':'مستخدم',user.status==='pending_approval'?'بانتظار مراجعة المدير':user.status].join(' · ');c.append(h,small);
    if(user.status==='pending_approval'){
     const actions=document.createElement('div');actions.className='row';
@@ -3893,6 +3893,7 @@ refreshAdminUsers=async function(){
    }
    adminResults.append(c)
   }
+  filterAdminUsers();
  }catch(e){adminResults.textContent='تعذر قراءة قائمة الحسابات: '+e.message}
 }
 adminRefresh.onclick=refreshAdminUsers;adminPanel.append(adminHeading,adminCaption,adminRefresh,adminResults);
@@ -4321,7 +4322,7 @@ premiumBox.querySelector('#premiumRunAI').onclick=async()=>{
   consent.checked=false;premiumProgress.textContent+=' تم تحليل الدفعة؛ لإكمال البقية جهّز دفعة جديدة وراجعها ووافق عليها منفصلًا.';
  }catch(error){target.textContent='تعذر التحليل: '+error.message}finally{button.disabled=false}
 };
-const adminPremium=document.createElement('section');adminPremium.className='panel docs-premium-admin';
+const adminPremium=document.createElement('section');adminPremium.className='docs-premium-admin';
 adminPremium.innerHTML='<h3>طلبات الاشتراك الذهبي</h3><p class="muted">الطلب لا يفعّل الاشتراك. تواصل مع صاحب رقم الجوال خارج الموقع وأبلغه بتفاصيل التحويل. لا تمنح الاشتراك إلا بعد تحققك الشخصي من وصول المبلغ. هاتف الطالب أو بيانات المستندات غير مطلوبة.</p><button type="button" class="btn" id="premiumAdminRefresh">تحديث طلبات الاشتراك</button><div id="premiumAdminList" role="status"></div>';
 adminPanel.append(adminPremium);
 async function premiumAdminRefresh(){
@@ -4363,8 +4364,8 @@ async function premiumAdminRefresh(){
  }catch(e){list.textContent=e.message}
 }
 adminPremium.querySelector('#premiumAdminRefresh').onclick=premiumAdminRefresh;
-const oldAdminRefreshUsers=refreshAdminUsers;
-refreshAdminUsers=async()=>{await oldAdminRefreshUsers();await premiumAdminRefresh()};
+// تحديث الحسابات والاشتراكات مستقل لتجنب طلبات الشبكة المكررة.
+
 
 /* Manager-only navigation and notifications center */
 const adminHeaderTools=document.createElement('div');
@@ -4375,18 +4376,20 @@ adminHeaderTools.innerHTML='<button type="button" id="docsGoAdmin" class="docs-a
 const docsSessionHeader=document.querySelector('header.top');
 docsSessionHeader.append(adminHeaderTools);
 const adminNotificationsPanel=document.createElement('section');
-adminNotificationsPanel.className='docs-admin-alerts panel';
+adminNotificationsPanel.className='docs-admin-alerts';
 adminNotificationsPanel.innerHTML='<div class="row"><div><h3>مركز تنبيهات الإدارة</h3><p class="muted">طلبات التسجيل والاشتراك التي تحتاج إلى مراجعة. تنبيهات داخل الموقع دون إرسال تلقائي.</p></div><div class="row"><button type="button" class="btn" id="docsAdminAlertsRefresh">تحديث</button><button type="button" class="btn" id="docsAdminAlertsRead">تمييز كمقروء</button></div></div><div id="docsAdminAlertsList" role="status"></div>';
 adminPanel.prepend(adminNotificationsPanel);
 let docsAdminNotificationBusy=false;
-function docsAdminNavigate(){
+function docsAdminNavigate(tab='alerts'){
+ if(adminHeaderTools.hidden)return;
  workspaceGoto('admin');
+ docsAdminOpenTab(tab);
  adminPanel.scrollIntoView({behavior:'smooth',block:'start'});
 }
 const goAdminBtn=adminHeaderTools.querySelector('#docsGoAdmin');
 const bellBtn=adminHeaderTools.querySelector('#docsAdminBell');
-goAdminBtn.onclick=docsAdminNavigate;
-bellBtn.onclick=()=>{docsAdminNavigate();bellBtn.setAttribute('aria-expanded','true');adminNotificationsPanel.scrollIntoView({behavior:'smooth',block:'start'});refreshAdminNotifications()};
+goAdminBtn.onclick=()=>docsAdminNavigate('overview');
+bellBtn.onclick=()=>{docsAdminNavigate('alerts');bellBtn.setAttribute('aria-expanded','true');refreshAdminNotifications()};
 async function refreshAdminNotifications(){
  if(adminHeaderTools.hidden||docsAdminNotificationBusy)return;
  docsAdminNotificationBusy=true;
@@ -4406,7 +4409,7 @@ async function refreshAdminNotifications(){
    const strong=document.createElement('strong');strong.textContent=alert.title;
    const detail=document.createElement('p');detail.textContent=alert.detail+' · '+(alert.at?new Date(alert.at).toLocaleDateString('ar-SA'):'');
    const action=document.createElement('button');action.className='btn';action.type='button';action.textContent=alert.type==='subscription'?'مراجعة الاشتراكات':'مراجعة الحسابات';
-   action.onclick=()=>{(alert.type==='subscription'?adminPremium:adminResults).scrollIntoView({behavior:'smooth',block:'start'});if(alert.type==='subscription')premiumAdminRefresh();else refreshAdminUsers()};
+   action.onclick=()=>{const tab=alert.type==='subscription'?'premium':'users';docsAdminOpenTab(tab);if(tab==='premium')premiumAdminRefresh();else refreshAdminUsers()};
    card.append(strong,detail,action);listing.append(card);
   }
  }catch(e){listing.textContent='تعذر تحميل التنبيهات: '+e.message}finally{docsAdminNotificationBusy=false}
@@ -4424,8 +4427,8 @@ adminNotificationsPanel.querySelector('#docsAdminAlertsRead').onclick=async()=>{
   if(result.ok)await refreshAdminNotifications();
  }catch(e){alert('تعذر تمييز التنبيهات: '+e.message)}
 };
-const previousAdminRefresh=refreshAdminUsers;
-refreshAdminUsers=async()=>{await previousAdminRefresh();if(!adminHeaderTools.hidden)refreshAdminNotifications()};
+// لا تسلسل تحديث التنبيهات مع كل تحديث لقائمة الحسابات.
+
 
 const reportsPanes={dashboard:$('reportsDashboard'),analytics:$('reportsAnalytics'),official:$('reportsOfficial'),export:$('reportsExport')};
 let reportsActiveTab='dashboard',reportsBusy=false,reportsOwner='',reportsSourcesReady=false,reportsStudentReady=false,reportsInsightsReady=false,reportsCareReady=false;
@@ -5217,7 +5220,7 @@ dsModern.innerHTML=
 '<button type="button" class="ds-nav-btn" role="tab" data-ds-tab="sync" aria-controls="dsPanelSync"><span class="ds-nav-icon">⇄</span>الأجهزة والمزامنة</button>'+
 '<button type="button" class="ds-nav-btn" role="tab" data-ds-tab="privacy" aria-controls="dsPanelPrivacy"><span class="ds-nav-icon">◇</span>الخصوصية والأمان</button></nav>'+
 '<div class="ds-content">'+
-'<section id="dsPanelOverview" class="ds-pane" role="tabpanel"><h3 class="ds-pane-title">نظرة عامة</h3><p class="ds-pane-desc">تابع بياناتك المحلية وانتقل للإعداد الذي تحتاجه فقط.</p><div class="ds-overview-actions"><button type="button" class="ds-shortcut" data-ds-open="storage"><span><strong>الحفظ والنسخ الاحتياطي</strong><small>تصدير نسخة مشفرة أو استعادتها</small></span><span class="ds-arrow">‹</span></button><button type="button" class="ds-shortcut" data-ds-open="sync"><span><strong>الأجهزة والمزامنة</strong><small>إدارة الاتصال ونقل البيانات بين الأجهزة</small></span><span class="ds-arrow">‹</span></button></div><p class="ds-notice">مهم: النسخة المحفوظة داخل المتصفح قد تتأثر بمسح بيانات الموقع أو حذف التطبيق. احتفظ بنسخة احتياطية مشفرة خارج المتصفح.</p></section>'+
+'<section id="dsPanelOverview" class="ds-pane" role="tabpanel"><h3 class="ds-pane-title">نظرة عامة</h3><p class="ds-pane-desc">إعداداتك الشخصية وأعمالك المحفوظة على هذا الجهاز.</p><div class="ds-overview-actions"><button type="button" class="ds-shortcut" data-ds-open="account"><span><strong>بيانات المدرسة والحساب</strong><small>المدرسة والموجّه وتفعيل العمل دون إنترنت</small></span><span class="ds-arrow">‹</span></button><button type="button" class="ds-shortcut" data-ds-open="storage"><span><strong>الحفظ والنسخ الاحتياطي</strong><small>تصدير نسخة مشفرة أو استعادتها</small></span><span class="ds-arrow">‹</span></button><button type="button" class="ds-shortcut" data-ds-open="sync"><span><strong>الأجهزة والمزامنة</strong><small>ربط الأجهزة ونقل المستندات</small></span><span class="ds-arrow">‹</span></button><button type="button" class="ds-shortcut" data-ds-open="privacy"><span><strong>الخصوصية والأمان</strong><small>التحكم بالبيانات المحلية</small></span><span class="ds-arrow">‹</span></button></div><p class="ds-notice">مهم: احتفظ بنسخة احتياطية مشفرة خارج المتصفح. لا يُحذف أي مستند عند تعديل هذه الإعدادات.</p></section>'+
 '<section id="dsPanelAccount" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">المدرسة والحساب</h3><p class="ds-pane-desc">تعديل بيانات المدرسة والموجّه وإعدادات حسابك الشخصي فقط.</p></section>'+
 '<section id="dsPanelStorage" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">الحفظ والنسخ الاحتياطي</h3><p class="ds-pane-desc">النسخ المشفرة والاستعادة وضبط الحفظ المحلي على هذا الجهاز.</p></section>'+
 '<section id="dsPanelSync" class="ds-pane" role="tabpanel" hidden><h3 class="ds-pane-title">الأجهزة والمزامنة</h3><p class="ds-pane-desc">افحص اتصال أجهزتك وابدأ النقل حسب الإمكانات المتاحة.</p></section>'+
@@ -5237,7 +5240,9 @@ dsTransferFold.append(dsTransferCard);
 dsPanel('Storage').append(dsTransferFold);
 const dsLegacyOps=document.createElement('div');dsLegacyOps.hidden=true;dsLegacyOps.append(operations);dsPanel('Storage').append(dsLegacyOps);
 dsPanel('Sync').append(dsPeerCard,peerSlot);
-dsPanel('Privacy').append(dsPrivacyCard,settingsClear);
+dsPanel('Privacy').append(settingsClear);
+// إزالة بطاقة الاختصارات القديمة بعد نقل إجراءاتها إلى التبويبات؛ لا نحذف البيانات أو معالجات الأزرار الأصلية.
+dsPrivacyCard.remove();
 if(legacyNote)dsPanel('Privacy').append(legacyNote);
 settingsHub.querySelector('.ds-grid')?.remove();
 dsAdvanced.remove();
@@ -5310,6 +5315,69 @@ document.addEventListener('athat-docs-login',()=>{
 dsOpenTab('overview');
 workspacePages.settings.append(settingsHub);
 workspacePages.admin.append(adminPanel);
+
+/* لوحة الإدارة: تقسيم عملي إلى ملخص، تنبيهات، حسابات، اشتراكات مع إعادة استخدام العناصر الأصلية. */
+const adminUIStyle=document.createElement('style');
+adminUIStyle.textContent=`
+#workspace-admin{max-width:1200px;margin-inline:auto;width:100%;min-width:0}
+#docsAdminPanel{border:0;background:transparent;box-shadow:none;padding:0;min-width:0}
+#docsAdminPanel .admin-hero{padding:22px 24px;background:linear-gradient(120deg,#fffdf8,#eee4d0);border:1px solid #d9c9a8;border-radius:19px;margin-bottom:16px}
+#docsAdminPanel .admin-hero h2{margin:3px 0 6px;color:#443826;font-size:clamp(22px,3vw,30px)}
+#docsAdminPanel .admin-hero p{margin:0;line-height:1.9;color:#75654c;font-size:13px}
+#docsAdminPanel .admin-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:7px;margin-bottom:15px;background:#fff;border:1px solid #e1d6c2;border-radius:14px}
+#docsAdminPanel .admin-tab{border:0;background:transparent;border-radius:10px;padding:11px 16px;min-height:44px;color:#61533e;font-weight:700;flex:1;min-width:115px}
+#docsAdminPanel .admin-tab[aria-selected=true]{background:#514735;color:#fff}
+#docsAdminPanel .admin-pane[hidden]{display:none!important}
+#docsAdminPanel .admin-pane{background:#fff;border:1px solid #e3d8c5;border-radius:17px;padding:18px;margin-bottom:14px;min-width:0}
+#docsAdminPanel .admin-pane h3{color:#443826;margin:0 0 8px;font-size:18px}
+#docsAdminPanel .admin-pane p{overflow-wrap:anywhere;line-height:1.8}
+#docsAdminPanel .admin-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:15px 0}
+#docsAdminPanel .admin-quick button{min-width:0;text-align:right;background:#fff;border:1px solid #dfd2ba;border-radius:14px;padding:16px;min-height:88px;color:#514735}
+#docsAdminPanel .admin-quick strong{display:block;margin-bottom:5px;font-size:15px}
+#docsAdminPanel .admin-quick small{display:block;color:#7c6d54;font-size:12px;line-height:1.7}
+#docsAdminPanel .admin-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0}
+#docsAdminPanel .admin-tools input{min-width:0;flex:1 1 230px;padding:12px;border:1px solid #d9ccb4;border-radius:10px;background:#fff}
+#docsAdminPanel #docsAdminResults{display:grid;gap:10px}
+#docsAdminPanel .admin-user-card{border:1px solid #e5dac8;padding:13px;border-radius:12px;overflow-wrap:anywhere;background:#fff}
+#docsAdminPanel .admin-empty{padding:18px;border-radius:12px;background:#f8f5ef;color:#746549}
+#docsAdminPanel button:focus-visible{outline:3px solid #ac8a51;outline-offset:2px}
+#docsSettingsHub .ds-modern{max-width:1200px;margin-inline:auto}
+#docsSettingsHub .ds-overview-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+#docsSettingsHub .ds-pane .panel,#docsSettingsHub .ds-pane .ds-card{min-width:0;overflow-wrap:anywhere}
+@media(max-width:650px){#docsAdminPanel .admin-hero{padding:17px 15px}#docsAdminPanel .admin-quick{grid-template-columns:1fr}#docsAdminPanel .admin-pane{padding:14px}#docsAdminPanel .admin-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#docsAdminPanel .admin-tab{min-width:0}#docsSettingsHub .ds-overview-actions{grid-template-columns:1fr}}
+`;
+workspacePages.admin.prepend(adminUIStyle);
+const adminHero=document.createElement('header');adminHero.className='admin-hero';adminHero.append(adminHeading,adminCaption);
+const adminTabs=document.createElement('nav');adminTabs.className='admin-tabs';adminTabs.setAttribute('role','tablist');adminTabs.setAttribute('aria-label','أقسام إدارة الموقع');
+const adminPanes={};
+for(const [key,label] of [['overview','نظرة عامة'],['alerts','التنبيهات'],['users','الحسابات'],['premium','الاشتراكات']]){
+ const tab=document.createElement('button');tab.type='button';tab.className='admin-tab';tab.dataset.adminTab=key;tab.setAttribute('role','tab');tab.textContent=label;adminTabs.append(tab);
+ const pane=document.createElement('section');pane.className='admin-pane';pane.dataset.adminPane=key;pane.setAttribute('role','tabpanel');pane.hidden=true;adminPanes[key]=pane;adminPanel.append(pane);
+ tab.onclick=()=>docsAdminOpenTab(key);
+}
+adminPanel.prepend(adminHero,adminTabs);
+const adminOverview=document.createElement('div');adminOverview.innerHTML='<h3>مركز إدارة الموقع</h3><p class="muted">اختر القسم المطلوب. طلبات التسجيل والاشتراكات لا تُعتمد تلقائيًا.</p><div class="admin-quick"><button type="button" data-admin-open="alerts"><strong>التنبيهات</strong><small>طلبات وتحديثات تحتاج مراجعتك</small></button><button type="button" data-admin-open="users"><strong>حسابات المستخدمين</strong><small>المراجعة والاعتماد وإدارة الطلبات</small></button><button type="button" data-admin-open="premium"><strong>طلبات الاشتراك</strong><small>مراجعة الدفع والتفعيل اليدوي</small></button></div>';
+adminPanes.overview.append(adminOverview);
+adminOverview.querySelectorAll('[data-admin-open]').forEach(button=>button.onclick=()=>docsAdminOpenTab(button.dataset.adminOpen));
+adminPanes.alerts.append(adminNotificationsPanel);
+const adminUsersHeading=document.createElement('h3');adminUsersHeading.textContent='حسابات المستخدمين';
+const adminUsersDesc=document.createElement('p');adminUsersDesc.className='muted';adminUsersDesc.textContent='استعراض حسابات الموقع وطلبات التسجيل دون الوصول إلى مستنداتهم الخاصة.';
+const adminSearchRow=document.createElement('div');adminSearchRow.className='admin-tools';
+const adminUserSearch=document.createElement('input');adminUserSearch.type='search';adminUserSearch.placeholder='بحث بالاسم أو البريد أو حالة الحساب';adminUserSearch.setAttribute('aria-label','بحث في حسابات المستخدمين');
+adminSearchRow.append(adminUserSearch,adminRefresh);
+adminPanes.users.append(adminUsersHeading,adminUsersDesc,adminSearchRow,adminResults);
+adminPanes.premium.append(adminPremium);
+function docsAdminOpenTab(tab){
+ if(!adminPanes[tab])tab='overview';
+ for(const button of adminTabs.querySelectorAll('[data-admin-tab]')){const chosen=button.dataset.adminTab===tab;button.setAttribute('aria-selected',String(chosen));button.tabIndex=chosen?0:-1}
+ for(const [key,pane] of Object.entries(adminPanes))pane.hidden=key!==tab;
+ if(tab==='users'&&!adminResults.children.length)refreshAdminUsers();
+ if(tab==='premium'&&!adminPremium.querySelector('#premiumAdminList').children.length)premiumAdminRefresh();
+ if(tab==='alerts'&&!adminNotificationsPanel.querySelector('#docsAdminAlertsList').children.length)refreshAdminNotifications();
+}
+function filterAdminUsers(){const term=adminUserSearch.value.trim().toLocaleLowerCase();let visible=0;for(const card of adminResults.querySelectorAll('.admin-user-card')){const show=!term||card.textContent.toLocaleLowerCase().includes(term);card.hidden=!show;if(show)visible++}const empty=adminResults.querySelector('.admin-empty');if(empty)empty.remove();if(term&&!visible){const msg=document.createElement('p');msg.className='admin-empty';msg.textContent='لا توجد حسابات تطابق البحث.';adminResults.append(msg)}}
+adminUserSearch.addEventListener('input',filterAdminUsers);
+docsAdminOpenTab('overview');
 
 docsMain.prepend(workspacePages.admin);docsMain.prepend(workspacePages.settings);docsMain.prepend(workspacePages.reports);docsMain.prepend(workspacePages.students);docsMain.prepend(workspacePages.documents);docsMain.prepend(workspacePages.home);docsMain.prepend(workspaceNav);workspaceNav.after(settingsButton,adminWorkspaceButton);
 originalHero.after($('docsStorageSummary'));
