@@ -5051,7 +5051,7 @@ function docsMsBase64(bytes){return btoa(Array.from(bytes,b=>String.fromCharCode
 function docsMsStatus(message,state='red'){
  const label=document.getElementById('docsOneDriveSetupStatus');
  if(label)label.textContent=message;
- window.dispatchEvent(new CustomEvent('docs:onedrive-status',{detail:{state,message:state==='green'?'تم النسخ المشفر':state==='yellow'?'جارٍ العمل':message}}));
+ window.dispatchEvent(new CustomEvent('docs:onedrive-status',{detail:{state,message:state==='green'?'تم الرفع المشفر':String(message).slice(0,85)}}));
 }
 async function docsMsConfig(){
  const res=await fetch('/api/onedrive/config',{credentials:'same-origin',cache:'no-store'});
