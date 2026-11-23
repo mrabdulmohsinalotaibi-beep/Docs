@@ -5034,7 +5034,7 @@ const docsOneDrivePanel=document.createElement('section');
 docsOneDrivePanel.className='ds-card';
 docsOneDrivePanel.id='docsOneDrivePanel';
 docsOneDrivePanel.setAttribute('aria-labelledby','docsOneDriveHeading');
-docsOneDrivePanel.innerHTML='<h3 id="docsOneDriveHeading">النسخ الاحتياطي المشفر إلى OneDrive</h3><p>الحفظ على هذا الجهاز يعمل بصورة مستقلة عن OneDrive. ربط Microsoft والرفع التلقائي لم يفعّلا بعد.</p><p id="docsOneDriveSetupStatus" role="status">الحالة: OneDrive غير مرتبط. لا توجد نسخة سحابية مؤكدة.</p><button id="docsOneDriveConnect" type="button" class="btn" disabled>ربط OneDrive — بانتظار إعداد Microsoft الآمن</button><p class="muted">بعد تفعيل الربط الرسمي، ستكون علامة OneDrive خضراء فقط عند التحقق من رفع نسخة مشفرة مكتملة، وليست عند حفظ المستند على الجهاز.</p>';
+docsOneDrivePanel.innerHTML='<h3 id="docsOneDriveHeading">النسخ الاحتياطي المشفر إلى OneDrive</h3><p>الحفظ على هذا الجهاز يعمل بصورة مستقلة عن OneDrive. ربط Microsoft والرفع التلقائي لم يفعّلا بعد.</p><p id="docsOneDriveSetupStatus" role="status">الحالة: OneDrive غير مرتبط. لا توجد نسخة سحابية مؤكدة.</p><button id="docsOneDriveConnect" type="button" class="btn" disabled>ربط OneDrive — بانتظار إعداد Microsoft الآمن</button><p class="muted">بعد تفعيل الربط الرسمي، ستكون علامة OneDrive خضراء فقط عند التحقق من رفع نسخة مشفرة مكتملة، وليست عند حفظ المستند على الجهاز.</p><p class="muted"><strong>سياسة الاحتفاظ المقترحة: 60 يومًا.</strong> تحفظ النسخ المؤرخة كي يمكن استرجاع مستند حُذف أو تلف منذ أسابيع. لا يُحذف آخر إصدار صالح لمجرد مرور 60 يومًا، ولا تُحذف النسخة السابقة قبل التحقق من الجديدة. لم يبدأ تطبيق هذه السياسة في OneDrive بعد.</p>';
 settingsHub.appendChild(docsOneDrivePanel);
 
 dsGet('dsAutosave').onchange=e=>{if(!activeUser)return;localStorage.setItem(docsDevicePermissionKey(),e.target.checked?'yes':'no');window.dispatchEvent(new CustomEvent('docs:local-status',{detail:e.target.checked?{state:'yellow',message:'الحفظ التلقائي مفعل؛ بانتظار أول عملية حفظ'}:{state:'red',message:'الحفظ التلقائي متوقف على هذا الجهاز'}}));say(e.target.checked?'الحفظ التلقائي مفعل لهذا الجهاز':'تم إيقاف الحفظ التلقائي')};
@@ -6021,7 +6021,11 @@ for(const [id,label,accessible,pathData] of docsTabItems){
  const observer=new MutationObserver(show);const panel=document.getElementById('sessionPanel');if(panel)observer.observe(panel,{attributes:true,attributeFilter:['hidden']});show();
  window.addEventListener('docs:local-status',e=>{const d=e.detail||{};set(local,d.state||'red','الحفظ بالجهاز: '+(d.message||'متوقف'))});
  window.addEventListener('docs:peer-status',e=>{const d=e.detail||{};set(peer,d.state||'red','مزامنة الأجهزة: '+(d.message||'غير متصل'))});
- window.addEventListener('docs:onedrive-status',e=>{const d=e.detail||{};set(document.getElementById('docsOneDriveIndicator'),d.state||'red','OneDrive: '+(d.message||'غير مرتبط'))});
+ window.addEventListener('docs:onedrive-status',e=>{const d=e.detail||{};const state=['green','yellow','red'].includes(d.state)?d.state:'red';set(document.getElementById('docsOneDriveIndicator'),state,'OneDrive: '+(d.message||'غير مرتبط'))});
+ // Until cloud linking is activated, never turn this indicator green in response to a local save.
+ window.addEventListener('docs:local-status',e=>{const state=e.detail?.state;const cloud=document.getElementById('docsOneDriveIndicator');if(!cloud||cloud.dataset.state==='green')return;cloud.title='نسخة OneDrive غير مفعلة؛ '+(state==='green'?'تم حفظ التعديل محليًا فقط':'لا توجد نسخة سحابية مؤكدة')});
+ window.addEventListener('offline',()=>{const cloud=document.getElementById('docsOneDriveIndicator');if(cloud&&cloud.dataset.state!=='green')cloud.title='الجهاز غير متصل؛ لا يمكن رفع نسخة جديدة الآن'});
+ 
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')show()});
 })();
 </script><script src="/peer-sync.js" defer></script><script src="/auto-sync.js" defer></script><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(r=>{if(navigator.onLine)r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)r.update().catch(()=>{})})}).catch(()=>{}))}</script><style id="docs-grade-styles">
