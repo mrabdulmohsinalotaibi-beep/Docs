@@ -1397,7 +1397,7 @@ let migratedA4Records=[],a4SyncBusy=false,currentA4Payload=null,migratedLibraryS
 let nativeDocsShown=35,localDocsShown=50;
 function say(s){$('toast').textContent=s;$('toast').style.display='block';clearTimeout(say.t);say.t=setTimeout(()=>$('toast').style.display='none',4200)}
 function openDb(userId){return new Promise((ok,no)=>{const r=indexedDB.open(storage+'-'+userId,3);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('documents'))r.result.createObjectStore('documents',{keyPath:'id'});if(!r.result.objectStoreNames.contains('deletions'))r.result.createObjectStore('deletions',{keyPath:'id'});if(!r.result.objectStoreNames.contains('cloudSnapshots'))r.result.createObjectStore('cloudSnapshots',{keyPath:'id'})};r.onsuccess=()=>{window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'green',message:'التخزين جاهز؛ لم يُختبر حفظ تغيير بعد'}}));ok(r.result)};r.onerror=()=>{window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'red',message:'تعذر فتح التخزين'}}));no(r.error)}})}
-function task(mode,action){return new Promise((ok,no)=>{const t=db.transaction('documents',mode);if(mode==='readwrite')window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'yellow',message:'جارٍ الحفظ'}}));try{action(t.objectStore('documents'))}catch(e){no(e);return}t.oncomplete=()=>{if(mode==='readwrite')window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'green',message:'تم الحفظ'}}));ok()};t.onerror=()=>{if(mode==='readwrite')window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'red',message:'فشل الحفظ'}}));no(t.error)}})}
+function task(mode,action,database=db){return new Promise((ok,no)=>{const t=database.transaction('documents',mode);if(mode==='readwrite')window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'yellow',message:'جارٍ الحفظ'}}));try{action(t.objectStore('documents'))}catch(e){no(e);return}t.oncomplete=()=>{if(mode==='readwrite')window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'green',message:'تم الحفظ'}}));ok()};t.onerror=()=>{if(mode==='readwrite')window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'red',message:'فشل الحفظ'}}));no(t.error)}})}
 function all(){return new Promise((ok,no)=>{const r=db.transaction('documents').objectStore('documents').getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
 async function refresh(){docs=await all();docs.sort((a,b)=>str(b.hijriDate||docsDisplayHijri(b.created)||'').localeCompare(str(a.hijriDate||docsDisplayHijri(a.created)||''))||str(b.updated).localeCompare(str(a.updated)));draw()}
 function drawTemplates(){const g=$('groups');g.replaceChildren();for(const label of groups){const b=document.createElement('button');b.textContent=label;b.className=group===label?'active':'';b.onclick=()=>{group=label;drawTemplates()};g.append(b)}const filter=$('subgroupFilter');if(filter.dataset.group!==group){filter.replaceChildren();filter.add(new Option('كل التصنيفات',''));for(const sub of A4_REF.groups[group]||[])filter.add(new Option(sub,sub));filter.dataset.group=group;}const el=$('templates');el.replaceChildren();catalog.filter(t=>t.group===group&&(!filter.value||t.subgroup===filter.value)).forEach(t=>{const b=document.createElement('button');b.className='template';b.innerHTML='<span>▤</span><b>'+esc(t.title)+'</b><small>'+esc(t.subgroup||'نموذج رسمي A4')+'</small>';b.onclick=()=>edit(null,t);el.append(b)})}
@@ -1568,6 +1568,7 @@ function docsSetEditorField(id,value,required=false){
  node.value=String(value??'');return true;
 }
 function edit(d,t){
+ if(!docsCanReplaceEditor())return false;
  if(typeof workspaceGoto==='function'&&activeWorkspace!=='documents')workspaceGoto('documents');
  openDocsView('works');
  const editor=$('editor');if(!editor)throw Error('تعذر العثور على واجهة تحرير المستند. حدّث الصفحة.');
@@ -1583,7 +1584,7 @@ function edit(d,t){
  activeTemplate={...baseTemplate,fields:mergedFields,officialDefinitions:mergedDefinitions};
  if(!activeTemplate)throw Error('لا يوجد قالب متاح لتحرير هذا السجل.');
  current=d?.id||null;photos=structuredClone(d?.photos||[]);
- docsEditorDirty=false;docsEditorRevision++;
+ docsEditorDirty=false;docsEditorRevision++;docsEditorSession++;
  docsAutoSavePending=false;clearTimeout(docsAutoSaveTimer);
  docsEditorSaveStatus(docs.some(row=>row.id===current)?'saved':'draft',docs.some(row=>row.id===current)?'نسخة محفوظة على هذا الجهاز؛ أي تعديل جديد يحتاج حفظًا.':'لم يُحفظ هذا المستند على الجهاز بعد.');
  // Previous imported documents retain their source fields without a separate restore-template button.
@@ -1651,7 +1652,25 @@ $('officialFields').addEventListener('input',()=>{docsReviewCompleteness();rende
 for(const id of ['docTitle','hijriDate','schoolName','documentNumber'])$(id).addEventListener('input',()=>{docsReviewCompleteness();renderOriginalA4Live()});
 $('docStatus').addEventListener('change',()=>{docsReviewCompleteness();renderOriginalA4Live()});
 
-let docsEditorDirty=false,docsEditorRevision=0;
+let docsEditorDirty=false,docsEditorRevision=0,docsEditorSession=0,docsSessionLeaving=false;
+function docsCanReplaceEditor(){
+ if(!activeUser||!db||docsSessionLeaving)return false;
+ if(!docsSaveInFlight&&!docsEditorDirty)return true;
+ workspaceGoto('documents');openDocsView('works');
+ $('editor').scrollIntoView({behavior:'smooth',block:'start'});
+ say(docsSaveInFlight?'انتظر اكتمال حفظ المستند قبل فتح مستند آخر.':'احفظ التغييرات أو أغلق المحرر قبل فتح مستند آخر.');
+ return false;
+}
+function docsResetEditorSession(){
+ clearTimeout(docsAutoSaveTimer);docsAutoSaveTimer=null;docsAutoSavePending=false;
+ docsEditorDirty=false;docsEditorRevision++;docsEditorSession++;
+ current=null;photos=[];activeTemplate=null;docsManualSigners=[];
+ $('editor').classList.remove('visible');
+ for(const id of ['docTitle','docKind','aiBrief'])$(id).value='';
+ $('officialFields').replaceChildren();$('evidencePreview').replaceChildren();$('manualSigners').replaceChildren();
+ setSign('');docsEditorSaveStatus('draft','لم يُفتح مستند على هذا الجهاز بعد.');
+ const preview=$('docsUnifiedPreview');if(preview.open)preview.close();
+}
 function docsEditorSaveStatus(state,message){
  const node=$('docsEditorSaveStatus');if(!node)return;
  node.dataset.state=state;node.textContent=message;
@@ -1662,19 +1681,22 @@ function docsEditorChanged(){
 }
 let docsSaveInFlight=false;
 async function docsSaveUpdated(asCopy=false){
+ if(!activeUser||!db||!activeTemplate||docsSessionLeaving)return false;
  if(docsSaveInFlight){docsAutoSavePending=true;return false}
  docsSaveInFlight=true;
- const revision=docsEditorRevision;
+ const revision=docsEditorRevision,owner=activeUser,connection=db,session=docsEditorSession;
+ const sameEditor=()=>owner===activeUser&&connection===db&&session===docsEditorSession;
  docsEditorSaveStatus('saving','جارٍ حفظ المستند على هذا الجهاز…');
- try{const title=str($('docTitle').value)||str(activeTemplate?.title)||'مسودة بدون عنوان';const previous=docs.find(d=>d.id===current);const validation=docsReviewCompleteness();if($('docStatus').value==='مكتمل'&&!validation.canComplete){$('docStatus').value='مسودة';say('السجل غير مكتمل؛ سيُحفظ كمسودة دون فقد البيانات.');}const fields=docsResolvedFields();const row={id:asCopy||!current?crypto.randomUUID():current,title,kind:activeTemplate.title,sourceTemplateLabel:previous?.sourceTemplateLabel||activeTemplate.sourceTemplateLabel||null,a4FieldDefinitions:previous?.a4FieldDefinitions||activeTemplate.officialDefinitions||null,sourceTemplateId:previous?.sourceTemplateId||activeTemplate.sourceTemplateId||null,group:activeTemplate.group,subgroup:activeTemplate.subgroup||'',department:a4Profile.department,counselor:a4Profile.counselor,schoolStage:a4Profile.stage,programWeek:Number(a4Weeks?.value||0)||null,programScope:programScope?.value||'regional',programName:($('programCustom')?.value||'').trim()||a4Programs?.value||'',programCustom:($('programCustom')?.value||'').trim(),signature:docsSignerValues()[0]?.signatureUrl||'',studentKey:$('docStudentSelect').value||null,studentName:(studentIndex.find(x=>x.key===$('docStudentSelect').value)?.name||''),sampleFromAthat:previous?.sampleFromAthat||null,sourceA4:previous?.sourceA4||null,sourceA4Kind:previous?.sourceA4Kind||null,derivedFrom:asCopy?(previous?.id||null):previous?.derivedFrom||null,fields,body:Object.entries(fields).map(([k,v])=>k+': '+v).join('\n\n'),status:$('docStatus').value,school:str($('schoolName').value),number:previous?.number||'',hijriDate:str($('hijriDate').value),signers:docsSignerValues(),photos:[...photos],created:asCopy?new Date().toISOString():previous?.created||new Date().toISOString(),updated:new Date().toISOString()};await task('readwrite',s=>s.put(row));current=row.id;await refresh();
- const verified=await new Promise((resolve,reject)=>{const req=db.transaction('documents','readonly').objectStore('documents').get(row.id);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+ try{const title=str($('docTitle').value)||str(activeTemplate?.title)||'مسودة بدون عنوان';const previous=docs.find(d=>d.id===current);const validation=docsReviewCompleteness();if($('docStatus').value==='مكتمل'&&!validation.canComplete){$('docStatus').value='مسودة';say('السجل غير مكتمل؛ سيُحفظ كمسودة دون فقد البيانات.');}const fields=docsResolvedFields();const row={id:asCopy||!current?crypto.randomUUID():current,title,kind:activeTemplate.title,sourceTemplateLabel:previous?.sourceTemplateLabel||activeTemplate.sourceTemplateLabel||null,a4FieldDefinitions:previous?.a4FieldDefinitions||activeTemplate.officialDefinitions||null,sourceTemplateId:previous?.sourceTemplateId||activeTemplate.sourceTemplateId||null,group:activeTemplate.group,subgroup:activeTemplate.subgroup||'',department:a4Profile.department,counselor:a4Profile.counselor,schoolStage:a4Profile.stage,programWeek:Number(a4Weeks?.value||0)||null,programScope:programScope?.value||'regional',programName:($('programCustom')?.value||'').trim()||a4Programs?.value||'',programCustom:($('programCustom')?.value||'').trim(),signature:docsSignerValues()[0]?.signatureUrl||'',studentKey:$('docStudentSelect').value||null,studentName:(studentIndex.find(x=>x.key===$('docStudentSelect').value)?.name||''),sampleFromAthat:previous?.sampleFromAthat||null,sourceA4:previous?.sourceA4||null,sourceA4Kind:previous?.sourceA4Kind||null,derivedFrom:asCopy?(previous?.id||null):previous?.derivedFrom||null,fields,body:Object.entries(fields).map(([k,v])=>k+': '+v).join('\n\n'),status:$('docStatus').value,school:str($('schoolName').value),number:previous?.number||'',hijriDate:str($('hijriDate').value),signers:docsSignerValues(),photos:[...photos],created:asCopy?new Date().toISOString():previous?.created||new Date().toISOString(),updated:new Date().toISOString()};await task('readwrite',s=>s.put(row),connection);if(!sameEditor())return false;current=row.id;await refresh();if(!sameEditor())return false;
+ const verified=await new Promise((resolve,reject)=>{const req=connection.transaction('documents','readonly').objectStore('documents').get(row.id);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+ if(!sameEditor())return false;
  if(!verified)throw Error('لم يتم العثور على السجل بعد الكتابة');
  renderOriginalA4Live();say(asCopy?'تم حفظ نسخة جديدة وتأكيد وجودها في المستندات.':row.status==='مسودة'?'تم حفظ المسودة على هذا الجهاز وتأكيد وجودها في المستندات.':'تم حفظ المستند وتأكيد وجوده في المستندات.');
  docsEditorDirty=docsEditorRevision!==revision;
  docsEditorSaveStatus(docsEditorDirty?'pending':'saved',docsEditorDirty?'حُفظت نسخة؛ توجد تغييرات أحدث بانتظار الحفظ.':'محفوظ على هذا الجهاز · '+new Date(row.updated).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'}));
  $('editorHeading').textContent='تحرير: '+row.title;return true
- }catch(e){docsEditorDirty=true;docsEditorSaveStatus('error','تعذر حفظ المستند. أبقِ المحرر مفتوحًا وأعد المحاولة. '+e.message);say('تعذر الحفظ: '+e.message);return false}
- finally{docsSaveInFlight=false;if(docsAutoSavePending&&$('editor').classList.contains('visible'))docsAutoSaveSchedule()}
+ }catch(e){if(sameEditor()){docsEditorDirty=true;docsEditorSaveStatus('error','تعذر حفظ المستند. أبقِ المحرر مفتوحًا وأعد المحاولة. '+e.message);say('تعذر الحفظ: '+e.message)}return false}
+ finally{docsSaveInFlight=false;if(sameEditor()&&docsAutoSavePending&&$('editor').classList.contains('visible'))docsAutoSaveSchedule()}
 }
 
 // Local-first editing: one-time device permission, then automatic IndexedDB saves.
@@ -1738,17 +1760,20 @@ docsDeleteCurrentButton.onclick=async()=>{
 };
 $('saveDoc').onclick=()=>docsSaveUpdated(false);
 $('saveDocCopy').onclick=()=>docsSaveUpdated(true);
-$('closeEditor').onclick=async()=>{
+async function docsFinishEditor(action){
  clearTimeout(docsAutoSaveTimer);
- if(docsSaveInFlight){say('انتظر حتى تنتهي عملية الحفظ قبل الإغلاق.');return}
+ if(docsSaveInFlight){say('انتظر حتى تنتهي عملية الحفظ قبل المتابعة.');return false}
  if(docsEditorDirty){
   if(docsLocalWriteAllowed()){
    docsAutoSavePending=false;
-   if(!await docsSaveUpdated(false)||docsEditorDirty)return;
-  }else if(!confirm('إغلاق المحرر دون حفظ التغييرات؟'))return;
+   if(!await docsSaveUpdated(false)||docsEditorDirty)return false;
+  }else if(!confirm(action+' دون حفظ التغييرات؟'))return false;
  }
  docsAutoSavePending=false;docsEditorDirty=false;$('editor').classList.remove('visible');
-};$('newBtn').onclick=()=>edit(null,catalog[0]);
+ return true;
+}
+$('closeEditor').onclick=()=>docsFinishEditor('إغلاق المحرر');
+$('newBtn').onclick=()=>edit(null,catalog[0]);
 
 function nativeA4Rows(){
  const unique=new Map();
@@ -3339,6 +3364,7 @@ async function hydrateNativeA4Evidence(existing,sourceId){
 }
 async function createNativeFromA4(sourceId,options={}){
  if(!db||!activeUser)return;
+ if(!docsCanReplaceEditor())return;
  const existing=docs.find(x=>x.sourceA4===sourceId&&Array.isArray(x.a4FieldDefinitions)&&x.a4FieldDefinitions.length);
  if(existing&&!options.forceNew){edit(await hydrateNativeA4Evidence(existing,sourceId));return}
  const oldDerived=docs.find(x=>x.sourceA4===sourceId);
@@ -3544,6 +3570,8 @@ async function enterDocs(user){
  }
 
  if(!user||typeof user.id!=='string'||!/^usr_[\w-]{10,}$/.test(user.id))throw Error('تعذر التحقق من هوية الحساب.');
+ if(activeUser&&(docsSaveInFlight||docsEditorDirty))throw Error('احفظ المستند أو أغلقه قبل إعادة فتح جلسة الحساب.');
+ docsResetEditorSession();
  if(db){db.close();db=null}
  if(navigator.onLine&&user.verifiedAt===undefined)docsRememberVerifiedUser(user);
  activeUser=user.id;docs=[];current=null;photos=[];selected.clear();
@@ -3572,6 +3600,7 @@ async function enterDocs(user){
  // Standalone Docs never imports samples from ATHAT.
 }
 function exitDocs(){
+ docsResetEditorSession();
  if(db){db.close();db=null}
  document.dispatchEvent(new Event('athat-docs-logout'));
  activeUser='';docs=[];current=null;photos=[];selected.clear();studentIndex=[];studentInsights={};studentCareIndex={};studentQuickFilter='all';studentActive=null;migratedA4Records=[];currentA4Payload=null;showDocsArea();a4Profile={school:'',department:'',counselor:'',stage:'متوسط'};clearSign();aiAuthToken='';aiResetSuggestions();aiSession(false);
@@ -3611,7 +3640,16 @@ $('registrationCancelBtn').onclick=()=>{$('registrationVerify').hidden=true;$('s
 
 $('passwordInput').onkeydown=e=>{if(e.key==='Enter')$('submitAuth').click()};
 $('mfaInput').onkeydown=e=>{if(e.key==='Enter')$('submitAuth').click()};
-$('logoutDocs').onclick=async()=>{if(!confirm('تسجيل الخروج؟ ستبقى الأعمال محفوظة في أرشيف هذا الحساب على الجهاز.'))return;try{await docsAuth('logout',{})}catch{}try{localStorage.removeItem(docsOfflineUserKey);localStorage.removeItem(docsOfflineUnlockKey)}catch{}exitDocs();authMessage('تم تسجيل الخروج.');};
+$('logoutDocs').onclick=async()=>{
+ if(docsSessionLeaving||!confirm('تسجيل الخروج؟ تبقى الأعمال المحفوظة في أرشيف هذا الحساب على الجهاز.'))return;
+ if(!await docsFinishEditor('تسجيل الخروج'))return;
+ docsSessionLeaving=true;$('appMain').inert=true;$('logoutDocs').disabled=true;
+ try{
+  try{await docsAuth('logout',{})}catch{}
+  try{localStorage.removeItem(docsOfflineUserKey);localStorage.removeItem(docsOfflineUnlockKey)}catch{}
+  exitDocs();authMessage('تم تسجيل الخروج.');
+ }finally{docsSessionLeaving=false;$('appMain').inert=false;$('logoutDocs').disabled=false}
+};
 (async()=>{try{const data=await docsAuth('me',null,'GET');try{await enterDocs(data.user)}catch(e){if(e?.authSucceeded){$('retryAuthSession').hidden=true;authMessage('')}else{$('retryAuthSession').hidden=false;authMessage('تم التحقق من الحساب لكن تعذّر فتح أرشيف الجهاز: '+(e.message||'خطأ في التخزين المحلي')+'. اضغط «فتح الجلسة مجددًا».')}}}catch(e){if(e.code==='UNAUTHORIZED'||e.code==='INVALID_CREDENTIALS'){authMessage('سجّل الدخول ببريدك الإلكتروني لفتح مستنداتك.')}else{authMessage('تعذر التحقق من الجلسة. أدخل البريد وكلمة المرور للفتح المحلي أو أعد الاتصال بالخادم. لا تمسح بيانات الموقع.');$('retryAuthSession').hidden=false;docsRefreshOfflineShortcut()}}})();
 
 
