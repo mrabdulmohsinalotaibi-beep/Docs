@@ -5249,6 +5249,60 @@ window.addEventListener('docs:local-status',event=>{
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)docsMsScheduleBackup(3000)});
 document.addEventListener('athat-docs-logout',docsMsClearBackup);
 
+const docsMsRestorePanel=document.createElement('div');
+docsMsRestorePanel.className='settings-operations';
+docsMsRestorePanel.innerHTML='<button type="button" class="btn" id="docsMsShowCopies">عرض نسخ OneDrive السابقة</button><div id="docsMsCopies" role="region" aria-label="نسخ OneDrive" hidden></div>';
+docsOneDrivePanel.appendChild(docsMsRestorePanel);
+async function docsMsListCopies(){
+ if(!activeUser)throw Error('سجل الدخول أولًا');
+ const token=await docsMsAccess();
+ const owner=activeUser;
+ const ownerHash=docsMsHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(owner))).slice(0,32);
+ const prefix='athat-docs-'+ownerHash+'-';
+ let url='https://graph.microsoft.com/v1.0/me/drive/special/approot/children?$top=200';
+ const entries=[];
+ for(let page=0;page<10&&url;page++){
+  const next=new URL(url);
+  if(next.origin!=='https://graph.microsoft.com')throw Error('رابط قائمة OneDrive غير آمن');
+  const res=await fetch(next.href,{headers:{authorization:'Bearer '+token},cache:'no-store'});
+  if(!res.ok)throw Error('تعذر قراءة نسخ OneDrive (HTTP '+res.status+')');
+  const data=await res.json();
+  for(const item of data.value||[]){
+   if(typeof item.name==='string'&&item.name.startsWith(prefix)&&/^athat-docs-[a-f0-9]{32}-\\d{4}-\\d{2}-\\d{2}\\.json$/.test(item.name)&&item.id)entries.push(item);
+  }
+  url=data['@odata.nextLink']||'';
+ }
+ if(owner!==activeUser)throw Error('تغير الحساب');
+ return entries.sort((a,b)=>String(b.name).localeCompare(String(a.name)));
+}
+document.getElementById('docsMsShowCopies').onclick=async()=>{
+ const panel=document.getElementById('docsMsCopies');panel.hidden=false;panel.replaceChildren();
+ const progress=document.createElement('p');progress.textContent='جارٍ قراءة النسخ المشفرة في OneDrive…';panel.append(progress);
+ try{
+  const copies=await docsMsListCopies();panel.replaceChildren();
+  if(!copies.length){panel.textContent='لا توجد نسخ سابقة لهذا الحساب في مجلد التطبيق.';return}
+  const explanation=document.createElement('p');
+  explanation.textContent='اختر النسخة التي تريد تنزيلها؛ بعد التنزيل استخدم زر «استعادة نسخة» في الإعدادات، وأدخل عبارة الاستعادة نفسها المستخدمة عند إنشاء النسخة.';
+  panel.append(explanation);
+  for(const item of copies.slice(0,80)){
+   const button=document.createElement('button');button.type='button';button.className='btn';
+   button.textContent='تنزيل نسخة '+item.name.slice(-15,-5)+' · '+Math.round((item.size||0)/1024)+' كيلوبايت';
+   button.onclick=async()=>{
+    try{
+     const token=await docsMsAccess();
+     const res=await fetch('https://graph.microsoft.com/v1.0/me/drive/items/'+encodeURIComponent(item.id),{headers:{authorization:'Bearer '+token},cache:'no-store'});
+     if(!res.ok)throw Error('تعذر الحصول على رابط تنزيل النسخة');
+     const detail=await res.json(),download=detail['@microsoft.graph.downloadUrl'];
+     if(!download||!/^https:\/\//i.test(download))throw Error('لا يتوفر رابط تنزيل مؤقت؛ افتح مجلد تطبيق مستندات الذات في OneDrive لتنزيل النسخة');
+     const link=document.createElement('a');link.href=download;link.rel='noreferrer noopener';link.target='_blank';link.click();
+    }catch(error){docsMsStatus('تعذر تنزيل النسخة: '+String(error.message||error),'red')}
+   };
+   panel.append(button);
+  }
+ }catch(error){progress.textContent='تعذر عرض النسخ: '+String(error.message||error).slice(0,180);panel.replaceChildren(progress)}
+};
+
+
 dsGet('dsAutosave').onchange=e=>{if(!activeUser)return;localStorage.setItem(docsDevicePermissionKey(),e.target.checked?'yes':'no');window.dispatchEvent(new CustomEvent('docs:local-status',{detail:e.target.checked?{state:'yellow',message:'الحفظ التلقائي مفعل؛ بانتظار أول عملية حفظ'}:{state:'red',message:'الحفظ التلقائي متوقف على هذا الجهاز'}}));say(e.target.checked?'الحفظ التلقائي مفعل لهذا الجهاز':'تم إيقاف الحفظ التلقائي')};
 
 async function dsStoreItems(name){
