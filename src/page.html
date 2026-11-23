@@ -5075,6 +5075,114 @@ async function docsRefreshBackupSummary(){
 $('docsStorageBackup').onclick=()=>{workspaceGoto('settings');dsOpenTab('storage');dsGet('dsBackup').click()};
 document.addEventListener('athat-docs-login',()=>docsRefreshBackupSummary());
 document.addEventListener('docs:backup-updated',event=>{if(event.detail?.userId===activeUser)docsRefreshBackupSummary()});
+
+const docsManualBackup={file:null,owner:'',handle:null};
+const docsBackupFolderDbName=owner=>'athat-docs-backup-folder-v1-'+owner;
+function docsBackupFolderOpen(owner){
+ return new Promise((resolve,reject)=>{
+  const request=indexedDB.open(docsBackupFolderDbName(owner),1);
+  request.onupgradeneeded=()=>request.result.createObjectStore('folder');
+  request.onsuccess=()=>resolve(request.result);
+  request.onerror=()=>reject(request.error);
+ });
+}
+async function docsBackupFolderStore(owner,handle){
+ const database=await docsBackupFolderOpen(owner);
+ try{await new Promise((resolve,reject)=>{
+  const tx=database.transaction('folder','readwrite');
+  tx.objectStore('folder').put(handle,'selected');
+  tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+ })}finally{database.close()}
+}
+async function docsBackupFolderLoad(owner){
+ const database=await docsBackupFolderOpen(owner);
+ try{return await new Promise((resolve,reject)=>{
+  const request=database.transaction('folder','readonly').objectStore('folder').get('selected');
+  request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error);
+ })}finally{database.close()}
+}
+const docsManualActions=document.createElement('section');
+docsManualActions.className='ds-card';
+docsManualActions.id='docsManualBackupTools';
+docsManualActions.innerHTML='<h3>مكان النسخة الاحتياطية المشفرة</h3><p id="docsFolderState" role="status">اختر مجلدًا على الجهاز، مثل ATHAT-Backups، أو استخدم التنزيل المعتاد.</p><div class="settings-operations"><button type="button" class="btn" id="docsPickFolder">اختيار مجلد النسخ</button><button type="button" class="btn" id="docsSaveEncryptedFile" disabled>حفظ النسخة في المجلد</button><button type="button" class="btn" id="docsShareEncryptedFile" disabled>مشاركة النسخة إلى Google Drive</button></div><p class="muted">المشاركة تفتح تطبيقات جهازك، ولا ترسل الملف إلى Google Drive إلا عندما تختاره وتؤكد الحفظ. مجلد الجهاز لا يحمي وحده من فقد الجهاز.</p>';
+settingsHub.appendChild(docsManualActions);
+function docsBackupSetFolderState(message){const el=document.getElementById('docsFolderState');if(el)el.textContent=message}
+function docsBackupRefreshControls(){
+ const hasFile=!!docsManualBackup.file&&docsManualBackup.owner===activeUser;
+ document.getElementById('docsSaveEncryptedFile').disabled=!hasFile;
+ document.getElementById('docsShareEncryptedFile').disabled=!hasFile||typeof navigator.share!=='function';
+}
+function docsBackupDownload(file){
+ const url=URL.createObjectURL(file),link=document.createElement('a');
+ link.href=url;link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+async function docsBackupWriteFolder(handle,file){
+ if(!handle)throw Error('اختر مجلد النسخ أولًا');
+ if(handle.kind!=='directory')throw Error('المجلد المحدد غير صالح');
+ const permission=await handle.queryPermission?.({mode:'readwrite'});
+ if(permission!=='granted'){
+  const granted=await handle.requestPermission?.({mode:'readwrite'});
+  if(granted!=='granted')throw Error('تحتاج موافقة المتصفح على الكتابة في المجلد');
+ }
+ const entry=await handle.getFileHandle(file.name,{create:true});
+ const writable=await entry.createWritable();
+ try{await writable.write(file);await writable.close()}catch(error){try{await writable.abort()}catch{}throw error}
+ const actual=await entry.getFile();
+ if(actual.size!==file.size)throw Error('تعذر التحقق من اكتمال الملف داخل المجلد');
+ const [originalHash,savedHash]=await Promise.all([crypto.subtle.digest('SHA-256',await file.arrayBuffer()),crypto.subtle.digest('SHA-256',await actual.arrayBuffer())]);
+ const same=Array.from(new Uint8Array(originalHash)).every((v,i)=>v===new Uint8Array(savedHash)[i]);
+ if(!same)throw Error('فشل التحقق من سلامة الملف المحفوظ');
+ return actual;
+}
+async function docsBackupUseFolder(){
+ if(typeof window.showDirectoryPicker!=='function'){
+  docsBackupSetFolderState('متصفحك لا يدعم اختيار مجلد ثابت. ستظل النسخة قابلة للتنزيل والمشاركة إلى Drive.');
+  return;
+ }
+ const owner=activeUser;
+ if(!owner){docsBackupSetFolderState('سجل الدخول أولًا');return}
+ try{
+  const handle=await window.showDirectoryPicker({id:'athat-docs-backups',mode:'readwrite'});
+  if(owner!==activeUser)return;
+  await docsBackupFolderStore(owner,handle);
+  docsManualBackup.handle=handle;
+  docsBackupSetFolderState('تم اختيار المجلد: '+handle.name+' · يمكن أن يطلب المتصفح السماح مرة أخرى.');
+ }catch(e){if(e?.name!=='AbortError')docsBackupSetFolderState('تعذر اختيار المجلد: '+e.message)}
+}
+document.getElementById('docsPickFolder').onclick=docsBackupUseFolder;
+document.getElementById('docsSaveEncryptedFile').onclick=async()=>{
+ const file=docsManualBackup.file,owner=docsManualBackup.owner;
+ if(!file||owner!==activeUser)return;
+ try{
+  const handle=docsManualBackup.handle||await docsBackupFolderLoad(owner);
+  if(!handle){docsBackupDownload(file);docsBackupSetFolderState('لم يُحدد مجلد. بدأ تنزيل الملف؛ تحقق من مكان حفظه في الجهاز.');return}
+  await docsBackupWriteFolder(handle,file);
+  docsBackupSetFolderState('تم حفظ النسخة المشفرة والتحقق من سلامتها في: '+handle.name+' / '+file.name);
+ }catch(error){docsBackupSetFolderState('تعذر الكتابة مباشرة: '+error.message+' · استخدم التنزيل أو اختر المجلد مجددًا.')}
+};
+document.getElementById('docsShareEncryptedFile').onclick=async()=>{
+ const file=docsManualBackup.file;
+ if(!file||docsManualBackup.owner!==activeUser||typeof navigator.share!=='function')return;
+ try{
+  if(navigator.canShare&&!navigator.canShare({files:[file]}))throw Error('جهازك لا يدعم مشاركة ملف بهذا الحجم أو النوع');
+  await navigator.share({files:[file],title:'نسخة مستندات الذات المشفرة'});
+  docsBackupSetFolderState('تم تسليم الملف إلى تطبيق المشاركة؛ تأكد بنفسك من اكتمال رفعه في Google Drive.');
+ }catch(error){if(error?.name!=='AbortError')docsBackupSetFolderState('تعذرت مشاركة الملف: '+error.message+' · يمكنك تنزيله ورفعه يدويًا.')}
+};
+document.addEventListener('athat-docs-login',async()=>{
+ docsManualBackup.file=null;docsManualBackup.owner=activeUser;docsManualBackup.handle=null;
+ docsBackupRefreshControls();
+ try{
+  const handle=await docsBackupFolderLoad(activeUser);
+  if(activeUser===docsManualBackup.owner&&handle){docsManualBackup.handle=handle;docsBackupSetFolderState('مجلد النسخ السابق: '+handle.name+' (قد تُطلب صلاحية الوصول مجددًا)')}
+ }catch{docsBackupSetFolderState('تعذر استعادة إذن المجلد؛ اختره مرة أخرى')}
+});
+document.addEventListener('athat-docs-logout',()=>{
+ docsManualBackup.file=null;docsManualBackup.handle=null;docsManualBackup.owner='';
+ docsBackupRefreshControls();
+ docsBackupSetFolderState('سجّل الدخول لاختيار مجلد النسخ.');
+});
+
 dsGet('dsBackup').onclick=async()=>{
  if(!activeUser||!db)return;
  const owner=activeUser;
@@ -5090,11 +5198,20 @@ dsGet('dsBackup').onclick=async()=>{
   if(owner!==activeUser)throw Error('تغير الحساب؛ أعد إنشاء النسخة');
   const encrypted=await docsExportSecureBackup(payload,password);
   if(owner!==activeUser)throw Error('تغير الحساب؛ أعد إنشاء النسخة');
-  const blob=new Blob([JSON.stringify(encrypted)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');
-  link.href=url;link.download='مستندات-الذات-نسخة-الجهاز-'+new Date().toISOString().slice(0,10)+'.json';link.click();
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const name='مستندات-الذات-نسخة-مشفرة-'+stamp+'-'+crypto.getRandomValues(new Uint32Array(1))[0].toString(16)+'.json';
+  const file=new File([JSON.stringify(encrypted)],name,{type:'application/json'});
+  docsManualBackup.file=file;docsManualBackup.owner=owner;docsBackupRefreshControls();
   try{localStorage.setItem(docsBackupExportKey(owner),new Date().toISOString())}catch{}
   document.dispatchEvent(new CustomEvent('docs:backup-updated',{detail:{userId:owner}}));
-  setTimeout(()=>URL.revokeObjectURL(url),30000);dsGet('dsTransferStatus').textContent='تم إنشاء نسخة مشفرة بكلمة مرور حسابك؛ احفظها خارج بيانات المتصفح. تغيير كلمة المرور لاحقًا لا يغير تشفير النسخ القديمة.';
+  const chosen=docsManualBackup.handle||await docsBackupFolderLoad(owner).catch(()=>null);
+  if(chosen&&owner===activeUser){
+   try{await docsBackupWriteFolder(chosen,file);docsBackupSetFolderState('حُفظ الملف المشفر في: '+chosen.name+' / '+file.name);dsGet('dsTransferStatus').textContent='تم حفظ الملف المشفر والتحقق من سلامته داخل المجلد المحدد. يمكنك أيضًا مشاركته إلى Google Drive.'}
+   catch(error){docsBackupDownload(file);docsBackupSetFolderState('لم يمكن الحفظ مباشرة في المجلد: '+error.message);dsGet('dsTransferStatus').textContent='بدأ تنزيل النسخة المشفرة بدلًا من الحفظ في المجلد. تحقق من اكتمال التنزيل.'}
+  }else{
+   docsBackupDownload(file);
+   dsGet('dsTransferStatus').textContent='بدأ تنزيل ملف مشفر بكلمة مرور حسابك. اختر مجلد ATHAT-Backups أو استخدم زر مشاركة النسخة إلى Google Drive. تحقق من اكتمال تنزيل الملف.';
+  }
  }catch(e){dsGet('dsTransferStatus').textContent='تعذر تصدير النسخة: '+e.message}
 };
 
