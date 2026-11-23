@@ -5036,26 +5036,113 @@ docsOneDrivePanel.id='docsOneDrivePanel';
 docsOneDrivePanel.setAttribute('aria-labelledby','docsOneDriveHeading');
 docsOneDrivePanel.innerHTML='<h3 id="docsOneDriveHeading">النسخ الاحتياطي المشفر إلى OneDrive</h3><p>الحفظ على هذا الجهاز يعمل بصورة مستقلة عن OneDrive. ربط Microsoft والرفع التلقائي لم يفعّلا بعد.</p><p id="docsOneDriveSetupStatus" role="status">الحالة: OneDrive غير مرتبط. لا توجد نسخة سحابية مؤكدة.</p><button id="docsOneDriveConnect" type="button" class="btn" disabled>ربط OneDrive — بانتظار إعداد Microsoft الآمن</button><p class="muted">بعد تفعيل الربط الرسمي، ستكون علامة OneDrive خضراء فقط عند التحقق من رفع نسخة مشفرة مكتملة، وليست عند حفظ المستند على الجهاز.</p><p class="muted"><strong>سياسة الاحتفاظ المقترحة: 60 يومًا.</strong> تحفظ النسخ المؤرخة كي يمكن استرجاع مستند حُذف أو تلف منذ أسابيع. لا يُحذف آخر إصدار صالح لمجرد مرور 60 يومًا، ولا تُحذف النسخة السابقة قبل التحقق من الجديدة. لم يبدأ تطبيق هذه السياسة في OneDrive بعد.</p>';
 settingsHub.appendChild(docsOneDrivePanel);
-async function docsOnedriveRefreshSetup(){
- const node=document.getElementById('docsOneDriveSetupStatus');
- const connect=document.getElementById('docsOneDriveConnect');
- if(!node||!connect)return;
- connect.disabled=true;
- connect.textContent='ربط OneDrive — بانتظار اكتمال نظام الرفع المشفر';
- if(!activeUser){node.textContent='الحالة: سجّل الدخول أولًا';return}
- try{
-  const response=await fetch('/api/onedrive/config',{credentials:'same-origin',cache:'no-store'});
-  if(!response.ok)throw Error('تعذّر فحص إعدادات Microsoft');
-  const config=await response.json();
-  node.textContent=config.configured
-   ?'تم تسجيل إعداد Microsoft للتطبيق. الربط والرفع التلقائي لم يفعّلا بعد؛ لا توجد نسخة سحابية مؤكدة.'
-   :'لم يتم تسجيل تطبيق Microsoft لربط OneDrive حتى الآن. الحفظ المحلي مستمر دون تغيير.';
- }catch{
-  node.textContent='تعذّر التحقق من إعداد OneDrive. لا توجد نسخة سحابية مؤكدة.';
- }
- window.dispatchEvent(new CustomEvent('docs:onedrive-status',{detail:{state:'red',message:'غير مرتبط؛ النسخ السحابي غير مفعل'}}));
+
+// OneDrive auth uses the public Microsoft SPA PKCE flow. Tokens are kept
+// in memory only; this stage deliberately does not claim cloud backup success.
+const docsMsAuth={token:'',refresh:'',expires:0,userId:'',busy:false,config:null};
+const docsMsScope='Files.ReadWrite.AppFolder offline_access';
+const docsMsRedirect='https://docs.athat.app/';
+const docsMsPending='athat-docs-ms-pkce-v1';
+function docsMsRandom(size=32){
+ const bytes=crypto.getRandomValues(new Uint8Array(size));
+ return Array.from(bytes,b=>String.fromCharCode(b)).join('');
 }
-document.addEventListener('athat-docs-login',docsOnedriveRefreshSetup);
+function docsMsBase64(bytes){return btoa(Array.from(bytes,b=>String.fromCharCode(b)).join('')).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'')}
+function docsMsStatus(message,state='red'){
+ const label=document.getElementById('docsOneDriveSetupStatus');
+ if(label)label.textContent=message;
+ window.dispatchEvent(new CustomEvent('docs:onedrive-status',{detail:{state,message:state==='green'?'تم النسخ المشفر':state==='yellow'?'جارٍ العمل':message}}));
+}
+async function docsMsConfig(){
+ const res=await fetch('/api/onedrive/config',{credentials:'same-origin',cache:'no-store'});
+ if(!res.ok)throw Error('تعذر فحص إعداد Microsoft');
+ const cfg=await res.json();
+ if(cfg.configured&&cfg.redirectUri!==docsMsRedirect)throw Error('عنوان عودة Microsoft غير مطابق');
+ return cfg;
+}
+async function docsMsAuthorize(){
+ if(!activeUser)throw Error('سجّل الدخول إلى مستندات الذات');
+ const cfg=await docsMsConfig();
+ if(!cfg.configured||!cfg.clientId)throw Error('يلزم تسجيل تطبيق Microsoft أولًا');
+ const verifier=docsMsBase64(crypto.getRandomValues(new Uint8Array(48)));
+ const challenge=docsMsBase64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
+ const state=docsMsBase64(crypto.getRandomValues(new Uint8Array(32)));
+ sessionStorage.setItem(docsMsPending,JSON.stringify({state,verifier,account:activeUser,created:Date.now(),clientId:cfg.clientId}));
+ const u=new URL('https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize');
+ for(const [k,v] of Object.entries({client_id:cfg.clientId,response_type:'code',redirect_uri:docsMsRedirect,response_mode:'query',scope:docsMsScope,code_challenge:challenge,code_challenge_method:'S256',state,prompt:'select_account'}))u.searchParams.set(k,v);
+ location.assign(u.toString());
+}
+async function docsMsExchange(params,clientId){
+ const response=await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(params)});
+ if(!response.ok)throw Error('تعذّر إكمال تفويض Microsoft');
+ const result=await response.json();
+ if(!result.access_token||!Number.isFinite(result.expires_in))throw Error('لم يتم الحصول على إذن صالح');
+ docsMsAuth.token=result.access_token;
+ docsMsAuth.refresh=result.refresh_token||'';
+ docsMsAuth.expires=Date.now()+Math.max(0,result.expires_in-120)*1000;
+ docsMsAuth.userId=activeUser;
+}
+async function docsMsCheckConnection(){
+ if(docsMsAuth.userId!==activeUser||!docsMsAuth.token)throw Error('غير مرتبط');
+ const response=await fetch('https://graph.microsoft.com/v1.0/me/drive/special/approot',{headers:{authorization:'Bearer '+docsMsAuth.token},cache:'no-store'});
+ if(!response.ok)throw Error('تعذر الوصول إلى مجلد التطبيق في OneDrive؛ تحقق من الصلاحيات ونوع الحساب');
+ const data=await response.json();
+ if(!data.id)throw Error('لم يرجع OneDrive معرف المجلد');
+ docsMsStatus('تم ربط حساب OneDrive لهذه الجلسة. النسخ الاحتياطي لم يبدأ بعد.','yellow');
+ const btn=document.getElementById('docsOneDriveConnect');
+ if(btn){btn.textContent='إعادة ربط حساب OneDrive';btn.disabled=false}
+}
+async function docsMsCompleteCallback(){
+ const url=new URL(location.href);
+ if(!url.searchParams.has('code')&&!url.searchParams.has('error'))return;
+ const code=url.searchParams.get('code'),state=url.searchParams.get('state');
+ const raw=sessionStorage.getItem(docsMsPending);
+ if(!raw)return; // Do not consume an unrelated OAuth callback.
+ // Remove authorization code from address bar before any asynchronous request.
+ history.replaceState(null,'',url.pathname+url.hash);
+ sessionStorage.removeItem(docsMsPending);
+ let pending;
+ try{pending=JSON.parse(raw)}catch{throw Error('حالة الربط غير صالحة')}
+ if(!code)throw Error('لم تتم الموافقة على ربط OneDrive');
+ if(!pending||!state||state!==pending.state||pending.account!==activeUser||Date.now()-pending.created>600000||pending.created>Date.now()+60000)throw Error('فشل التحقق من طلب الربط');
+ const cfg=await docsMsConfig();
+ if(!cfg.configured||cfg.clientId!==pending.clientId)throw Error('تغيّر إعداد تطبيق Microsoft أثناء الربط');
+ await docsMsExchange({client_id:cfg.clientId,grant_type:'authorization_code',code,redirect_uri:docsMsRedirect,code_verifier:pending.verifier,scope:docsMsScope},cfg.clientId);
+ await docsMsCheckConnection();
+}
+async function docsOnedriveRefreshSetup(){
+ const btn=document.getElementById('docsOneDriveConnect');
+ if(!btn)return;
+ if(!activeUser){btn.disabled=true;docsMsStatus('سجّل الدخول إلى إعدادات حسابك أولًا');return}
+ btn.disabled=true;
+ try{
+  const cfg=await docsMsConfig();
+  docsMsAuth.config=cfg;
+  if(!cfg.configured){
+   btn.textContent='ربط OneDrive — بانتظار إعداد Microsoft';
+   docsMsStatus('لم يُضبط معرّف Microsoft للتطبيق بعد؛ تبقى بيانات الجهاز دون تغيير.');
+   return;
+  }
+  btn.disabled=false;btn.textContent='ربط OneDrive (حساب Microsoft شخصي)';
+  if(docsMsAuth.token&&docsMsAuth.userId===activeUser){
+   docsMsStatus('OneDrive مرتبط لهذه الجلسة. لا توجد نسخة احتياطية مؤكدة حتى الآن.','yellow');
+  }else{
+   docsMsStatus('إعداد Microsoft متاح. اربط OneDrive للموافقة على وصول التطبيق إلى مجلده الخاص.');
+  }
+ }catch(error){
+  docsMsStatus('تعذّر فحص ربط OneDrive: '+String(error?.message||error).slice(0,120));
+ }
+}
+document.getElementById('docsOneDriveConnect').onclick=()=>docsMsAuthorize().catch(error=>docsMsStatus('تعذّر بدء الربط: '+error.message));
+document.addEventListener('athat-docs-login',async()=>{
+ await docsOnedriveRefreshSetup();
+ try{await docsMsCompleteCallback()}catch(error){docsMsStatus('تعذّر إتمام الربط: '+String(error.message||error).slice(0,120))}
+});
+document.addEventListener('athat-docs-logout',()=>{
+ docsMsAuth.token='';docsMsAuth.refresh='';docsMsAuth.userId='';docsMsAuth.expires=0;
+ sessionStorage.removeItem(docsMsPending);
+ docsMsStatus('غير مرتبط؛ لا توجد نسخة سحابية مؤكدة');
+});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeUser)docsOnedriveRefreshSetup()});
 
 
