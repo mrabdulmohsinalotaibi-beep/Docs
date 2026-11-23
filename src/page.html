@@ -5047,7 +5047,7 @@ function docsMsRandom(size=32){
  const bytes=crypto.getRandomValues(new Uint8Array(size));
  return Array.from(bytes,b=>String.fromCharCode(b)).join('');
 }
-function docsMsBase64(bytes){return btoa(Array.from(bytes,b=>String.fromCharCode(b)).join('')).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'')}
+function docsMsBase64(bytes){return btoa(Array.from(bytes,b=>String.fromCharCode(b)).join('')).split('+').join('-').split('/').join('_').replace(/=+$/,'')}
 function docsMsStatus(message,state='red'){
  const label=document.getElementById('docsOneDriveSetupStatus');
  if(label)label.textContent=message;
