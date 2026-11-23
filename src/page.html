@@ -5146,6 +5146,109 @@ document.addEventListener('athat-docs-logout',()=>{
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeUser)docsOnedriveRefreshSetup()});
 
 
+
+const docsMsBackup={phrase:'',active:false,busy:false,timer:null,lastDigest:'',lastGood:false,owner:''};
+const docsMsControls=document.createElement('div');
+docsMsControls.className='settings-operations';
+docsMsControls.innerHTML='<button type="button" class="btn" id="docsMsEnableBackup">تشغيل النسخ التلقائي لهذه الجلسة</button><button type="button" class="btn" id="docsMsBackupNow">نسخ مشفر الآن</button><p id="docsMsBackupHelp" class="muted">اربط حساب OneDrive أولًا، ثم أدخل عبارة استعادة مستقلة. يعمل النسخ التلقائي أثناء فتح الموقع فقط، ولا تُحفظ عبارة الاستعادة أو رموز Microsoft بين الجلسات.</p>';
+docsOneDrivePanel.appendChild(docsMsControls);
+function docsMsClearBackup(){
+ clearTimeout(docsMsBackup.timer);docsMsBackup.timer=null;
+ docsMsBackup.phrase='';docsMsBackup.active=false;docsMsBackup.busy=false;docsMsBackup.lastDigest='';docsMsBackup.lastGood=false;docsMsBackup.owner='';
+}
+async function docsMsAccess(){
+ if(docsMsAuth.userId!==activeUser||!docsMsAuth.token)throw Error('اربط OneDrive في هذه الجلسة أولًا');
+ if(docsMsAuth.expires>Date.now()+30000)return docsMsAuth.token;
+ if(!docsMsAuth.refresh)throw Error('انتهت جلسة Microsoft؛ أعد الربط');
+ const config=await docsMsConfig();
+ if(!config.configured||!config.clientId)throw Error('إعداد Microsoft غير متاح');
+ await docsMsExchange({client_id:config.clientId,grant_type:'refresh_token',refresh_token:docsMsAuth.refresh,scope:docsMsScope},config.clientId);
+ return docsMsAuth.token;
+}
+async function docsMsBuildPayload(owner){
+ if(owner!==activeUser||!db)throw Error('تعذر العثور على الحساب والجهاز');
+ const [documents,snapshots,deletions,messages,planFiles,mirrorResponses,mirrorFiles]=await Promise.all([
+  all(),dsStoreItems('cloudSnapshots'),dsStoreItems('deletions'),
+  docsBackupExtra('athat-docs-message-center-v1-'+owner,'messages'),
+  docsBackupExtra('athat-docs-planfiles-v1-'+owner,'files'),
+  docsMirrorGetAll('responses'),
+  docsBackupExtra('athat-docs-account-mirror-v1-'+owner,'files')
+ ]);
+ if(owner!==activeUser)throw Error('تغير الحساب أثناء تجهيز النسخة');
+ const mirrorComplete=docsMirrorFullTableCount(owner)===DOCS_MIRROR_TABLES.length;
+ return {payload:{app:'ATHAT-DOCS-LOCAL-FULL',version:3,accountId:owner,createdAt:new Date().toISOString(),documents,snapshots,deletions,messages,planFiles,mirrorResponses,mirrorFiles,localSettings:docsBackupSettings()},mirrorComplete};
+}
+function docsMsHex(bytes){return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')}
+async function docsMsUpload(){
+ if(docsMsBackup.busy)return;
+ if(!docsMsBackup.phrase||!docsMsBackup.active)throw Error('فعّل النسخ باستخدام عبارة الاستعادة أولًا');
+ if(!navigator.onLine)throw Error('لا يوجد إنترنت؛ التعديلات محفوظة محليًا وستُعاد المحاولة عند الاتصال');
+ const owner=activeUser;
+ if(!owner||owner!==docsMsBackup.owner)throw Error('تغير الحساب؛ أعد تفعيل النسخ');
+ docsMsBackup.busy=true;
+ docsMsStatus('جارٍ تجهيز نسخة مشفرة محلية ورفعها إلى OneDrive…','yellow');
+ try{
+  const {payload,mirrorComplete}=await docsMsBuildPayload(owner);
+  const snapshot=JSON.stringify({...payload,createdAt:null});
+  const digest=docsMsHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(snapshot)));
+  if(digest===docsMsBackup.lastDigest&&docsMsBackup.lastGood){docsMsStatus('النسخة المشفرة الحالية مرفوعة إلى OneDrive؛ لم تتغير البيانات.','green');return}
+  const encrypted=await docsExportSecureBackup(payload,docsMsBackup.phrase);
+  const content=JSON.stringify(encrypted),body=new Blob([content],{type:'application/json'});
+  if(body.size>240*1024*1024)throw Error('النسخة تتجاوز 240 ميجابايت؛ يلزم رفع مجزأ قبل تشغيل النسخ التلقائي لهذا الحجم');
+  const ownerToken=docsMsHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(owner))).slice(0,32);
+  const name='athat-docs-'+ownerToken+'-'+new Date().toISOString().slice(0,10)+'.json';
+  const token=await docsMsAccess();
+  if(owner!==activeUser)throw Error('تغير الحساب أثناء الرفع');
+  const url='https://graph.microsoft.com/v1.0/me/drive/special/approot:/'+encodeURIComponent(name)+':/content';
+  const sent=await fetch(url,{method:'PUT',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body});
+  if(!sent.ok)throw Error('رفض OneDrive رفع النسخة (HTTP '+sent.status+')');
+  const uploaded=await sent.json();
+  if(!uploaded.id||uploaded.size!==body.size)throw Error('لم يؤكد OneDrive حجم النسخة المرفوعة');
+  const check=await fetch('https://graph.microsoft.com/v1.0/me/drive/items/'+encodeURIComponent(uploaded.id)+'?$select=id,size,name,eTag',{headers:{authorization:'Bearer '+await docsMsAccess()},cache:'no-store'});
+  if(!check.ok)throw Error('تعذر التحقق من النسخة بعد رفعها');
+  const meta=await check.json();
+  if(meta.id!==uploaded.id||meta.size!==body.size||meta.name!==name)throw Error('بيانات الملف المرفوع غير مطابقة');
+  if(owner!==activeUser)throw Error('تغير الحساب قبل تأكيد النسخ');
+  docsMsBackup.lastDigest=digest;docsMsBackup.lastGood=true;
+  docsMsStatus(mirrorComplete?'تم رفع نسخة مشفرة إلى OneDrive والتحقق من حجم الملف.':'تم رفع نسخة مشفرة جزئية؛ لا تزال بعض بيانات الحساب قيد النقل للجهاز.',mirrorComplete?'green':'yellow');
+  document.getElementById('docsMsBackupHelp').textContent='آخر رفع مؤكد: '+new Date().toLocaleString('ar-SA')+' · '+name+' · استعادة النسخة الكاملة لم تُختبر بعد. النسخ السابقة لا تُحذف تلقائيًا في هذه المرحلة.';
+ }catch(error){
+  docsMsBackup.lastGood=false;
+  docsMsStatus('فشل النسخ السحابي: '+String(error?.message||error).slice(0,140),'red');
+  throw error;
+ }finally{docsMsBackup.busy=false}
+}
+function docsMsScheduleBackup(delay=20000){
+ if(!docsMsBackup.active||docsMsBackup.owner!==activeUser)return;
+ clearTimeout(docsMsBackup.timer);
+ docsMsBackup.timer=setTimeout(()=>{
+  if(document.visibilityState==='hidden'||!navigator.onLine)return;
+  docsMsUpload().catch(()=>{});
+ },delay);
+}
+async function docsMsEnable(){
+ if(!activeUser||docsMsAuth.userId!==activeUser||!docsMsAuth.token)throw Error('اربط حساب Microsoft قبل تفعيل النسخ');
+ const phrase=prompt('أنشئ عبارة استعادة قوية (12 حرفًا على الأقل). ستحتاجها لاستعادة نسخ OneDrive عند فقد جهازك. لن تُحفظ العبارة في الموقع أو OneDrive.');
+ if(!phrase)return;
+ if(phrase.length<12)throw Error('عبارة الاستعادة قصيرة؛ استخدم 12 حرفًا على الأقل');
+ docsMsBackup.phrase=phrase;docsMsBackup.owner=activeUser;docsMsBackup.active=true;
+ docsMsBackup.lastGood=false;docsMsBackup.lastDigest='';
+ docsMsStatus('النسخ التلقائي مفعّل لهذه الجلسة؛ جارٍ تجهيز النسخة الأولى.','yellow');
+ await docsMsUpload();
+}
+document.getElementById('docsMsEnableBackup').onclick=()=>docsMsEnable().catch(error=>docsMsStatus('تعذر التفعيل أو النسخ: '+String(error.message||error).slice(0,130),'red'));
+document.getElementById('docsMsBackupNow').onclick=()=>(
+ docsMsBackup.active?docsMsUpload():docsMsEnable()
+).catch(error=>docsMsStatus('تعذر النسخ: '+String(error.message||error).slice(0,130),'red'));
+window.addEventListener('online',()=>docsMsScheduleBackup(3000));
+window.addEventListener('docs:local-status',event=>{
+ if(!docsMsBackup.active||event.detail?.state!=='green')return;
+ if(docsMsBackup.lastGood)docsMsStatus('تم الحفظ على الجهاز؛ بانتظار تحديث نسخة OneDrive.','yellow');
+ docsMsScheduleBackup(20000);
+});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)docsMsScheduleBackup(3000)});
+document.addEventListener('athat-docs-logout',docsMsClearBackup);
+
 dsGet('dsAutosave').onchange=e=>{if(!activeUser)return;localStorage.setItem(docsDevicePermissionKey(),e.target.checked?'yes':'no');window.dispatchEvent(new CustomEvent('docs:local-status',{detail:e.target.checked?{state:'yellow',message:'الحفظ التلقائي مفعل؛ بانتظار أول عملية حفظ'}:{state:'red',message:'الحفظ التلقائي متوقف على هذا الجهاز'}}));say(e.target.checked?'الحفظ التلقائي مفعل لهذا الجهاز':'تم إيقاف الحفظ التلقائي')};
 
 async function dsStoreItems(name){
