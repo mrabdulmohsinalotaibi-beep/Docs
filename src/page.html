@@ -5034,7 +5034,7 @@ const docsOneDrivePanel=document.createElement('section');
 docsOneDrivePanel.className='ds-card';
 docsOneDrivePanel.id='docsOneDrivePanel';
 docsOneDrivePanel.setAttribute('aria-labelledby','docsOneDriveHeading');
-docsOneDrivePanel.innerHTML='<h3 id="docsOneDriveHeading">النسخ الاحتياطي المشفر إلى OneDrive</h3><p>الحفظ على هذا الجهاز يعمل بصورة مستقلة عن OneDrive. ربط Microsoft والرفع التلقائي لم يفعّلا بعد.</p><p id="docsOneDriveSetupStatus" role="status">الحالة: OneDrive غير مرتبط. لا توجد نسخة سحابية مؤكدة.</p><button id="docsOneDriveConnect" type="button" class="btn" disabled>ربط OneDrive — بانتظار إعداد Microsoft الآمن</button><p class="muted">بعد تفعيل الربط الرسمي، ستكون علامة OneDrive خضراء فقط عند التحقق من رفع نسخة مشفرة مكتملة، وليست عند حفظ المستند على الجهاز.</p><p class="muted"><strong>سياسة الاحتفاظ المقترحة: 60 يومًا.</strong> تحفظ النسخ المؤرخة كي يمكن استرجاع مستند حُذف أو تلف منذ أسابيع. لا يُحذف آخر إصدار صالح لمجرد مرور 60 يومًا، ولا تُحذف النسخة السابقة قبل التحقق من الجديدة. لم يبدأ تطبيق هذه السياسة في OneDrive بعد.</p>';
+docsOneDrivePanel.innerHTML='<h3 id="docsOneDriveHeading">النسخ الاحتياطي المشفر إلى OneDrive</h3><p>الحفظ المحلي مستقل. بعد تسجيل تطبيق Microsoft وربط OneDrive يمكنك تشغيل النسخ المشفر التلقائي أثناء فتح الموقع فقط، ثم تنزيل النسخ السابقة للاستعادة.</p><p id="docsOneDriveSetupStatus" role="status">الحالة: OneDrive غير مرتبط. لا توجد نسخة سحابية مؤكدة.</p><button id="docsOneDriveConnect" type="button" class="btn" disabled>ربط OneDrive — بانتظار إعداد Microsoft الآمن</button><p class="muted">بعد تفعيل الربط الرسمي، ستكون علامة OneDrive خضراء فقط عند التحقق من رفع نسخة مشفرة مكتملة، وليست عند حفظ المستند على الجهاز.</p><p class="muted"><strong>سياسة الاحتفاظ المقترحة: 60 يومًا.</strong> تحفظ النسخ المؤرخة كي يمكن استرجاع مستند حُذف أو تلف منذ أسابيع. لا يُحذف آخر إصدار صالح لمجرد مرور 60 يومًا، ولا تُحذف النسخة السابقة قبل التحقق من الجديدة. لم يبدأ تطبيق هذه السياسة في OneDrive بعد.</p>';
 settingsHub.appendChild(docsOneDrivePanel);
 
 // OneDrive auth uses the public Microsoft SPA PKCE flow. Tokens are kept
@@ -5268,7 +5268,7 @@ async function docsMsListCopies(){
   if(!res.ok)throw Error('تعذر قراءة نسخ OneDrive (HTTP '+res.status+')');
   const data=await res.json();
   for(const item of data.value||[]){
-   if(typeof item.name==='string'&&item.name.startsWith(prefix)&&/^athat-docs-[a-f0-9]{32}-\\d{4}-\\d{2}-\\d{2}\\.json$/.test(item.name)&&item.id)entries.push(item);
+   if(typeof item.name==='string'&&item.name.startsWith(prefix)&&/^athat-docs-[a-f0-9]{32}-\d{4}-\d{2}-\d{2}\.json$/.test(item.name)&&item.id)entries.push(item);
   }
   url=data['@odata.nextLink']||'';
  }
