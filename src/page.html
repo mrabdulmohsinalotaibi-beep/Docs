@@ -5036,6 +5036,28 @@ docsOneDrivePanel.id='docsOneDrivePanel';
 docsOneDrivePanel.setAttribute('aria-labelledby','docsOneDriveHeading');
 docsOneDrivePanel.innerHTML='<h3 id="docsOneDriveHeading">النسخ الاحتياطي المشفر إلى OneDrive</h3><p>الحفظ على هذا الجهاز يعمل بصورة مستقلة عن OneDrive. ربط Microsoft والرفع التلقائي لم يفعّلا بعد.</p><p id="docsOneDriveSetupStatus" role="status">الحالة: OneDrive غير مرتبط. لا توجد نسخة سحابية مؤكدة.</p><button id="docsOneDriveConnect" type="button" class="btn" disabled>ربط OneDrive — بانتظار إعداد Microsoft الآمن</button><p class="muted">بعد تفعيل الربط الرسمي، ستكون علامة OneDrive خضراء فقط عند التحقق من رفع نسخة مشفرة مكتملة، وليست عند حفظ المستند على الجهاز.</p><p class="muted"><strong>سياسة الاحتفاظ المقترحة: 60 يومًا.</strong> تحفظ النسخ المؤرخة كي يمكن استرجاع مستند حُذف أو تلف منذ أسابيع. لا يُحذف آخر إصدار صالح لمجرد مرور 60 يومًا، ولا تُحذف النسخة السابقة قبل التحقق من الجديدة. لم يبدأ تطبيق هذه السياسة في OneDrive بعد.</p>';
 settingsHub.appendChild(docsOneDrivePanel);
+async function docsOnedriveRefreshSetup(){
+ const node=document.getElementById('docsOneDriveSetupStatus');
+ const connect=document.getElementById('docsOneDriveConnect');
+ if(!node||!connect)return;
+ connect.disabled=true;
+ connect.textContent='ربط OneDrive — بانتظار اكتمال نظام الرفع المشفر';
+ if(!activeUser){node.textContent='الحالة: سجّل الدخول أولًا';return}
+ try{
+  const response=await fetch('/api/onedrive/config',{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok)throw Error('تعذّر فحص إعدادات Microsoft');
+  const config=await response.json();
+  node.textContent=config.configured
+   ?'تم تسجيل إعداد Microsoft للتطبيق. الربط والرفع التلقائي لم يفعّلا بعد؛ لا توجد نسخة سحابية مؤكدة.'
+   :'لم يتم تسجيل تطبيق Microsoft لربط OneDrive حتى الآن. الحفظ المحلي مستمر دون تغيير.';
+ }catch{
+  node.textContent='تعذّر التحقق من إعداد OneDrive. لا توجد نسخة سحابية مؤكدة.';
+ }
+ window.dispatchEvent(new CustomEvent('docs:onedrive-status',{detail:{state:'red',message:'غير مرتبط؛ النسخ السحابي غير مفعل'}}));
+}
+document.addEventListener('athat-docs-login',docsOnedriveRefreshSetup);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeUser)docsOnedriveRefreshSetup()});
+
 
 dsGet('dsAutosave').onchange=e=>{if(!activeUser)return;localStorage.setItem(docsDevicePermissionKey(),e.target.checked?'yes':'no');window.dispatchEvent(new CustomEvent('docs:local-status',{detail:e.target.checked?{state:'yellow',message:'الحفظ التلقائي مفعل؛ بانتظار أول عملية حفظ'}:{state:'red',message:'الحفظ التلقائي متوقف على هذا الجهاز'}}));say(e.target.checked?'الحفظ التلقائي مفعل لهذا الجهاز':'تم إيقاف الحفظ التلقائي')};
 
