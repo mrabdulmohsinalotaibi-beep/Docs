@@ -1916,6 +1916,31 @@ function docsAccountOriginals(){
  }
  return [...originals.values()];
 }
+// Status comes from the original account record; absence of a status is never a finding of incomplete work.
+function docsWorkCenterCounts(rows){
+ const counts={required:0,active:0,done:0,overdue:0,archived:0,unknown:0};
+ for(const row of rows){
+  const status=String(row.status??'').trim().replace(/[\u064B-\u065F\u0670]/g,'').replace(/\s+/g,' ').toLowerCase();
+  const key=/^(مسودة|مطلوب|مطلوبة|قيد الانتظار|pending|draft|required)$/.test(status)?'required':
+   /^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|active|in progress|in_progress)$/.test(status)?'active':
+   /^(مكتمل|مكتملة|تم التنفيذ|done|completed)$/.test(status)?'done':
+   /^(متأخر|متأخرة|overdue)$/.test(status)?'overdue':
+   /^(مؤرشف|مؤرشفة|archived)$/.test(status)?'archived':'unknown';
+  counts[key]++;
+ }
+ return counts;
+}
+function docsRenderWorkCenter(rows){
+ const host=$('docsWorkCenter');if(!host)return;
+ const counts=activeUser?docsWorkCenterCounts(rows):null;
+ const labels={required:'مطلوبة أو مسودات',active:'قيد التنفيذ',done:'موسومة مكتملة',overdue:'موسومة متأخرة',archived:'مؤرشفة',unknown:'حالة غير مصنفة'};
+ const metrics=host.querySelector('[data-work-metrics]');metrics.replaceChildren();
+ for(const [key,label] of Object.entries(labels)){
+  const card=document.createElement('article'),value=document.createElement('strong'),caption=document.createElement('small');
+  value.textContent=counts?String(counts[key]):'—';caption.textContent=label;card.append(value,caption);metrics.append(card);
+ }
+ host.querySelector('[data-work-note]').textContent=!activeUser?'سجّل الدخول لعرض أعمالك.':guidanceLoadedUser!==activeUser?'عرض جزئي للأعمال المتاحة؛ لم يكتمل تحميل فهرس السجلات.':'الأعداد من الأصول المتاحة دون تكرار نسخها. الحالة كما وردت من المصدر؛ لا تعني اعتماد العمل أو اكتمال جميع المصادر. التأخر غير مستنتج من تاريخ الإنشاء.';
+}
 function docsReviewCounts(){
  const unique=new Map();
  for(const r of migratedA4Records)if(!unique.has(r.source_record_id))unique.set(r.source_record_id,r);
@@ -2268,6 +2293,7 @@ function draw(){
  const virtual=imports.filter(x=>!countSources.has(x.source_record_id));
  // This renderer runs outside the reports workspace scope: never call reportsRows() here.
  const allOriginals=docsAccountOriginals();
+ docsRenderWorkCenter(allOriginals);
  $('countAll').textContent=guidanceLoadedUser===activeUser?String(allOriginals.length):'—';
  $('countDone').textContent=guidanceLoadedUser===activeUser?String(allOriginals.filter(d=>/^مكتمل(?:ة)?$/.test(String(d.status||'').trim())).length):'—';
  $('countArchive').textContent=String(new Set(docs.filter(d=>d.status==='مؤرشف').map(d=>docsCanonicalKey(d))).size);
@@ -3240,21 +3266,29 @@ $('reloadA4Library').onclick=()=>loadMigratedA4().catch(e=>$('migratedA4LibraryS
 
 // Offline-aware record loader must be in the same scope as student and guidance viewers.
 async function docsOfflineFetch(url){
- const u=new URL(url,location.origin);let key='',kind='';
+ const u=new URL(url,location.origin),owner=activeUser,ownerDb=db;let key='',kind='';
+ if(!owner||!ownerDb)throw Error('يتطلب تسجيل الدخول وفتح التخزين المحلي');
+ const sameAccount=()=>activeUser===owner&&db===ownerDb;
  if(u.pathname==='/api/students/a4'){key='index:a4';kind='index'}
- else if(u.pathname==='/api/guidance/records'){key='index:guidance';kind='index'}
+ else if(u.pathname==='/api/guidance/records'){const student=u.searchParams.get('student');key=student?'index:guidance:student:'+student:'index:guidance';kind='index'}
+ else if(u.pathname==='/api/students/360'){key='index:student360:'+u.searchParams.get('key');kind='index'}
  else if(u.pathname==='/api/students/a4-record')key='a4:'+u.searchParams.get('id');
  else if(u.pathname==='/api/guidance/record')key='guidance:'+u.searchParams.get('type')+':'+u.searchParams.get('id');
  else throw Error('مصدر غير مدعوم');
  try{
  const r=await fetch(url,{credentials:'same-origin',cache:'no-store'}),data=await r.json();
  if(!r.ok||!data.ok)throw Error(data.message||data.code||'تعذر قراءة السجل');
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  if(db&&activeUser){try{await dsStoreSnapshot(kind?{id:key,kind,records:data.records||[],downloadedAt:new Date().toISOString()}:{id:key,kind:u.pathname.includes('a4')?'a4':'guidance',record:data.record,downloadedAt:new Date().toISOString()})}catch(e){console.warn('offline_snapshot_failed',e?.name)}}
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  return {...data,offline:false};
  }catch(e){
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  const local=await docsCachedItem(key).catch(()=>null);
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  if(local){if(kind)return {ok:true,records:local.records||[],offline:true};if(local.record)return {ok:true,record:local.record,offline:true}}
  const mirror=typeof docsMirrorCachedResponse==='function'?await docsMirrorCachedResponse(u.pathname+u.search).catch(()=>null):null;
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  if(mirror)return {...mirror,offline:true};
  throw Error('لا توجد نسخة داخل الجهاز؛ انقل بياناتك من الإعدادات أثناء الاتصال. '+(e.message||''));
  }
@@ -3494,6 +3528,8 @@ $('s360A4CopyToDocs').onclick=async()=>{
 };
 
 async function openStudent360(key){
+ const owner=activeUser,ownerDb=db;
+ const isCurrent=()=>activeUser===owner&&db===ownerDb&&studentActive===key;
  const student=studentIndex.find(s=>s.key===key);if(!student)return;studentActive=key;
  $('student360Detail').hidden=false;$('studentRoster').hidden=true;activateStudentProfileTab('basics');$('student360Title').textContent=student.name+' · ملف الطالب 360°';
  const basics=$('student360Basics');basics.replaceChildren();
@@ -3507,8 +3543,8 @@ async function openStudent360(key){
  renderStudentA4(key);loadGuidanceStudentRecords(key).catch(()=>{});$('student360LocalDocs').hidden=true;loadStudentCareDetails(key);
  const metrics=$('student360Metrics');metrics.replaceChildren();const info360=studentInsights[key]||{};const metricDefs=[['غياب',info360.absence||0],['تأخر',info360.late||0],['سلوكيات',info360.behavior||0],['سلوك إيجابي',info360.positive||0],['حالات',info360.cases||0],['جلسات',info360.interviews||0],['إحالات',info360.referrals||0]];for(const [caption,value] of metricDefs){const item=document.createElement('div'),small=document.createElement('small'),bold=document.createElement('b');item.className='s360-kpi';small.textContent=caption;bold.textContent=value;item.append(bold,small);metrics.append(item)}
  gradeRenderPlansForStudent(key).catch(()=>{});const timeline=$('student360Timeline');timeline.textContent='جارٍ تحميل السجلات المساندة…';
- try{const r=await fetch('/api/students/360?key='+encodeURIComponent(key),{credentials:'same-origin',cache:'no-store'}),result=await r.json();if(!r.ok||!result.ok)throw Error(result.message||'تعذر تحميل أعمال الذات');if(studentActive!==key)return;timeline.replaceChildren();
-  const h=document.createElement('h4');h.textContent='السجلات القديمة المساندة ('+(result.records||[]).length+') · السجلات الجديدة المهيكلة تظهر في قسم مستقل';timeline.append(h);
+ try{const result=await docsOfflineFetch('/api/students/360?key='+encodeURIComponent(key));if(!isCurrent())return;timeline.replaceChildren();
+  const h=document.createElement('h4');h.textContent='السجلات القديمة المساندة ('+(result.records||[]).length+') · السجلات الجديدة المهيكلة تظهر في قسم مستقل'+(result.offline?' · نسخة الجهاز؛ قد تحتاج تحديثًا':'');timeline.append(h);
   const titles={attendance:'المواظبة',behavior:'السلوك',interviews:'المقابلات والجلسات',counseling_cases:'الحالات والمتابعة',referrals:'الإحالات',free_documents:'المستندات',reports:'التقارير',comprehensive_records:'السجلات الشاملة'};
   const careOriginals=new Set(studentCareIndex[key]?.source_ids||[]);
   const groups=new Map();for(const item of result.records||[]){
@@ -3529,7 +3565,7 @@ async function openStudent360(key){
     }
   }
   if(!(result.records||[]).length){const p=document.createElement('p');p.className='muted';p.textContent='السجلات المهيكلة المنقولة من الملف تظهر في القسم المخصص داخل ملف الطالب. لا نعتمد تطابق الأسماء وحده.';timeline.append(p)}
- }catch(e){timeline.textContent='تعذر تحميل الأعمال المرتبطة: '+e.message}
+ }catch(e){if(isCurrent())timeline.textContent='تعذر تحميل الأعمال المرتبطة: '+e.message}
 }
 let docsStudentsNav=null,docsStudentPanel=null,docsMain=null,workspaceNav=null,workspacePages={},activeWorkspace='home',workspaceGoto=()=>{};
 let adminPanel=null,refreshAdminUsers=async()=>{};
@@ -3815,18 +3851,20 @@ async function openGuidanceRecord(type,id){
  }catch(e){document.getElementById('docsGuidanceModalTitle').textContent='تعذر فتح السجل';document.getElementById('docsGuidanceNotice').textContent=e.message}
 }
 async function loadGuidanceStudentRecords(key){
+ const owner=activeUser,ownerDb=db;
+ const isCurrent=()=>activeUser===owner&&db===ownerDb&&studentActive===key;
  const detail=document.getElementById('student360Detail');if(!detail)return;
  let block=document.getElementById('docsGuidanceStudentSection');
  if(!block){block=document.createElement('section');block.id='docsGuidanceStudentSection';block.className='panel';const title=document.createElement('h3');title.textContent='وقائع المواظبة والجلسات والحالات والإحالات';const body=document.createElement('div');body.id='docsGuidanceStudentList';block.append(title,body);detail.append(block)}
  const body=document.getElementById('docsGuidanceStudentList');body.textContent='جارٍ تحميل السجلات المرتبطة…';
  try{
-  const d=await guidanceFetch('/api/guidance/records?student='+encodeURIComponent(key));
-  if(studentActive!==key)return;
+  const d=await docsOfflineFetch('/api/guidance/records?student='+encodeURIComponent(key));
+  if(!isCurrent())return;
   body.replaceChildren();
-  if(!d.records?.length){body.textContent='لا توجد وقائع مرتبطة بمعرّف هذا الطالب في السجلات المنقولة.';return}
-  const summary=document.createElement('p');summary.className='muted';summary.textContent='عدد الوقائع والسجلات: '+d.records.length+' · يعرض الغياب كواقعة، وليس مستند A4 مستقل.';body.append(summary);
+  if(!d.records?.length){body.textContent=d.offline?'لا توجد وقائع في النسخة المحلية لهذا الطالب؛ حدّث السجلات عند الاتصال.':'لا توجد وقائع مرتبطة بمعرّف هذا الطالب في السجلات المنقولة.';return}
+  const summary=document.createElement('p');summary.className='muted';summary.textContent='عدد الوقائع والسجلات: '+d.records.length+' · يعرض الغياب كواقعة، وليس مستند A4 مستقل.'+(d.offline?' · نسخة الجهاز؛ قد تحتاج تحديثًا':'');body.append(summary);
   for(const r of d.records){const b=document.createElement('button');b.type='button';b.className='docs-guidance-row';const strong=document.createElement('strong');strong.textContent=r.title;const small=document.createElement('small');small.textContent=[guidanceLabel(r),r.date_hijri?r.date_hijri+' هـ':'',r.status].filter(Boolean).join(' · ');b.append(strong,small);b.onclick=()=>openGuidanceRecord(r.source_table,r.source_record_id);body.append(b)}
- }catch(e){body.textContent='تعذر تحميل السجلات: '+e.message}
+ }catch(e){if(isCurrent())body.textContent='تعذر تحميل السجلات: '+e.message}
 }
 
 drawTemplates();
@@ -3840,7 +3878,7 @@ docsMain.prepend(docsStudentPanel);docsMain.prepend(docsStudentsNav);
 workspaceNav=document.createElement('nav');workspaceNav.id='workspaceNav';workspaceNav.className='workspace-nav';workspaceNav.setAttribute('aria-label','أقسام مستندات الذات');
 workspacePages={};
 for(const id of ['home','documents','students','reports','messages','settings','admin']){
- const section=document.createElement('section');section.id='workspace-'+id;section.className='workspace-page workspace-'+id;section.hidden=id!=='home';workspacePages[id]=section;
+ const section=document.createElement('section');section.id='workspace-'+id;section.className='workspace-page workspace-'+id;section.hidden=id!=='home';workspacePages[id]=section;docsMain.append(section);
 }
 const originalHero=docsMain.querySelector('.hero'),originalMetrics=docsMain.querySelector('.metrics'),originalTemplates=$('templatesPanel'),originalWorks=$('worksPanel'),originalArchive=$('migratedA4Library'),originalProfile=$('accountSchoolPanel'),originalEditor=$('editor'),originalPrograms=$('regionalProgramPanel'),originalLocalPlan=$('localPlanPanel'),originalSample=$('sampleMigrationPanel');
 const operations=document.createElement('section');operations.className='panel';const opsTitle=document.createElement('h2');opsTitle.textContent='النسخ الاحتياطي وإدارة البيانات';
@@ -4008,7 +4046,13 @@ for(const [label,description,target,view] of [
  btn.onclick=()=>{workspaceGoto(target);if(view)openDocsView(view);if(view==='portfolio')activateDocsTab('portfolio');if(target==='students')refreshStudentDirectory().catch(()=>{})};
  cards.append(btn)
 }
+const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
+workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
+workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
 workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards);
+quickHeading.before(workCenter);
+docsRenderWorkCenter([]);
+document.addEventListener('athat-docs-logout',()=>{workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
 if(activeUser)refreshModernHome().catch(()=>{});
 // Recalculate cross-section totals after successfully committed restoration or device import.
 let docsRefreshRecoveredBusy=false,docsRefreshRecoveredAgain=false;
@@ -5209,6 +5253,7 @@ dsDesignStyle.textContent=`
 @media(max-width:560px){#docsSettingsHub .ds-overview-actions{grid-template-columns:1fr}#docsSettingsHub .ds-health-row{width:100%}#docsSettingsHub .ds-health{flex:1;min-width:120px}#docsSettingsHub .ds-welcome{padding:17px 14px}#docsSettingsHub .ds-card{padding:15px 13px}#docsSettingsHub .ds-nav-icon{width:22px;height:22px}#docsSettingsHub .ds-nav-btn{font-size:12px}#docsSettingsHub .ds-quick button{flex:1;min-width:130px}}
 `;
 settingsHub.append(dsDesignStyle);
+workspacePages.settings.append(settingsHub);
 const dsModern=document.createElement('div');
 dsModern.className='ds-modern';
 dsModern.innerHTML=
@@ -5254,8 +5299,7 @@ function dsOpenTab(key){
 }
 settingsHub.querySelectorAll('.ds-nav-btn').forEach(btn=>btn.addEventListener('click',()=>dsOpenTab(btn.dataset.dsTab)));
 settingsHub.querySelectorAll('[data-ds-open]').forEach(btn=>btn.addEventListener('click',()=>dsOpenTab(btn.dataset.dsOpen)));
-dsGet('dsAccount').onclick=()=>{dsOpenTab('account');originalProfile.scrollIntoView({behavior:'smooth',block:'start'})};
-dsGet('dsDanger').onclick=()=>{dsOpenTab('privacy');settingsClear.scrollIntoView({behavior:'smooth',block:'center'})};
+// The old shortcuts were removed above; the connected modern tabs already own navigation.
 function dsSetHealth(name,detail){
  const card=settingsHub.querySelector('#dsState'+name),value=settingsHub.querySelector('#dsState'+name+'Text');
  if(!card||!value)return;
@@ -5672,7 +5716,7 @@ panel.innerHTML=[
  '<label>حد أولوية المتابعة %<input id="gradeLow" type="number" min="1" max="99" value="60"></label><label>حد التفوق للفرز %<input id="gradeHigh" type="number" min="1" max="100" value="90"></label></div>',
  '<p class="muted">حدود المتابعة والتفوق مرشحات تحليلية قابلة للتعديل، وليست معايير نجاح أو رسوب رسمية.</p><div id="gradeMetrics" class="grade-metrics"></div>',
  '<h3>تحليل المواد</h3><div id="gradeSubjectRows" class="grade-bars"></div><h3>الطلاب الذين يحتاجون متابعة</h3><div id="gradeStudentRows" class="grade-table-wrap"></div>',
- '<section id="gradePlanEditor" class="panel" hidden><h3>متابعة علاجية لطالب</h3><p id="gradePlanStudent" class="muted"></p><div class="grade-input-grid"><label>الإجراء العلاجي<textarea id="gradePlanAction" rows="3" placeholder="التنسيق مع معلم المادة ودعم الطالب"></textarea></label><label>الهدف القابل للقياس<textarea id="gradePlanGoal" rows="3" placeholder="رفع التحصيل في المادة"></textarea></label><label>نتيجة المتابعة / ملاحظات<textarea id="gradePlanResult" rows="3" placeholder="نتيجة القياس اللاحق"></textarea></label><label>الحالة<select id="gradePlanStatus"><option value="draft">مسودة</option><option value="active">جارٍ التنفيذ</option><option value="done">مكتملة</option></select></label></div><div class="actions"><button id="gradePlanSave" type="button" class="primary">حفظ خطة المتابعة على الجهاز</button><button id="gradePlanClose" type="button">إغلاق</button></div><p id="gradePlanNotice" role="status" class="muted"></p></section><div class="grade-input-grid"><label>نوع التقرير<select id="gradeReportMode"><option value="summary">ملخص وتحليل المواد والمتابعة</option><option value="subjects">تحليل حسب المادة</option><option value="excellent">كشف المتفوقين</option><option value="low">كشف متدني التحصيل</option><option value="plan">خطة المتابعة العلاجية</option></select></label><label>خصوصية الأسماء<select id="gradeReportNames"><option value="named">بالأسماء (للاستخدام الداخلي)</option><option value="anonymous">بدون أسماء</option><option value="coded">برموز الطلاب</option></select></label></div><div class="actions"><button id="gradePrintBtn" type="button">طباعة تقرير A4 / حفظ PDF</button><button id="gradeCsvBtn" type="button">تصدير CSV</button><button id="gradeBackupBtn" type="button">نسخة JSON من النتائج</button><button id="gradeDeleteBtn" type="button">حذف الملف المحدد</button></div></section>',
+ '<section id="gradePlanEditor" class="panel" hidden><h3>متابعة علاجية لطالب</h3><p id="gradePlanStudent" class="muted"></p><div class="grade-input-grid"><label>الإجراء العلاجي<textarea id="gradePlanAction" rows="3" placeholder="التنسيق مع معلم المادة ودعم الطالب"></textarea></label><label>الهدف القابل للقياس<textarea id="gradePlanGoal" rows="3" placeholder="رفع التحصيل في المادة"></textarea></label><label>الدرجة البعدية (%)<input id="gradePlanPost" type="number" min="0" max="100" step="any" placeholder="اختياري"></label><label>نتيجة المتابعة / ملاحظات<textarea id="gradePlanResult" rows="3" placeholder="نتيجة القياس اللاحق"></textarea></label><label>الحالة<select id="gradePlanStatus"><option value="draft">مسودة</option><option value="active">جارٍ التنفيذ</option><option value="done">مكتملة</option></select></label></div><div class="actions"><button id="gradePlanSave" type="button" class="primary">حفظ خطة المتابعة على الجهاز</button><button id="gradePlanClose" type="button">إغلاق</button></div><p id="gradePlanNotice" role="status" class="muted"></p></section><div class="grade-input-grid"><label>نوع التقرير<select id="gradeReportMode"><option value="summary">ملخص وتحليل المواد والمتابعة</option><option value="subjects">تحليل حسب المادة</option><option value="excellent">كشف المتفوقين</option><option value="low">كشف متدني التحصيل</option><option value="plan">خطة المتابعة العلاجية</option></select></label><label>خصوصية الأسماء<select id="gradeReportNames"><option value="named">بالأسماء (للاستخدام الداخلي)</option><option value="anonymous">بدون أسماء</option><option value="coded">برموز الطلاب</option></select></label></div><div class="actions"><button id="gradePrintBtn" type="button">طباعة تقرير A4 / حفظ PDF</button><button id="gradeCsvBtn" type="button">تصدير CSV</button><button id="gradeBackupBtn" type="button">نسخة JSON من النتائج</button><button id="gradeDeleteBtn" type="button">حذف الملف المحدد</button></div></section>',
  '<section id="gradePrintable" class="grade-print-only" aria-label="تقرير تحصيل الطلاب"></section>'
 ].join('');
 workspacePages.grades=panel;el('appMain').append(panel);
@@ -5698,12 +5742,22 @@ async function openStore(){
  req.onerror=()=>reject(req.error||Error('تعذر فتح التخزين المحلي'))});
 }
 /* Locally retained intervention plans; no server upload. */
+function gradeImpact(baseline,post){
+ const parse=value=>value==null||String(value).trim()===''?null:Number(value);
+ const before=parse(baseline),after=parse(post);
+ if(before===null||after===null||!Number.isFinite(before)||!Number.isFinite(after)||before<0||before>100||after<0||after>100)return null;
+ return Math.round((after-before)*100)/100;
+}
+function gradePlanBelongs(plan,studentKey,match){
+ if(plan.studentKey)return plan.studentKey===studentKey;
+ return match({id:plan.studentNo||'',name:plan.name,grade:plan.grade,cls:plan.cls})?.key===studentKey;
+}
 function gradePlanStore(method,arg){
  return openStore().then(db=>new Promise((resolve,reject)=>{
   const tx=db.transaction('plans',method==='getAll'?'readonly':'readwrite');
   const store=tx.objectStore('plans');
   const req=method==='getAll'?store.getAll():store.put(arg);
-  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);tx.onerror=()=>reject(tx.error);
+  tx.oncomplete=()=>resolve(req.result);req.onerror=()=>reject(req.error);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('تعذر إتمام الحفظ'));
  }));
 }
 async function gradeRenderPlansForStudent(studentKey){
@@ -5712,14 +5766,14 @@ async function gradeRenderPlansForStudent(studentKey){
  const title=document.createElement('h4');title.textContent='خطط متابعة التحصيل الدراسي';holder.append(title);
  try{
   const student=(studentIndex||[]).find(s=>s.key===studentKey);if(!student)return;
-  const plans=(await gradePlanStore('getAll')).filter(plan=>plan.studentKey===studentKey||(!plan.studentKey&&norm(plan.name)===norm(student.name)&&norm(plan.grade)===norm(student.grade)&&norm(plan.cls)===norm(student.classroom)));
+  const plans=(await gradePlanStore('getAll')).filter(plan=>gradePlanBelongs(plan,studentKey,matchStudent));
   if(studentActive!==studentKey)return;
   if(!plans.length){const note=document.createElement('p');note.className='muted';note.textContent='لا توجد خطط متابعة محفوظة لهذا الطالب على الجهاز.';holder.append(note);return}
   const states={draft:'مسودة',active:'جارٍ التنفيذ',done:'مكتملة'};
   for(const plan of plans.sort((a,b)=>String(b.updated).localeCompare(String(a.updated)))){
    const card=document.createElement('article');card.className='s360-real-record';
    const h=document.createElement('h5');h.textContent=plan.subject+' · '+(plan.period||'نتائج الطلاب')+' · '+(states[plan.status]||'مسودة');card.append(h);
-   for(const [label,value] of [['الدرجة القبلية',plan.baseline+'%'],['الهدف',plan.goal],['الإجراء',plan.action],['نتيجة المتابعة',plan.result||'لم تسجل بعد']]){const row=document.createElement('p');row.style.whiteSpace='pre-wrap';const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));card.append(row)}
+   for(const [label,value] of [['الدرجة القبلية',plan.baseline+'%'],['الدرجة البعدية',gradeImpact(plan.baseline,plan.post)===null?'لم تسجل بعد':plan.post+'%'],['التغير بالنقاط المئوية',gradeImpact(plan.baseline,plan.post)===null?'غير مقاس':String(gradeImpact(plan.baseline,plan.post))],['الهدف',plan.goal],['الإجراء',plan.action],['نتيجة المتابعة',plan.result||'لم تسجل بعد']]){const row=document.createElement('p');row.style.whiteSpace='pre-wrap';const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));card.append(row)}
    holder.append(card);
   }
  }catch(error){const note=document.createElement('p');note.className='muted';note.textContent='تعذر قراءة خطط التحصيل المحلية: '+error.message;holder.append(note)}
@@ -5729,7 +5783,7 @@ async function gradeOpenPlan(record){
  const student=matchStudent(record);
  const key=norm(record.id)||[norm(record.name),norm(record.grade),norm(record.cls)].join('|');
  const id=state.current+'|'+key+'|'+norm(record.subject);
- gradeEditingPlan={id,studentKey:student?.key||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:state.imports.find(x=>x.id===state.current)?.period||''};
+ gradeEditingPlan={id,studentKey:student?.key||'',studentNo:record.id||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:state.imports.find(x=>x.id===state.current)?.period||''};
  const editor=el('gradePlanEditor');editor.hidden=false;
  el('gradePlanStudent').textContent=[record.name,record.grade,record.cls,record.subject,'الدرجة القبلية '+record.pct+'%'].filter(Boolean).join(' — ');
  el('gradePlanNotice').textContent=student?'الطالب مرتبط بملف 360.':'لم يُعثر على تطابق وحيد في ملف الطالب؛ تُحفظ الخطة مع بيانات سجل النتائج حتى تتطابق.';
@@ -5737,6 +5791,7 @@ async function gradeOpenPlan(record){
   const stored=(await gradePlanStore('getAll')).find(x=>x.id===id);
   el('gradePlanAction').value=stored?.action||'التنسيق مع معلم المادة لتقديم أنشطة علاجية مناسبة، ومتابعة ولي الأمر.';
   el('gradePlanGoal').value=stored?.goal||'رفع درجة الطالب في المادة إلى حد المتابعة المحدد أو أعلى في القياس القادم.';
+  el('gradePlanPost').value=stored?.post??'';
   el('gradePlanResult').value=stored?.result||'';
   el('gradePlanStatus').value=stored?.status||'draft';
  }catch(error){el('gradePlanNotice').textContent='تعذر استعادة الخطة: '+error.message}
@@ -5745,7 +5800,10 @@ async function gradeOpenPlan(record){
 el('gradePlanClose').onclick=()=>{el('gradePlanEditor').hidden=true;gradeEditingPlan=null};
 el('gradePlanSave').onclick=async()=>{
  if(!gradeEditingPlan)return;
- const item={...gradeEditingPlan,action:el('gradePlanAction').value.trim(),goal:el('gradePlanGoal').value.trim(),result:el('gradePlanResult').value.trim(),status:el('gradePlanStatus').value,updated:new Date().toISOString()};
+ const postText=el('gradePlanPost').value.trim();
+ const post=postText===''?null:Number(postText);
+ if(post!==null&&gradeImpact(gradeEditingPlan.baseline,post)===null){el('gradePlanNotice').textContent='أدخل درجة بعدية صحيحة بين 0 و100.';return}
+ const item={...gradeEditingPlan,post,action:el('gradePlanAction').value.trim(),goal:el('gradePlanGoal').value.trim(),result:el('gradePlanResult').value.trim(),status:el('gradePlanStatus').value,updated:new Date().toISOString()};
  if(!item.action||!item.goal){el('gradePlanNotice').textContent='أدخل الإجراء والهدف قبل الحفظ.';return}
  try{await gradePlanStore('put',item);if(item.studentKey&&studentActive===item.studentKey)gradeRenderPlansForStudent(item.studentKey).catch(()=>{});el('gradePlanNotice').textContent='تم حفظ الخطة محليًا على هذا الجهاز وربطها بسجل نتيجة الطالب.'}
  catch(error){el('gradePlanNotice').textContent='لم تُحفظ الخطة: '+error.message}
