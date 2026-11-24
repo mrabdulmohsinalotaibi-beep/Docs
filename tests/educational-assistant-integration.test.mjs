@@ -20,6 +20,13 @@ test('assistant reuses existing local followup and A4 review without modifying o
  assert.match(page,/educational-assistant:v1:/);
  assert.match(page,/status:'draft',hijriDate:hijriToday\(\)/);
 });
+test('followup prefills reviewed intervention fields and remains in followup tab',()=>{
+ assert.match(page,/suggestedGoal:row.goal/);
+ assert.match(page,/suggestedAction:item.steps.join/);
+ assert.match(page,/source.suggestedGoal/);
+ assert.match(page,/root.dataset.s360section='followup'/);
+ assert.match(page,/docsStudentGradeResultsLink/);
+});
 test('all inline scripts parse and generated worker matches the sources',()=>{
  for(const [index,match] of [...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].entries()){
   new Script(match[1],{filename:'embedded-'+(index+1)+'.js'});
