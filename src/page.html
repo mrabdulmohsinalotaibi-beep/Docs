@@ -1154,7 +1154,7 @@ body[data-docs-theme=mono] .docs-admin-alerts,body[data-docs-theme=mono] .docs-a
 body[data-docs-theme=mono] .docs-admin-header-tools button{background:#fff;color:#111;border-color:#aaa}
 @media(max-width:650px){.docs-admin-header-tools{width:100%;justify-content:flex-start}.docs-admin-header-tools button{font-size:12px;padding:8px}}
 }
-</style><style id="docs-theme-button-style">@media screen{header.top .docs-theme-picker{position:relative;flex:0 0 auto;overflow:visible}#docsThemeButton{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid #ffffff65;border-radius:10px;background:transparent!important;color:#fff!important;cursor:pointer}#docsThemeMenu{position:absolute;top:calc(100% + 7px);inset-inline-end:0;width:158px;padding:5px;border-radius:12px;border:1px solid #D9CCB2;background:#fff!important;box-shadow:0 8px 24px #0003;z-index:1000}#docsThemeMenu[hidden]{display:none!important}#docsThemeMenu button{display:block;width:100%;padding:9px 8px;text-align:right;border:0;border-radius:7px;background:#fff!important;color:#514735!important;font-size:13px;white-space:normal}#docsThemeMenu button[aria-pressed="true"]{font-weight:750;background:#EAE3D5!important}body[data-docs-theme="mono"] #docsThemeMenu button{color:#111!important}body[data-docs-theme="mono"] #docsThemeMenu button[aria-pressed="true"]{background:#eee!important}}</style><style id="docsEducationalAssistantStyle">.s360-assistant{padding:14px;border:1px solid #D9CCB2;border-radius:13px;background:#fff;margin:12px 0}.s360-assistant h4{margin-top:0}.docs-assistant-form{display:grid;gap:9px;max-width:650px}.docs-assistant-form select,.docs-assistant-form textarea{width:100%;padding:11px;border:1px solid #D9CCB2;border-radius:9px;background:#fff;color:#514735}.docs-assistant-draft{border:1px solid #EAE3D5;border-radius:11px;padding:13px;margin:11px 0}.docs-assistant-draft p{overflow-wrap:anywhere}.docs-assistant-draft li{margin:5px 0}@media(max-width:650px){.student-profile-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}</style></head><body><script>(function(){var key='athat-docs-ui-theme-v3',allowed=['terracotta','mono'],v;try{v=localStorage.getItem(key)}catch(e){}v=allowed.includes(v)?v:'terracotta';document.addEventListener('DOMContentLoaded',function(){var themeMeta=document.querySelector('meta[name="theme-color"]'),button=document.getElementById('docsThemeButton'),menu=document.getElementById('docsThemeMenu');function apply(value){v=value;document.body.dataset.docsTheme=value;if(themeMeta)themeMeta.setAttribute('content',value==='mono'?'#111111':'#514735');if(menu)menu.querySelectorAll('[data-theme-choice]').forEach(function(item){item.setAttribute('aria-pressed',String(item.dataset.themeChoice===value))})}apply(v);if(!button||!menu)return;function close(focus){menu.hidden=true;button.setAttribute('aria-expanded','false');if(focus)button.focus()}button.addEventListener('click',function(){if(!menu.hidden){close(false);return}menu.hidden=false;button.setAttribute('aria-expanded','true');menu.querySelector('[aria-pressed="true"]')?.focus()});menu.addEventListener('click',function(e){var item=e.target.closest('[data-theme-choice]');if(!item||!allowed.includes(item.dataset.themeChoice))return;apply(item.dataset.themeChoice);try{localStorage.setItem(key,v)}catch(e){}close(true)});document.addEventListener('click',function(e){if(!menu.hidden&&!menu.contains(e.target)&&!button.contains(e.target))close(false)});document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!menu.hidden){e.preventDefault();close(true)}});document.addEventListener('focusin',function(e){if(!menu.hidden&&!menu.contains(e.target)&&e.target!==button)close(false)})})})();</script>
+</style><style id="docs-theme-button-style">@media screen{header.top .docs-theme-picker{position:relative;flex:0 0 auto;overflow:visible}#docsThemeButton{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid #ffffff65;border-radius:10px;background:transparent!important;color:#fff!important;cursor:pointer}#docsThemeMenu{position:absolute;top:calc(100% + 7px);inset-inline-end:0;width:158px;padding:5px;border-radius:12px;border:1px solid #D9CCB2;background:#fff!important;box-shadow:0 8px 24px #0003;z-index:1000}#docsThemeMenu[hidden]{display:none!important}#docsThemeMenu button{display:block;width:100%;padding:9px 8px;text-align:right;border:0;border-radius:7px;background:#fff!important;color:#514735!important;font-size:13px;white-space:normal}#docsThemeMenu button[aria-pressed="true"]{font-weight:750;background:#EAE3D5!important}body[data-docs-theme="mono"] #docsThemeMenu button{color:#111!important}body[data-docs-theme="mono"] #docsThemeMenu button[aria-pressed="true"]{background:#eee!important}}</style><style id="docsEducationalAssistantStyle">.s360-assistant{padding:14px;border:1px solid #D9CCB2;border-radius:13px;background:#fff;margin:12px 0}.s360-assistant h4{margin-top:0}.docs-assistant-form{display:grid;gap:9px;max-width:650px}.docs-assistant-form select,.docs-assistant-form textarea{width:100%;padding:11px;border:1px solid #D9CCB2;border-radius:9px;background:#fff;color:#514735}.docs-assistant-draft{border:1px solid #EAE3D5;border-radius:11px;padding:13px;margin:11px 0}.docs-assistant-draft p{overflow-wrap:anywhere}.docs-assistant-draft li{margin:5px 0}@media(max-width:650px){.student-profile-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}</style><style id="docsWorkDrilldownCSS">.docs-work-status-card{font:inherit;color:inherit;text-align:inherit;cursor:pointer;width:100%;background:#fff;border:1px solid #D9CCB2;border-radius:16px;padding:16px;display:grid;gap:8px;box-shadow:0 5px 10px #51473512;min-height:104px}.docs-work-status-card strong{font-size:26px}.docs-work-status-card small{font-size:13px}.docs-work-status-card[aria-pressed="true"]{outline:3px solid #95815A;outline-offset:1px;background:#F7F4ED}.docs-work-status-card:disabled{opacity:.62;cursor:default}.docs-work-details{border:1px solid #D9CCB2;border-radius:13px;padding:14px;margin:15px 0;background:#fff;scroll-margin-top:16px}.docs-work-details[hidden]{display:none!important}.docs-work-status-list{display:grid;gap:9px;margin:10px 0}.docs-work-status-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid #EAE3D5;border-radius:10px;padding:12px;flex-wrap:wrap}.docs-work-status-entry div{flex:1;min-width:175px}.docs-work-status-entry strong,.docs-work-status-entry small{display:block;overflow-wrap:anywhere}.docs-work-status-entry small{margin-top:5px;color:#76664A}.docs-work-details h3{margin:0}@media(max-width:650px){.docs-work-status-entry button{width:100%;justify-content:center}}</style><style id="docsWorkDrilldownLayout">#docsWorkCenter [data-work-metrics]{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}#docsWorkCenter [data-work-metrics] .docs-work-status-card{min-width:0;min-height:106px;display:grid;align-content:center;justify-items:start;gap:6px;padding:16px 12px!important;color:#514735!important;background:#fff!important;border:1px solid #D9CCB2!important;border-radius:16px!important;text-align:right!important}#docsWorkCenter [data-work-metrics] .docs-work-status-card[aria-pressed="true"]{background:#F7F4ED!important;border-color:#95815A!important}#docsWorkCenter [data-work-metrics] .docs-work-status-card strong{color:#514735}#docsWorkCenter [data-work-metrics] .docs-work-status-card small{color:#76664A}@media(max-width:700px){#docsWorkCenter [data-work-metrics]{grid-template-columns:repeat(2,minmax(0,1fr))}}</style></head><body><script>(function(){var key='athat-docs-ui-theme-v3',allowed=['terracotta','mono'],v;try{v=localStorage.getItem(key)}catch(e){}v=allowed.includes(v)?v:'terracotta';document.addEventListener('DOMContentLoaded',function(){var themeMeta=document.querySelector('meta[name="theme-color"]'),button=document.getElementById('docsThemeButton'),menu=document.getElementById('docsThemeMenu');function apply(value){v=value;document.body.dataset.docsTheme=value;if(themeMeta)themeMeta.setAttribute('content',value==='mono'?'#111111':'#514735');if(menu)menu.querySelectorAll('[data-theme-choice]').forEach(function(item){item.setAttribute('aria-pressed',String(item.dataset.themeChoice===value))})}apply(v);if(!button||!menu)return;function close(focus){menu.hidden=true;button.setAttribute('aria-expanded','false');if(focus)button.focus()}button.addEventListener('click',function(){if(!menu.hidden){close(false);return}menu.hidden=false;button.setAttribute('aria-expanded','true');menu.querySelector('[aria-pressed="true"]')?.focus()});menu.addEventListener('click',function(e){var item=e.target.closest('[data-theme-choice]');if(!item||!allowed.includes(item.dataset.themeChoice))return;apply(item.dataset.themeChoice);try{localStorage.setItem(key,v)}catch(e){}close(true)});document.addEventListener('click',function(e){if(!menu.hidden&&!menu.contains(e.target)&&!button.contains(e.target))close(false)});document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!menu.hidden){e.preventDefault();close(true)}});document.addEventListener('focusin',function(e){if(!menu.hidden&&!menu.contains(e.target)&&e.target!==button)close(false)})})})();</script>
 <header class="top"><div class="brand"><div class="logo"><img src="/brand.svg?v=10" alt="شعار مستندات الذات الأصلي DOCS ATHAT" width="88" height="88"></div><div><b>مستندات الذات</b><small>ATHAT Docs · أعمالك وشواهدك</small></div></div><div class="docs-theme-picker"><button type="button" id="docsThemeButton" aria-label="تغيير المظهر" title="تغيير المظهر" aria-expanded="false" aria-controls="docsThemeMenu"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.4a1.7 1.7 0 0 0 1.1-3c-.9-.8-.3-2.2.9-2.2H18a3 3 0 0 0 3-3C21 7.3 17 3 12 3Z"/><circle cx="7.5" cy="11" r=".8"/><circle cx="10" cy="7.5" r=".8"/><circle cx="14.5" cy="7.5" r=".8"/><circle cx="17.5" cy="11" r=".8"/></svg></button><div id="docsThemeMenu" hidden aria-label="خيارات المظهر"><button type="button" data-theme-choice="terracotta" aria-pressed="false">الذهبي الملكي</button><button type="button" data-theme-choice="mono" aria-pressed="false">الأسود والأبيض</button></div></div><div id="sessionPanel" hidden><small id="accountName"></small><button id="logoutDocs" type="button">تسجيل خروج</button></div></header><div id="docsLiveIndicators" class="docs-live-indicators" hidden aria-label="حالة الحفظ والمزامنة"><span id="docsLocalIndicator" class="docs-live-indicator" data-state="yellow" role="status"><i></i><span>الحفظ بالجهاز: جارٍ التحقق</span></span><span id="docsPeerIndicator" class="docs-live-indicator" data-state="red" role="status"><i></i><span>مزامنة الأجهزة: غير متصل</span></span></div>
 <section id="authGate" aria-label="تسجيل الدخول">
 <div class="auth-card"><h1>مستندات الذات</h1><p>ادخل مرة واحدة، وسيبقى حسابك مفتوحًا على هذا الجهاز حتى تختار تسجيل الخروج.</p>
@@ -2069,6 +2069,14 @@ async function docsRenderStudentFollowups(key){
 }
 /* DOCS_FOLLOWUP_END */
 
+/* WORK_CENTER_DRILLDOWN_START */
+const docsWorkLabels={required:'مطلوبة أو مسودات',active:'قيد التنفيذ',done:'موسومة مكتملة',overdue:'موسومة متأخرة',archived:'مؤرشفة',unknown:'حالة غير مصنفة'};
+let docsWorkSelected='';
+let docsWorkSourceRows=[];
+function docsWorkStatus(row){
+ const counts=docsWorkCenterCounts([row]);
+ return Object.keys(counts).find(key=>counts[key]===1)||'unknown';
+}
 function docsWorkCenterCounts(rows){
  const counts={required:0,active:0,done:0,overdue:0,archived:0,unknown:0};
  for(const row of rows){
@@ -2082,17 +2090,81 @@ function docsWorkCenterCounts(rows){
  }
  return counts;
 }
+function docsWorkTitle(row){
+ return String(row.title||row.kind||row.canonicalTitle||row.source_student_name||'سجل بلا عنوان').trim().slice(0,250);
+}
+function docsWorkOpen(row){
+ const type=String(row.accountSourceTable||'');
+ const sourceId=String(row.source_record_id||'');
+ if(type==='local'){
+  const doc=docs.find(item=>String(item.id)===sourceId||docsCanonicalKey(item)===sourceId);
+  if(doc){edit(doc);return}
+  say('تعذر العثور على أصل المستند المحلي في هذا الجهاز؛ راجع المزامنة والنسخ الاحتياطية.');return;
+ }
+ // Imported A4 source is opened from the account archive, not an editable duplicate.
+ if(nativeA4Rows().some(item=>String(item.source_record_id)===sourceId)){
+  openMigratedA4(sourceId).catch(error=>say('تعذر فتح سجل A4: '+error.message));return;
+ }
+ if(type&&sourceId&&guidanceRecords.some(item=>item.source_table===type&&String(item.source_record_id)===sourceId)){
+  openGuidanceRecord(type,sourceId).catch(error=>say('تعذر فتح السجل: '+error.message));return;
+ }
+ say('مصدر هذا السجل غير متاح الآن. افتح المستندات والسجلات لتحديث الفهرس قبل المحاولة.');
+}
+function docsWorkRenderDetails(){
+ const host=$('docsWorkCenter'),details=host?.querySelector('[data-work-details]');if(!details)return;
+ details.replaceChildren();
+ const rows=docsWorkSourceRows.filter(row=>docsWorkStatus(row)===docsWorkSelected);
+ if(!docsWorkSelected||!activeUser){details.hidden=true;return}
+ details.hidden=false;
+ const header=document.createElement('div');header.className='row';
+ const h=document.createElement('h3');h.textContent=docsWorkLabels[docsWorkSelected]+' ('+rows.length+')';
+ const close=document.createElement('button');close.type='button';close.className='btn';close.textContent='إغلاق القائمة';close.onclick=()=>{docsWorkSelected='';docsWorkRenderWorkSelection();docsWorkRenderDetails()};
+ header.append(h,close);details.append(header);
+ if(docsWorkSelected==='unknown'){const note=document.createElement('p');note.className='muted';note.textContent='هذه السجلات لا تتضمن حالة مصنفة بصورة موثوقة. افتح كل سجل وراجع بياناته قبل اعتماد حالة أو تغييرها. العدد لا يعني أنها أعمال ناقصة.';details.append(note)}
+ if(!rows.length){const p=document.createElement('p');p.className='muted';p.textContent='لا توجد أعمال ضمن هذه الحالة حاليًا.';details.append(p);return}
+ const visible=rows.slice(0,docsWorkPageLimit);
+ const list=document.createElement('div');list.className='docs-work-status-list';
+ for(const row of visible){
+  const item=document.createElement('article');item.className='docs-work-status-entry';
+  const info=document.createElement('div'),title=document.createElement('strong'),meta=document.createElement('small'),open=document.createElement('button');
+  title.textContent=docsWorkTitle(row);
+  meta.textContent=[row.status?'الحالة: '+row.status:'الحالة غير محددة',row.date_hijri||row.hijriDate||row.date_text||'',row.source_table||row.kind||''].filter(Boolean).join(' · ');
+  info.append(title,meta);
+  open.type='button';open.className='btn';open.textContent='فتح العمل';open.setAttribute('aria-label','فتح: '+docsWorkTitle(row));open.onclick=()=>docsWorkOpen(row);
+  item.append(info,open);list.append(item);
+ }
+ details.append(list);
+ if(rows.length>visible.length){
+  const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='عرض '+Math.min(50,rows.length-visible.length)+' عمل إضافي';
+  more.onclick=()=>{docsWorkPageLimit+=50;docsWorkRenderDetails()};
+  details.append(more);
+ }
+}
+
+let docsWorkPageLimit=50;
+function docsWorkRenderWorkSelection(){
+ const host=$('docsWorkCenter');if(!host)return;
+ for(const button of host.querySelectorAll('[data-work-filter]'))button.setAttribute('aria-pressed',String(button.dataset.workFilter===docsWorkSelected));
+}
 function docsRenderWorkCenter(rows){
  const host=$('docsWorkCenter');if(!host)return;
+ docsWorkSourceRows=activeUser?[...rows]:[];
  const counts=activeUser?docsWorkCenterCounts(rows):null;
- const labels={required:'مطلوبة أو مسودات',active:'قيد التنفيذ',done:'موسومة مكتملة',overdue:'موسومة متأخرة',archived:'مؤرشفة',unknown:'حالة غير مصنفة'};
  const metrics=host.querySelector('[data-work-metrics]');metrics.replaceChildren();
- for(const [key,label] of Object.entries(labels)){
-  const card=document.createElement('article'),value=document.createElement('strong'),caption=document.createElement('small');
+ for(const [key,label] of Object.entries(docsWorkLabels)){
+  const card=document.createElement('button'),value=document.createElement('strong'),caption=document.createElement('small');
+  card.type='button';card.className='docs-work-status-card';card.dataset.workFilter=key;
+  card.disabled=!activeUser||!counts?.[key];
+  card.setAttribute('aria-controls','docsWorkDetails');
+  card.setAttribute('aria-pressed',String(docsWorkSelected===key));
+  card.setAttribute('aria-label',label+'، '+(counts?counts[key]:'غير متاح')+' عمل، اضغط لعرض القائمة');
+  card.onclick=()=>{docsWorkSelected=docsWorkSelected===key?'':key;docsWorkPageLimit=50;docsWorkRenderWorkSelection();docsWorkRenderDetails();if(docsWorkSelected)host.querySelector('[data-work-details]')?.scrollIntoView({behavior:'smooth',block:'nearest'})};
   value.textContent=counts?String(counts[key]):'—';caption.textContent=label;card.append(value,caption);metrics.append(card);
  }
- host.querySelector('[data-work-note]').textContent=!activeUser?'سجّل الدخول لعرض أعمالك.':guidanceLoadedUser!==activeUser?'عرض جزئي للأعمال المتاحة؛ لم يكتمل تحميل فهرس السجلات.':'الأعداد من الأصول المتاحة دون تكرار نسخها. الحالة كما وردت من المصدر؛ لا تعني اعتماد العمل أو اكتمال جميع المصادر. التأخر غير مستنتج من تاريخ الإنشاء.';
+ host.querySelector('[data-work-note]').textContent=!activeUser?'سجّل الدخول لعرض أعمالك.':guidanceLoadedUser!==activeUser?'عرض جزئي للأعمال المتاحة؛ لم يكتمل تحميل فهرس السجلات.':'اضغط على أي بطاقة لعرض سجلاتها وفتح الأصل. الأعداد بحسب الحالة المسجلة؛ لا تعني اكتمال العمل أو اكتمال جميع المصادر. التأخر غير مستنتج من تاريخ الإنشاء.';
+ docsWorkRenderDetails();
 }
+/* WORK_CENTER_DRILLDOWN_END */
 function docsReviewCounts(){
  const unique=new Map();
  for(const r of migratedA4Records)if(!unique.has(r.source_record_id))unique.set(r.source_record_id,r);
@@ -4277,13 +4349,13 @@ for(const [label,description,target,view] of [
  cards.append(btn)
 }
 const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
-workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
+workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><section id="docsWorkDetails" data-work-details class="docs-work-details" hidden aria-label="الأعمال حسب الحالة"></section><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
 workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
 workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards);
 quickHeading.before(workCenter);
 const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
 docsRenderWorkCenter([]);
-document.addEventListener('athat-docs-logout',()=>{docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
+document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
 if(activeUser)refreshModernHome().catch(()=>{});
 // Recalculate cross-section totals after successfully committed restoration or device import.
 let docsRefreshRecoveredBusy=false,docsRefreshRecoveredAgain=false;
