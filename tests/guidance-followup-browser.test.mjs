@@ -20,6 +20,7 @@ test('followup browser workflow persists draft, requires outcome, approves and r
  try{
   browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const page=await browser.newPage({viewport:{width:390,height:844}});
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
   page.on('dialog',dialog=>dialog.accept());
   await page.addInitScript(id=>localStorage.setItem('athat-docs-local-write-consent-v1-'+id,'yes'),uid);
   await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'load'});
@@ -28,6 +29,7 @@ test('followup browser workflow persists draft, requires outcome, approves and r
   await root.locator('select').selectOption('followup:attendance:synthetic-1');
   await root.getByRole('button',{name:'فتح خطة متابعة السجل'}).click();
   const dialog=page.locator('#docsFollowupDialog'),field=k=>dialog.locator('[data-followup-field="'+k+'"]');
+  try{await field('action').waitFor({timeout:10000})}catch(e){throw Error('Followup opening failed: '+JSON.stringify({errors,dialog:await dialog.count()?await dialog.innerText():null,center:await root.innerText(),toast:await page.locator('#toast').textContent()}),{cause:e})}
   await field('action').fill('لقاء ومتابعة');
   await field('goal').fill('خفض الغياب');
   await field('due').fill('1448/06/15');

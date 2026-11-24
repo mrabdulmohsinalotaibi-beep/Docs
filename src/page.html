@@ -1972,25 +1972,28 @@ function docsCommitFollowup(database,entry,expected){
 let docsFollowupCenterToken=0;
 async function docsRenderFollowupCenter(){
  const root=$('docsFollowupCenter');if(!root)return;
- const token=++docsFollowupCenterToken,owner=activeUser,ownerDb=db,selectedSource=root.querySelector('select')?.value||'';root.replaceChildren();
- if(!owner||!ownerDb)return;
- const title=document.createElement('h3');title.textContent='المتابعة التربوية';root.append(title);
- const note=document.createElement('p');note.className='muted';note.textContent='خطط متابعة محلية مستقلة عن حالة السجل الأصلي، ويُحدد التأخر من موعد المتابعة الهجري.';root.append(note);
+ const token=++docsFollowupCenterToken,owner=activeUser,ownerDb=db;
+ if(!owner||!ownerDb){root.replaceChildren();delete root.dataset.renderKey;return}
  try{
   const rows=await docsFollowupRows(owner,ownerDb);if(token!==docsFollowupCenterToken||owner!==activeUser||ownerDb!==db)return;
-  const counts=new Map(),today=hijriToday();
+  const counts=new Map(),today=hijriToday(),sources=new Map();
   for(const row of rows){const label=docsFollowupStatus(row.plan,today);counts.set(label,(counts.get(label)||0)+1)}
+  for(const row of docsAccountOriginals()){const source=docsFollowupSource(row);if(source&&!sources.has(source.id))sources.set(source.id,source)}
+  const renderKey=JSON.stringify([owner,today,[...sources.values()],rows.map(r=>r.plan)]);
+  if(root.dataset.renderKey===renderKey)return;
+  const selectedSource=root.querySelector('select')?.value||'';
+  root.replaceChildren();root.dataset.renderKey=renderKey;
+  const title=document.createElement('h3');title.textContent='المتابعة التربوية';root.append(title);
+  const note=document.createElement('p');note.className='muted';note.textContent='خطط متابعة محلية مستقلة عن حالة السجل الأصلي، ويُحدد التأخر من موعد المتابعة الهجري.';root.append(note);
   const stats=document.createElement('p');stats.textContent=['مسودة','قيد التنفيذ','متأخرة','معتمدة'].map(k=>k+': '+(counts.get(k)||0)).join(' · ');root.append(stats);
   const selector=document.createElement('select');selector.setAttribute('aria-label','السجل الأصلي للمتابعة');selector.add(new Option('اختر سجلًا لبدء المتابعة',''));
-  const sources=new Map();
-  for(const row of docsAccountOriginals()){const source=docsFollowupSource(row);if(source&&!sources.has(source.id))sources.set(source.id,source)}
   for(const source of sources.values())selector.add(new Option(source.title,source.id));
-  const add=document.createElement('button');add.type='button';add.className='btn';add.textContent='فتح خطة متابعة السجل';if(sources.has(selectedSource))selector.value=selectedSource;add.disabled=!sources.has(selector.value);selector.onchange=()=>add.disabled=!sources.has(selector.value);add.onclick=()=>{const source=sources.get(selector.value);if(source)docsOpenFollowup(source)};
+  const add=document.createElement('button');add.type='button';add.className='btn';add.textContent='فتح خطة متابعة السجل';if(sources.has(selectedSource))selector.value=selectedSource;add.disabled=!sources.has(selector.value);selector.onchange=()=>add.disabled=!sources.has(selector.value);add.onclick=()=>{const source=sources.get(selector.value);if(source)docsOpenFollowup(source).catch(e=>say('تعذر فتح المتابعة: '+e.message))};
   const actions=document.createElement('div');actions.className='row';actions.append(selector,add);root.append(actions);
   for(const row of rows.sort((a,b)=>String(a.plan.due).localeCompare(String(b.plan.due)))){
-   const btn=document.createElement('button');btn.type='button';btn.className='docs-guidance-row';btn.textContent=row.plan.title+' · '+docsFollowupStatus(row.plan,today)+' · '+row.plan.due+' هـ';btn.onclick=()=>docsOpenFollowup(row.plan);root.append(btn);
+   const btn=document.createElement('button');btn.type='button';btn.className='docs-guidance-row';btn.textContent=row.plan.title+' · '+docsFollowupStatus(row.plan,today)+' · '+row.plan.due+' هـ';btn.onclick=()=>docsOpenFollowup(row.plan).catch(e=>say('تعذر فتح المتابعة: '+e.message));root.append(btn);
   }
- }catch(e){if(token===docsFollowupCenterToken&&owner===activeUser)note.textContent='تعذر قراءة المتابعات المحلية: '+e.message}
+ }catch(e){if(token===docsFollowupCenterToken&&owner===activeUser){root.textContent='تعذر قراءة المتابعات المحلية: '+e.message;delete root.dataset.renderKey}}
 }
 async function docsOpenFollowup(source){
  if(!activeUser||!db||!source?.id||source.id!==docsFollowupKey(source.type,source.sourceId))return;
@@ -2002,8 +2005,8 @@ async function docsOpenFollowup(source){
  q('[data-source]').textContent=source.title+(source.studentName?' · '+source.studentName:'');
  close.onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove(),{once:true});
  const current=()=>dialog.open&&owner===activeUser&&ownerDb===db;
- dialog.showModal();
  try{
+  dialog.showModal();
   const entry=await docsCachedItem(source.id);if(!current())return;
   let stored=entry?.kind==='local-followup'?entry.plan:null;
   if(entry&&!stored)throw Error('معرّف المتابعة مستخدم في سجل آخر.');
@@ -2037,7 +2040,7 @@ async function docsOpenFollowup(source){
   save.onclick=()=>commit(false);approve.onclick=()=>commit(true);
   print.onclick=()=>{if(!current()||stored?.status!=='approved')return;const labels=[['السجل المرتبط',stored.title],['اسم الطالب',stored.studentName],['الإجراء',stored.action],['الهدف',stored.goal],['موعد المتابعة',stored.due],['المؤشر',stored.metric],['القياس القبلي',stored.before],['القياس البعدي',stored.after],['التغير في القياس',stored.change],['نتيجة المتابعة',stored.result],['حالة المتابعة','معتمدة']];printOriginalA4Docs([],[{id:stored.id,title:'تقرير متابعة تربوية',showEmptyFields:false,organization:{country:'المملكة العربية السعودية',authority:'وزارة التعليم',department:a4Profile.department,school:a4Profile.school},reference:{hijriDate:stored.approvedHijri},fields:labels.map(([label,value],i)=>({id:'followup-'+i,label,value,kind:'paragraph'})),attachments:[],signers:[{role:'الموجّه الطلابي',name:a4Profile.counselor}],site:{logoUrl:'/icon.png',url:location.origin}}])};
   update();
- }catch(e){if(current())notice.textContent='تعذر فتح المتابعة: '+e.message}
+ }catch(e){if(current())notice.textContent='تعذر فتح المتابعة: '+e.message;else if(owner===activeUser&&ownerDb===db){dialog.remove();say('تعذر فتح المتابعة: '+e.message)}}
 }
 async function docsRenderStudentFollowups(key){
  const owner=activeUser,ownerDb=db,detail=$('student360Detail');if(!detail)return;
@@ -4191,7 +4194,7 @@ workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,
 quickHeading.before(workCenter);
 const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
 docsRenderWorkCenter([]);
-document.addEventListener('athat-docs-logout',()=>{docsFollowupCenterToken++;followupCenter.replaceChildren();$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
+document.addEventListener('athat-docs-logout',()=>{docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
 if(activeUser)refreshModernHome().catch(()=>{});
 // Recalculate cross-section totals after successfully committed restoration or device import.
 let docsRefreshRecoveredBusy=false,docsRefreshRecoveredAgain=false;
