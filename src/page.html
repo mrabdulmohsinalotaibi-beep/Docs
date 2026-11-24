@@ -3266,21 +3266,29 @@ $('reloadA4Library').onclick=()=>loadMigratedA4().catch(e=>$('migratedA4LibraryS
 
 // Offline-aware record loader must be in the same scope as student and guidance viewers.
 async function docsOfflineFetch(url){
- const u=new URL(url,location.origin);let key='',kind='';
+ const u=new URL(url,location.origin),owner=activeUser,ownerDb=db;let key='',kind='';
+ if(!owner||!ownerDb)throw Error('يتطلب تسجيل الدخول وفتح التخزين المحلي');
+ const sameAccount=()=>activeUser===owner&&db===ownerDb;
  if(u.pathname==='/api/students/a4'){key='index:a4';kind='index'}
- else if(u.pathname==='/api/guidance/records'){key='index:guidance';kind='index'}
+ else if(u.pathname==='/api/guidance/records'){const student=u.searchParams.get('student');key=student?'index:guidance:student:'+student:'index:guidance';kind='index'}
+ else if(u.pathname==='/api/students/360'){key='index:student360:'+u.searchParams.get('key');kind='index'}
  else if(u.pathname==='/api/students/a4-record')key='a4:'+u.searchParams.get('id');
  else if(u.pathname==='/api/guidance/record')key='guidance:'+u.searchParams.get('type')+':'+u.searchParams.get('id');
  else throw Error('مصدر غير مدعوم');
  try{
  const r=await fetch(url,{credentials:'same-origin',cache:'no-store'}),data=await r.json();
  if(!r.ok||!data.ok)throw Error(data.message||data.code||'تعذر قراءة السجل');
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  if(db&&activeUser){try{await dsStoreSnapshot(kind?{id:key,kind,records:data.records||[],downloadedAt:new Date().toISOString()}:{id:key,kind:u.pathname.includes('a4')?'a4':'guidance',record:data.record,downloadedAt:new Date().toISOString()})}catch(e){console.warn('offline_snapshot_failed',e?.name)}}
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  return {...data,offline:false};
  }catch(e){
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  const local=await docsCachedItem(key).catch(()=>null);
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  if(local){if(kind)return {ok:true,records:local.records||[],offline:true};if(local.record)return {ok:true,record:local.record,offline:true}}
  const mirror=typeof docsMirrorCachedResponse==='function'?await docsMirrorCachedResponse(u.pathname+u.search).catch(()=>null):null;
+ if(!sameAccount())throw Error('تغير الحساب أثناء قراءة السجلات');
  if(mirror)return {...mirror,offline:true};
  throw Error('لا توجد نسخة داخل الجهاز؛ انقل بياناتك من الإعدادات أثناء الاتصال. '+(e.message||''));
  }
@@ -3520,6 +3528,8 @@ $('s360A4CopyToDocs').onclick=async()=>{
 };
 
 async function openStudent360(key){
+ const owner=activeUser,ownerDb=db;
+ const isCurrent=()=>activeUser===owner&&db===ownerDb&&studentActive===key;
  const student=studentIndex.find(s=>s.key===key);if(!student)return;studentActive=key;
  $('student360Detail').hidden=false;$('studentRoster').hidden=true;activateStudentProfileTab('basics');$('student360Title').textContent=student.name+' · ملف الطالب 360°';
  const basics=$('student360Basics');basics.replaceChildren();
@@ -3533,8 +3543,8 @@ async function openStudent360(key){
  renderStudentA4(key);loadGuidanceStudentRecords(key).catch(()=>{});$('student360LocalDocs').hidden=true;loadStudentCareDetails(key);
  const metrics=$('student360Metrics');metrics.replaceChildren();const info360=studentInsights[key]||{};const metricDefs=[['غياب',info360.absence||0],['تأخر',info360.late||0],['سلوكيات',info360.behavior||0],['سلوك إيجابي',info360.positive||0],['حالات',info360.cases||0],['جلسات',info360.interviews||0],['إحالات',info360.referrals||0]];for(const [caption,value] of metricDefs){const item=document.createElement('div'),small=document.createElement('small'),bold=document.createElement('b');item.className='s360-kpi';small.textContent=caption;bold.textContent=value;item.append(bold,small);metrics.append(item)}
  gradeRenderPlansForStudent(key).catch(()=>{});const timeline=$('student360Timeline');timeline.textContent='جارٍ تحميل السجلات المساندة…';
- try{const r=await fetch('/api/students/360?key='+encodeURIComponent(key),{credentials:'same-origin',cache:'no-store'}),result=await r.json();if(!r.ok||!result.ok)throw Error(result.message||'تعذر تحميل أعمال الذات');if(studentActive!==key)return;timeline.replaceChildren();
-  const h=document.createElement('h4');h.textContent='السجلات القديمة المساندة ('+(result.records||[]).length+') · السجلات الجديدة المهيكلة تظهر في قسم مستقل';timeline.append(h);
+ try{const result=await docsOfflineFetch('/api/students/360?key='+encodeURIComponent(key));if(!isCurrent())return;timeline.replaceChildren();
+  const h=document.createElement('h4');h.textContent='السجلات القديمة المساندة ('+(result.records||[]).length+') · السجلات الجديدة المهيكلة تظهر في قسم مستقل'+(result.offline?' · نسخة الجهاز؛ قد تحتاج تحديثًا':'');timeline.append(h);
   const titles={attendance:'المواظبة',behavior:'السلوك',interviews:'المقابلات والجلسات',counseling_cases:'الحالات والمتابعة',referrals:'الإحالات',free_documents:'المستندات',reports:'التقارير',comprehensive_records:'السجلات الشاملة'};
   const careOriginals=new Set(studentCareIndex[key]?.source_ids||[]);
   const groups=new Map();for(const item of result.records||[]){
@@ -3555,7 +3565,7 @@ async function openStudent360(key){
     }
   }
   if(!(result.records||[]).length){const p=document.createElement('p');p.className='muted';p.textContent='السجلات المهيكلة المنقولة من الملف تظهر في القسم المخصص داخل ملف الطالب. لا نعتمد تطابق الأسماء وحده.';timeline.append(p)}
- }catch(e){timeline.textContent='تعذر تحميل الأعمال المرتبطة: '+e.message}
+ }catch(e){if(isCurrent())timeline.textContent='تعذر تحميل الأعمال المرتبطة: '+e.message}
 }
 let docsStudentsNav=null,docsStudentPanel=null,docsMain=null,workspaceNav=null,workspacePages={},activeWorkspace='home',workspaceGoto=()=>{};
 let adminPanel=null,refreshAdminUsers=async()=>{};
@@ -3841,18 +3851,20 @@ async function openGuidanceRecord(type,id){
  }catch(e){document.getElementById('docsGuidanceModalTitle').textContent='تعذر فتح السجل';document.getElementById('docsGuidanceNotice').textContent=e.message}
 }
 async function loadGuidanceStudentRecords(key){
+ const owner=activeUser,ownerDb=db;
+ const isCurrent=()=>activeUser===owner&&db===ownerDb&&studentActive===key;
  const detail=document.getElementById('student360Detail');if(!detail)return;
  let block=document.getElementById('docsGuidanceStudentSection');
  if(!block){block=document.createElement('section');block.id='docsGuidanceStudentSection';block.className='panel';const title=document.createElement('h3');title.textContent='وقائع المواظبة والجلسات والحالات والإحالات';const body=document.createElement('div');body.id='docsGuidanceStudentList';block.append(title,body);detail.append(block)}
  const body=document.getElementById('docsGuidanceStudentList');body.textContent='جارٍ تحميل السجلات المرتبطة…';
  try{
-  const d=await guidanceFetch('/api/guidance/records?student='+encodeURIComponent(key));
-  if(studentActive!==key)return;
+  const d=await docsOfflineFetch('/api/guidance/records?student='+encodeURIComponent(key));
+  if(!isCurrent())return;
   body.replaceChildren();
-  if(!d.records?.length){body.textContent='لا توجد وقائع مرتبطة بمعرّف هذا الطالب في السجلات المنقولة.';return}
-  const summary=document.createElement('p');summary.className='muted';summary.textContent='عدد الوقائع والسجلات: '+d.records.length+' · يعرض الغياب كواقعة، وليس مستند A4 مستقل.';body.append(summary);
+  if(!d.records?.length){body.textContent=d.offline?'لا توجد وقائع في النسخة المحلية لهذا الطالب؛ حدّث السجلات عند الاتصال.':'لا توجد وقائع مرتبطة بمعرّف هذا الطالب في السجلات المنقولة.';return}
+  const summary=document.createElement('p');summary.className='muted';summary.textContent='عدد الوقائع والسجلات: '+d.records.length+' · يعرض الغياب كواقعة، وليس مستند A4 مستقل.'+(d.offline?' · نسخة الجهاز؛ قد تحتاج تحديثًا':'');body.append(summary);
   for(const r of d.records){const b=document.createElement('button');b.type='button';b.className='docs-guidance-row';const strong=document.createElement('strong');strong.textContent=r.title;const small=document.createElement('small');small.textContent=[guidanceLabel(r),r.date_hijri?r.date_hijri+' هـ':'',r.status].filter(Boolean).join(' · ');b.append(strong,small);b.onclick=()=>openGuidanceRecord(r.source_table,r.source_record_id);body.append(b)}
- }catch(e){body.textContent='تعذر تحميل السجلات: '+e.message}
+ }catch(e){if(isCurrent())body.textContent='تعذر تحميل السجلات: '+e.message}
 }
 
 drawTemplates();
@@ -4037,7 +4049,8 @@ for(const [label,description,target,view] of [
 const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
 workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
 workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
-workspacePages.home.append(originalHero,premiumMetrics,workCenter,quickHeading,homeActions,latestHeading,cards);
+workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards);
+quickHeading.before(workCenter);
 docsRenderWorkCenter([]);
 document.addEventListener('athat-docs-logout',()=>{workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
 if(activeUser)refreshModernHome().catch(()=>{});
