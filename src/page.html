@@ -1916,6 +1916,31 @@ function docsAccountOriginals(){
  }
  return [...originals.values()];
 }
+// Status comes from the original account record; absence of a status is never a finding of incomplete work.
+function docsWorkCenterCounts(rows){
+ const counts={required:0,active:0,done:0,overdue:0,archived:0,unknown:0};
+ for(const row of rows){
+  const status=String(row.status??'').trim().replace(/[\u064B-\u065F\u0670]/g,'').replace(/\s+/g,' ').toLowerCase();
+  const key=/^(مسودة|مطلوب|مطلوبة|قيد الانتظار|pending|draft|required)$/.test(status)?'required':
+   /^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|active|in progress|in_progress)$/.test(status)?'active':
+   /^(مكتمل|مكتملة|تم التنفيذ|done|completed)$/.test(status)?'done':
+   /^(متأخر|متأخرة|overdue)$/.test(status)?'overdue':
+   /^(مؤرشف|مؤرشفة|archived)$/.test(status)?'archived':'unknown';
+  counts[key]++;
+ }
+ return counts;
+}
+function docsRenderWorkCenter(rows){
+ const host=$('docsWorkCenter');if(!host)return;
+ const counts=activeUser?docsWorkCenterCounts(rows):null;
+ const labels={required:'مطلوبة أو مسودات',active:'قيد التنفيذ',done:'موسومة مكتملة',overdue:'موسومة متأخرة',archived:'مؤرشفة',unknown:'حالة غير مصنفة'};
+ const metrics=host.querySelector('[data-work-metrics]');metrics.replaceChildren();
+ for(const [key,label] of Object.entries(labels)){
+  const card=document.createElement('article'),value=document.createElement('strong'),caption=document.createElement('small');
+  value.textContent=counts?String(counts[key]):'—';caption.textContent=label;card.append(value,caption);metrics.append(card);
+ }
+ host.querySelector('[data-work-note]').textContent=!activeUser?'سجّل الدخول لعرض أعمالك.':guidanceLoadedUser!==activeUser?'عرض جزئي للأعمال المتاحة؛ لم يكتمل تحميل فهرس السجلات.':'الأعداد من الأصول المتاحة دون تكرار نسخها. الحالة كما وردت من المصدر؛ لا تعني اعتماد العمل أو اكتمال جميع المصادر. التأخر غير مستنتج من تاريخ الإنشاء.';
+}
 function docsReviewCounts(){
  const unique=new Map();
  for(const r of migratedA4Records)if(!unique.has(r.source_record_id))unique.set(r.source_record_id,r);
@@ -2268,6 +2293,7 @@ function draw(){
  const virtual=imports.filter(x=>!countSources.has(x.source_record_id));
  // This renderer runs outside the reports workspace scope: never call reportsRows() here.
  const allOriginals=docsAccountOriginals();
+ docsRenderWorkCenter(allOriginals);
  $('countAll').textContent=guidanceLoadedUser===activeUser?String(allOriginals.length):'—';
  $('countDone').textContent=guidanceLoadedUser===activeUser?String(allOriginals.filter(d=>/^مكتمل(?:ة)?$/.test(String(d.status||'').trim())).length):'—';
  $('countArchive').textContent=String(new Set(docs.filter(d=>d.status==='مؤرشف').map(d=>docsCanonicalKey(d))).size);
@@ -3840,7 +3866,7 @@ docsMain.prepend(docsStudentPanel);docsMain.prepend(docsStudentsNav);
 workspaceNav=document.createElement('nav');workspaceNav.id='workspaceNav';workspaceNav.className='workspace-nav';workspaceNav.setAttribute('aria-label','أقسام مستندات الذات');
 workspacePages={};
 for(const id of ['home','documents','students','reports','messages','settings','admin']){
- const section=document.createElement('section');section.id='workspace-'+id;section.className='workspace-page workspace-'+id;section.hidden=id!=='home';workspacePages[id]=section;
+ const section=document.createElement('section');section.id='workspace-'+id;section.className='workspace-page workspace-'+id;section.hidden=id!=='home';workspacePages[id]=section;docsMain.append(section);
 }
 const originalHero=docsMain.querySelector('.hero'),originalMetrics=docsMain.querySelector('.metrics'),originalTemplates=$('templatesPanel'),originalWorks=$('worksPanel'),originalArchive=$('migratedA4Library'),originalProfile=$('accountSchoolPanel'),originalEditor=$('editor'),originalPrograms=$('regionalProgramPanel'),originalLocalPlan=$('localPlanPanel'),originalSample=$('sampleMigrationPanel');
 const operations=document.createElement('section');operations.className='panel';const opsTitle=document.createElement('h2');opsTitle.textContent='النسخ الاحتياطي وإدارة البيانات';
@@ -4008,7 +4034,12 @@ for(const [label,description,target,view] of [
  btn.onclick=()=>{workspaceGoto(target);if(view)openDocsView(view);if(view==='portfolio')activateDocsTab('portfolio');if(target==='students')refreshStudentDirectory().catch(()=>{})};
  cards.append(btn)
 }
-workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards);
+const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
+workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
+workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
+workspacePages.home.append(originalHero,premiumMetrics,workCenter,quickHeading,homeActions,latestHeading,cards);
+docsRenderWorkCenter([]);
+document.addEventListener('athat-docs-logout',()=>{workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
 if(activeUser)refreshModernHome().catch(()=>{});
 // Recalculate cross-section totals after successfully committed restoration or device import.
 let docsRefreshRecoveredBusy=false,docsRefreshRecoveredAgain=false;
@@ -5209,6 +5240,7 @@ dsDesignStyle.textContent=`
 @media(max-width:560px){#docsSettingsHub .ds-overview-actions{grid-template-columns:1fr}#docsSettingsHub .ds-health-row{width:100%}#docsSettingsHub .ds-health{flex:1;min-width:120px}#docsSettingsHub .ds-welcome{padding:17px 14px}#docsSettingsHub .ds-card{padding:15px 13px}#docsSettingsHub .ds-nav-icon{width:22px;height:22px}#docsSettingsHub .ds-nav-btn{font-size:12px}#docsSettingsHub .ds-quick button{flex:1;min-width:130px}}
 `;
 settingsHub.append(dsDesignStyle);
+workspacePages.settings.append(settingsHub);
 const dsModern=document.createElement('div');
 dsModern.className='ds-modern';
 dsModern.innerHTML=
@@ -5254,8 +5286,7 @@ function dsOpenTab(key){
 }
 settingsHub.querySelectorAll('.ds-nav-btn').forEach(btn=>btn.addEventListener('click',()=>dsOpenTab(btn.dataset.dsTab)));
 settingsHub.querySelectorAll('[data-ds-open]').forEach(btn=>btn.addEventListener('click',()=>dsOpenTab(btn.dataset.dsOpen)));
-dsGet('dsAccount').onclick=()=>{dsOpenTab('account');originalProfile.scrollIntoView({behavior:'smooth',block:'start'})};
-dsGet('dsDanger').onclick=()=>{dsOpenTab('privacy');settingsClear.scrollIntoView({behavior:'smooth',block:'center'})};
+// The old shortcuts were removed above; the connected modern tabs already own navigation.
 function dsSetHealth(name,detail){
  const card=settingsHub.querySelector('#dsState'+name),value=settingsHub.querySelector('#dsState'+name+'Text');
  if(!card||!value)return;
