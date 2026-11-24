@@ -2074,16 +2074,20 @@ const docsWorkLabels={required:'مطلوبة أو مسودات',active:'قيد �
 let docsWorkSelected='';
 let docsWorkSourceRows=[];
 function docsWorkStatus(row){
- const status=String(row.status??'').trim().replace(/[\u064B-\u065F\u0670]/g,'').replace(/\s+/g,' ').toLowerCase();
- return /^(مسودة|مطلوب|مطلوبة|قيد الانتظار|pending|draft|required)$/.test(status)?'required':
- /^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|active|in progress|in_progress)$/.test(status)?'active':
- /^(مكتمل|مكتملة|تم التنفيذ|done|completed)$/.test(status)?'done':
- /^(متأخر|متأخرة|overdue)$/.test(status)?'overdue':
- /^(مؤرشف|مؤرشفة|archived)$/.test(status)?'archived':'unknown';
+ const counts=docsWorkCenterCounts([row]);
+ return Object.keys(counts).find(key=>counts[key]===1)||'unknown';
 }
 function docsWorkCenterCounts(rows){
  const counts={required:0,active:0,done:0,overdue:0,archived:0,unknown:0};
- for(const row of rows)counts[docsWorkStatus(row)]++;
+ for(const row of rows){
+  const status=String(row.status??'').trim().replace(/[\u064B-\u065F\u0670]/g,'').replace(/\s+/g,' ').toLowerCase();
+  const key=/^(مسودة|مطلوب|مطلوبة|قيد الانتظار|pending|draft|required)$/.test(status)?'required':
+   /^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|active|in progress|in_progress)$/.test(status)?'active':
+   /^(مكتمل|مكتملة|تم التنفيذ|done|completed)$/.test(status)?'done':
+   /^(متأخر|متأخرة|overdue)$/.test(status)?'overdue':
+   /^(مؤرشف|مؤرشفة|archived)$/.test(status)?'archived':'unknown';
+  counts[key]++;
+ }
  return counts;
 }
 function docsWorkTitle(row){
@@ -2157,7 +2161,7 @@ function docsRenderWorkCenter(rows){
   card.onclick=()=>{docsWorkSelected=docsWorkSelected===key?'':key;docsWorkPageLimit=50;docsWorkRenderWorkSelection();docsWorkRenderDetails();if(docsWorkSelected)host.querySelector('[data-work-details]')?.scrollIntoView({behavior:'smooth',block:'nearest'})};
   value.textContent=counts?String(counts[key]):'—';caption.textContent=label;card.append(value,caption);metrics.append(card);
  }
- host.querySelector('[data-work-note]').textContent=!activeUser?'سجّل الدخول لعرض أعمالك.':guidanceLoadedUser!==activeUser?'عرض جزئي للأعمال المتاحة؛ لم يكتمل تحميل فهرس السجلات.':'اضغط على أي بطاقة لعرض سجلاتها وفتح الأصل. الأعداد بحسب الحالة المسجلة؛ لا تعني اكتمال العمل أو اكتمال جميع المصادر.';
+ host.querySelector('[data-work-note]').textContent=!activeUser?'سجّل الدخول لعرض أعمالك.':guidanceLoadedUser!==activeUser?'عرض جزئي للأعمال المتاحة؛ لم يكتمل تحميل فهرس السجلات.':'اضغط على أي بطاقة لعرض سجلاتها وفتح الأصل. الأعداد بحسب الحالة المسجلة؛ لا تعني اكتمال العمل أو اكتمال جميع المصادر. التأخر غير مستنتج من تاريخ الإنشاء.';
  docsWorkRenderDetails();
 }
 /* WORK_CENTER_DRILLDOWN_END */
