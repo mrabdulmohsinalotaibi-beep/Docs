@@ -3716,8 +3716,10 @@ async function docsAssistRender(key){
  for(const item of docsAssistCatalog)selected.add(new Option(item.name,item.id));
  const goal=document.createElement('textarea');goal.placeholder='الهدف التربوي الذي اعتمدته بعد دراسة الحالة';goal.maxLength=1500;goal.rows=2;
  const action=document.createElement('button');action.type='button';action.className='btn primary';action.textContent='حفظ مسودة محلية';
+ const gradesLink=document.createElement('button');gradesLink.type='button';gradesLink.className='btn';gradesLink.textContent='عرض تحليل النتائج والخطط العلاجية المرتبطة';
+ gradesLink.onclick=()=>{const button=$('student360Detail')?.querySelector(':scope > .row button:last-child');if(button&&button.textContent==='نتائج الطالب')button.click();else say('افتح تحليل النتائج من القائمة الرئيسية.')};
  const note=document.createElement('p');note.className='muted';note.textContent='لن تُنشأ أي مسودة تلقائيًا من مؤشرات الطالب. اختيار التدخل قرار الموجّه.';
- const form=document.createElement('div');form.className='docs-assistant-form';form.append(selected,goal,action,note);box.append(form);
+ const form=document.createElement('div');form.className='docs-assistant-form';form.append(selected,goal,action,gradesLink,note);box.append(form);
  const show=async()=>{
    if(!valid())return;
    history.replaceChildren();
@@ -3729,7 +3731,9 @@ async function docsAssistRender(key){
      const title=document.createElement('strong');title.textContent=item.name+' · مسودة غير معتمدة';
      const detail=document.createElement('p');detail.textContent='الهدف: '+(row.goal||'غير محدد')+' · التاريخ: '+row.hijriDate+' · مرجع الدليل: ص '+item.page;
      const steps=document.createElement('ol');for(const step of item.steps){const li=document.createElement('li');li.textContent=step;steps.append(li)}
-     card.append(title,detail,steps);history.append(card);
+     const track=document.createElement('button');track.type='button';track.className='btn';track.textContent='فتح المتابعة وقياس الأثر وطباعة A4';
+     track.onclick=()=>docsOpenFollowup({id:docsFollowupKey('educational_assistant',key+':'+item.id),type:'educational_assistant',sourceId:key+':'+item.id,title:'تدخل تربوي: '+item.name,studentKey:key,studentName:studentIndex.find(s=>s.key===key)?.name||''}).catch(e=>{if(valid())say('تعذر فتح المتابعة: '+e.message)});
+     card.append(title,detail,steps,track);history.append(card);
    }
    if(!history.children.length)history.textContent='لا توجد مسودات تدخل لهذا الطالب على هذا الجهاز.';
  };
