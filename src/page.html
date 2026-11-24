@@ -2031,7 +2031,7 @@ async function docsOpenFollowup(source){
    else if(tag==='textarea'){el.rows=3;el.maxLength=2000}
    else if(key==='before'||key==='after'){el.type='number';el.step='any'}
    else el.maxLength=160;
-   el.value=stored?.[key]??(key==='status'?'draft':'');if(key==='status'&&stored?.status==='approved')el.value='active';
+   el.value=stored?.[key]??(key==='goal'?String(source.suggestedGoal||'').slice(0,2000):key==='action'?String(source.suggestedAction||'').slice(0,2000):key==='status'?'draft':'');if(key==='status'&&stored?.status==='approved')el.value='active';
    el.dataset.followupField=key;inputs[key]=el;wrap.append(el);form.append(wrap);
   }
   const update=()=>{const locked=stored?.status==='approved';for(const el of Object.values(inputs))el.disabled=locked;save.disabled=locked;approve.disabled=locked;print.disabled=!locked;notice.textContent=locked?'متابعة معتمدة محفوظة محليًا؛ الطباعة من النسخة المحفوظة فقط.':stored?'متابعة محفوظة محليًا. لا يعتبر حفظ المسودة اعتمادًا.':'متابعة جديدة؛ تحفظ على هذا الجهاز فقط.'};
@@ -2058,8 +2058,8 @@ async function docsOpenFollowup(source){
 }
 async function docsRenderStudentFollowups(key){
  const owner=activeUser,ownerDb=db,detail=$('student360Detail');if(!detail)return;
- let root=$('docsStudentFollowups');if(!root){root=document.createElement('section');root.id='docsStudentFollowups';root.className='panel';detail.append(root)}
- root.replaceChildren();
+ let root=$('docsStudentFollowups');if(!root){root=document.createElement('section');root.id='docsStudentFollowups';root.className='panel';root.dataset.s360section='followup';detail.append(root)}
+ root.hidden=!document.querySelector('#studentProfileTabs button[data-s360page="followup"]')?.getAttribute('aria-current')?.includes('page');root.replaceChildren();
  try{const rows=await docsFollowupRows(owner,ownerDb);if(owner!==activeUser||ownerDb!==db||studentActive!==key)return;
   const title=document.createElement('h3');title.textContent='المتابعات التربوية المحلية';root.append(title);
   const linked=rows.filter(r=>r.plan.studentKey===key);
@@ -3717,7 +3717,7 @@ async function docsAssistRender(key){
  const goal=document.createElement('textarea');goal.placeholder='الهدف التربوي الذي اعتمدته بعد دراسة الحالة';goal.maxLength=1500;goal.rows=2;
  const action=document.createElement('button');action.type='button';action.className='btn primary';action.textContent='حفظ مسودة محلية';
  const gradesLink=document.createElement('button');gradesLink.type='button';gradesLink.className='btn';gradesLink.textContent='عرض تحليل النتائج والخطط العلاجية المرتبطة';
- gradesLink.onclick=()=>{const button=$('student360Detail')?.querySelector(':scope > .row button:last-child');if(button&&button.textContent==='نتائج الطالب')button.click();else say('افتح تحليل النتائج من القائمة الرئيسية.')};
+ gradesLink.onclick=()=>{const button=$('docsStudentGradeResultsLink');if(button?.id==='docsStudentGradeResultsLink')button.click();else $('docsStudentGradeResultsLink')?.click()};
  const note=document.createElement('p');note.className='muted';note.textContent='لن تُنشأ أي مسودة تلقائيًا من مؤشرات الطالب. اختيار التدخل قرار الموجّه.';
  const form=document.createElement('div');form.className='docs-assistant-form';form.append(selected,goal,action,gradesLink,note);box.append(form);
  const show=async()=>{
@@ -3732,7 +3732,7 @@ async function docsAssistRender(key){
      const detail=document.createElement('p');detail.textContent='الهدف: '+(row.goal||'غير محدد')+' · التاريخ: '+row.hijriDate+' · مرجع الدليل: ص '+item.page;
      const steps=document.createElement('ol');for(const step of item.steps){const li=document.createElement('li');li.textContent=step;steps.append(li)}
      const track=document.createElement('button');track.type='button';track.className='btn';track.textContent='فتح المتابعة وقياس الأثر وطباعة A4';
-     track.onclick=()=>docsOpenFollowup({id:docsFollowupKey('educational_assistant',key+':'+item.id),type:'educational_assistant',sourceId:key+':'+item.id,title:'تدخل تربوي: '+item.name,studentKey:key,studentName:studentIndex.find(s=>s.key===key)?.name||''}).catch(e=>{if(valid())say('تعذر فتح المتابعة: '+e.message)});
+     track.onclick=()=>docsOpenFollowup({id:docsFollowupKey('educational_assistant',key+':'+item.id),type:'educational_assistant',sourceId:key+':'+item.id,title:'تدخل تربوي: '+item.name,studentKey:key,studentName:studentIndex.find(s=>s.key===key)?.name||'',suggestedGoal:row.goal||'',suggestedAction:item.steps.join('؛ ')}).catch(e=>{if(valid())say('تعذر فتح المتابعة: '+e.message)});
      card.append(title,detail,steps,track);history.append(card);
    }
    if(!history.children.length)history.textContent='لا توجد مسودات تدخل لهذا الطالب على هذا الجهاز.';
@@ -5949,7 +5949,7 @@ panel.append(comparisonPanel);
 
 const navButton=document.createElement('button');navButton.type='button';navButton.dataset.workspace='grades';navButton.textContent='تحليل النتائج';navButton.onclick=()=>openPage();el('workspaceNav').insertBefore(navButton,el('workspaceNav').querySelector('[data-workspace="reports"]'));
 const quick=el('appMain').querySelector('.docs-quick-grid');if(quick){const q=document.createElement('button');q.type='button';q.innerHTML='<strong>تحليل نتائج الطلاب</strong><small>استيراد Excel واستخراج تقارير التحصيل</small>';q.onclick=()=>openPage();quick.append(q)}
-const studentRow=el('student360Detail')?.querySelector(':scope > .row');if(studentRow){const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='نتائج الطالب';b.onclick=()=>{state.focus=studentActive||'';openPage()};studentRow.append(b)}
+const studentRow=el('student360Detail')?.querySelector(':scope > .row');if(studentRow){const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='نتائج الطالب';b.id='docsStudentGradeResultsLink';b.onclick=()=>{state.focus=studentActive||'';openPage()};studentRow.append(b)}
 async function openStore(){
  if(!activeUser)throw Error('يلزم تسجيل الدخول إلى مستندات الذات');
  if(state.store&&state.loadedUser===activeUser)return state.store;
