@@ -5672,7 +5672,7 @@ panel.innerHTML=[
  '<label>حد أولوية المتابعة %<input id="gradeLow" type="number" min="1" max="99" value="60"></label><label>حد التفوق للفرز %<input id="gradeHigh" type="number" min="1" max="100" value="90"></label></div>',
  '<p class="muted">حدود المتابعة والتفوق مرشحات تحليلية قابلة للتعديل، وليست معايير نجاح أو رسوب رسمية.</p><div id="gradeMetrics" class="grade-metrics"></div>',
  '<h3>تحليل المواد</h3><div id="gradeSubjectRows" class="grade-bars"></div><h3>الطلاب الذين يحتاجون متابعة</h3><div id="gradeStudentRows" class="grade-table-wrap"></div>',
- '<section id="gradePlanEditor" class="panel" hidden><h3>متابعة علاجية لطالب</h3><p id="gradePlanStudent" class="muted"></p><div class="grade-input-grid"><label>الإجراء العلاجي<textarea id="gradePlanAction" rows="3" placeholder="التنسيق مع معلم المادة ودعم الطالب"></textarea></label><label>الهدف القابل للقياس<textarea id="gradePlanGoal" rows="3" placeholder="رفع التحصيل في المادة"></textarea></label><label>نتيجة المتابعة / ملاحظات<textarea id="gradePlanResult" rows="3" placeholder="نتيجة القياس اللاحق"></textarea></label><label>الحالة<select id="gradePlanStatus"><option value="draft">مسودة</option><option value="active">جارٍ التنفيذ</option><option value="done">مكتملة</option></select></label></div><div class="actions"><button id="gradePlanSave" type="button" class="primary">حفظ خطة المتابعة على الجهاز</button><button id="gradePlanClose" type="button">إغلاق</button></div><p id="gradePlanNotice" role="status" class="muted"></p></section><div class="grade-input-grid"><label>نوع التقرير<select id="gradeReportMode"><option value="summary">ملخص وتحليل المواد والمتابعة</option><option value="subjects">تحليل حسب المادة</option><option value="excellent">كشف المتفوقين</option><option value="low">كشف متدني التحصيل</option><option value="plan">خطة المتابعة العلاجية</option></select></label><label>خصوصية الأسماء<select id="gradeReportNames"><option value="named">بالأسماء (للاستخدام الداخلي)</option><option value="anonymous">بدون أسماء</option><option value="coded">برموز الطلاب</option></select></label></div><div class="actions"><button id="gradePrintBtn" type="button">طباعة تقرير A4 / حفظ PDF</button><button id="gradeCsvBtn" type="button">تصدير CSV</button><button id="gradeBackupBtn" type="button">نسخة JSON من النتائج</button><button id="gradeDeleteBtn" type="button">حذف الملف المحدد</button></div></section>',
+ '<section id="gradePlanEditor" class="panel" hidden><h3>متابعة علاجية لطالب</h3><p id="gradePlanStudent" class="muted"></p><div class="grade-input-grid"><label>الإجراء العلاجي<textarea id="gradePlanAction" rows="3" placeholder="التنسيق مع معلم المادة ودعم الطالب"></textarea></label><label>الهدف القابل للقياس<textarea id="gradePlanGoal" rows="3" placeholder="رفع التحصيل في المادة"></textarea></label><label>الدرجة البعدية (%)<input id="gradePlanPost" type="number" min="0" max="100" step="any" placeholder="اختياري"></label><label>نتيجة المتابعة / ملاحظات<textarea id="gradePlanResult" rows="3" placeholder="نتيجة القياس اللاحق"></textarea></label><label>الحالة<select id="gradePlanStatus"><option value="draft">مسودة</option><option value="active">جارٍ التنفيذ</option><option value="done">مكتملة</option></select></label></div><div class="actions"><button id="gradePlanSave" type="button" class="primary">حفظ خطة المتابعة على الجهاز</button><button id="gradePlanClose" type="button">إغلاق</button></div><p id="gradePlanNotice" role="status" class="muted"></p></section><div class="grade-input-grid"><label>نوع التقرير<select id="gradeReportMode"><option value="summary">ملخص وتحليل المواد والمتابعة</option><option value="subjects">تحليل حسب المادة</option><option value="excellent">كشف المتفوقين</option><option value="low">كشف متدني التحصيل</option><option value="plan">خطة المتابعة العلاجية</option></select></label><label>خصوصية الأسماء<select id="gradeReportNames"><option value="named">بالأسماء (للاستخدام الداخلي)</option><option value="anonymous">بدون أسماء</option><option value="coded">برموز الطلاب</option></select></label></div><div class="actions"><button id="gradePrintBtn" type="button">طباعة تقرير A4 / حفظ PDF</button><button id="gradeCsvBtn" type="button">تصدير CSV</button><button id="gradeBackupBtn" type="button">نسخة JSON من النتائج</button><button id="gradeDeleteBtn" type="button">حذف الملف المحدد</button></div></section>',
  '<section id="gradePrintable" class="grade-print-only" aria-label="تقرير تحصيل الطلاب"></section>'
 ].join('');
 workspacePages.grades=panel;el('appMain').append(panel);
@@ -5698,12 +5698,22 @@ async function openStore(){
  req.onerror=()=>reject(req.error||Error('تعذر فتح التخزين المحلي'))});
 }
 /* Locally retained intervention plans; no server upload. */
+function gradeImpact(baseline,post){
+ const parse=value=>value==null||String(value).trim()===''?null:Number(value);
+ const before=parse(baseline),after=parse(post);
+ if(before===null||after===null||!Number.isFinite(before)||!Number.isFinite(after)||before<0||before>100||after<0||after>100)return null;
+ return Math.round((after-before)*100)/100;
+}
+function gradePlanBelongs(plan,studentKey,match){
+ if(plan.studentKey)return plan.studentKey===studentKey;
+ return match({id:plan.studentNo||'',name:plan.name,grade:plan.grade,cls:plan.cls})?.key===studentKey;
+}
 function gradePlanStore(method,arg){
  return openStore().then(db=>new Promise((resolve,reject)=>{
   const tx=db.transaction('plans',method==='getAll'?'readonly':'readwrite');
   const store=tx.objectStore('plans');
   const req=method==='getAll'?store.getAll():store.put(arg);
-  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);tx.onerror=()=>reject(tx.error);
+  tx.oncomplete=()=>resolve(req.result);req.onerror=()=>reject(req.error);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('تعذر إتمام الحفظ'));
  }));
 }
 async function gradeRenderPlansForStudent(studentKey){
@@ -5712,14 +5722,14 @@ async function gradeRenderPlansForStudent(studentKey){
  const title=document.createElement('h4');title.textContent='خطط متابعة التحصيل الدراسي';holder.append(title);
  try{
   const student=(studentIndex||[]).find(s=>s.key===studentKey);if(!student)return;
-  const plans=(await gradePlanStore('getAll')).filter(plan=>plan.studentKey===studentKey||(!plan.studentKey&&norm(plan.name)===norm(student.name)&&norm(plan.grade)===norm(student.grade)&&norm(plan.cls)===norm(student.classroom)));
+  const plans=(await gradePlanStore('getAll')).filter(plan=>gradePlanBelongs(plan,studentKey,matchStudent));
   if(studentActive!==studentKey)return;
   if(!plans.length){const note=document.createElement('p');note.className='muted';note.textContent='لا توجد خطط متابعة محفوظة لهذا الطالب على الجهاز.';holder.append(note);return}
   const states={draft:'مسودة',active:'جارٍ التنفيذ',done:'مكتملة'};
   for(const plan of plans.sort((a,b)=>String(b.updated).localeCompare(String(a.updated)))){
    const card=document.createElement('article');card.className='s360-real-record';
    const h=document.createElement('h5');h.textContent=plan.subject+' · '+(plan.period||'نتائج الطلاب')+' · '+(states[plan.status]||'مسودة');card.append(h);
-   for(const [label,value] of [['الدرجة القبلية',plan.baseline+'%'],['الهدف',plan.goal],['الإجراء',plan.action],['نتيجة المتابعة',plan.result||'لم تسجل بعد']]){const row=document.createElement('p');row.style.whiteSpace='pre-wrap';const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));card.append(row)}
+   for(const [label,value] of [['الدرجة القبلية',plan.baseline+'%'],['الدرجة البعدية',gradeImpact(plan.baseline,plan.post)===null?'لم تسجل بعد':plan.post+'%'],['التغير بالنقاط المئوية',gradeImpact(plan.baseline,plan.post)===null?'غير مقاس':String(gradeImpact(plan.baseline,plan.post))],['الهدف',plan.goal],['الإجراء',plan.action],['نتيجة المتابعة',plan.result||'لم تسجل بعد']]){const row=document.createElement('p');row.style.whiteSpace='pre-wrap';const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));card.append(row)}
    holder.append(card);
   }
  }catch(error){const note=document.createElement('p');note.className='muted';note.textContent='تعذر قراءة خطط التحصيل المحلية: '+error.message;holder.append(note)}
@@ -5729,7 +5739,7 @@ async function gradeOpenPlan(record){
  const student=matchStudent(record);
  const key=norm(record.id)||[norm(record.name),norm(record.grade),norm(record.cls)].join('|');
  const id=state.current+'|'+key+'|'+norm(record.subject);
- gradeEditingPlan={id,studentKey:student?.key||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:state.imports.find(x=>x.id===state.current)?.period||''};
+ gradeEditingPlan={id,studentKey:student?.key||'',studentNo:record.id||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:state.imports.find(x=>x.id===state.current)?.period||''};
  const editor=el('gradePlanEditor');editor.hidden=false;
  el('gradePlanStudent').textContent=[record.name,record.grade,record.cls,record.subject,'الدرجة القبلية '+record.pct+'%'].filter(Boolean).join(' — ');
  el('gradePlanNotice').textContent=student?'الطالب مرتبط بملف 360.':'لم يُعثر على تطابق وحيد في ملف الطالب؛ تُحفظ الخطة مع بيانات سجل النتائج حتى تتطابق.';
@@ -5737,6 +5747,7 @@ async function gradeOpenPlan(record){
   const stored=(await gradePlanStore('getAll')).find(x=>x.id===id);
   el('gradePlanAction').value=stored?.action||'التنسيق مع معلم المادة لتقديم أنشطة علاجية مناسبة، ومتابعة ولي الأمر.';
   el('gradePlanGoal').value=stored?.goal||'رفع درجة الطالب في المادة إلى حد المتابعة المحدد أو أعلى في القياس القادم.';
+  el('gradePlanPost').value=stored?.post??'';
   el('gradePlanResult').value=stored?.result||'';
   el('gradePlanStatus').value=stored?.status||'draft';
  }catch(error){el('gradePlanNotice').textContent='تعذر استعادة الخطة: '+error.message}
@@ -5745,7 +5756,10 @@ async function gradeOpenPlan(record){
 el('gradePlanClose').onclick=()=>{el('gradePlanEditor').hidden=true;gradeEditingPlan=null};
 el('gradePlanSave').onclick=async()=>{
  if(!gradeEditingPlan)return;
- const item={...gradeEditingPlan,action:el('gradePlanAction').value.trim(),goal:el('gradePlanGoal').value.trim(),result:el('gradePlanResult').value.trim(),status:el('gradePlanStatus').value,updated:new Date().toISOString()};
+ const postText=el('gradePlanPost').value.trim();
+ const post=postText===''?null:Number(postText);
+ if(post!==null&&gradeImpact(gradeEditingPlan.baseline,post)===null){el('gradePlanNotice').textContent='أدخل درجة بعدية صحيحة بين 0 و100.';return}
+ const item={...gradeEditingPlan,post,action:el('gradePlanAction').value.trim(),goal:el('gradePlanGoal').value.trim(),result:el('gradePlanResult').value.trim(),status:el('gradePlanStatus').value,updated:new Date().toISOString()};
  if(!item.action||!item.goal){el('gradePlanNotice').textContent='أدخل الإجراء والهدف قبل الحفظ.';return}
  try{await gradePlanStore('put',item);if(item.studentKey&&studentActive===item.studentKey)gradeRenderPlansForStudent(item.studentKey).catch(()=>{});el('gradePlanNotice').textContent='تم حفظ الخطة محليًا على هذا الجهاز وربطها بسجل نتيجة الطالب.'}
  catch(error){el('gradePlanNotice').textContent='لم تُحفظ الخطة: '+error.message}
