@@ -1905,7 +1905,16 @@ function docsAccountOriginals(){
  for(const row of nativeA4Rows()){const id=String(row.source_record_id||'');if(id)originals.set('a4:'+id,{...row,accountSourceTable:row.source_table||'a4'})}
  for(const doc of docs){
   if(!valid(doc))continue;
-  if(doc.sourceA4){const id=String(doc.sourceA4),key='a4:'+id;if(!originals.has(key))originals.set(key,{...doc,source_record_id:id,accountSourceTable:'local'});continue}
+  if(doc.sourceA4){
+   const id=String(doc.sourceA4),key='a4:'+id,original=originals.get(key);
+   // A local edit may contain the explicit status missing from the migrated index.
+   // Do not overwrite an existing source status or infer completion from document content.
+   if(!original)originals.set(key,{...doc,source_record_id:id,accountSourceTable:'local',workStatusOrigin:'local'});
+   else if(!String(original.status??'').trim()&&String(doc.status??'').trim()){
+    originals.set(key,{...original,status:doc.status,workStatusOrigin:'linked-local-status'});
+   }
+   continue;
+  }
   const id=docsCanonicalKey(doc),key='local:'+id;
   if(!originals.has(key))originals.set(key,{...doc,source_record_id:id,accountSourceTable:'local'});
  }
@@ -2080,12 +2089,14 @@ function docsWorkStatus(row){
 function docsWorkCenterCounts(rows){
  const counts={required:0,active:0,done:0,overdue:0,archived:0,unknown:0};
  for(const row of rows){
-  const status=String(row.status??'').trim().replace(/[\u064B-\u065F\u0670]/g,'').replace(/\s+/g,' ').toLowerCase();
-  const key=/^(مسودة|مطلوب|مطلوبة|قيد الانتظار|pending|draft|required)$/.test(status)?'required':
-   /^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|active|in progress|in_progress)$/.test(status)?'active':
-   /^(مكتمل|مكتملة|تم التنفيذ|done|completed)$/.test(status)?'done':
-   /^(متأخر|متأخرة|overdue)$/.test(status)?'overdue':
-   /^(مؤرشف|مؤرشفة|archived)$/.test(status)?'archived':'unknown';
+  // Only explicit status fields. Do not interpret date, signature, attachments or filled content as completion.
+  const raw=String(row.status??'').trim();
+  const status=raw.normalize('NFKC').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[\s_-]+/g,' ').trim().toLowerCase();
+  const key=/^(مسوده|مطلوب|مطلوبه|قيد الانتظار|بانتظار التنفيذ|لم يبدا|لم يتم البدء|pending|draft|required|not started)$/.test(status)?'required':
+   /^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|جاري العمل|جار العمل|قيد الانجاز|قيد المتابعه|in progress|active|ongoing|in progress)$/.test(status)?'active':
+   /^(مكتمل|مكتمله|تم التنفيذ|منجز|منجزه|تم الانجاز|انجز|completed|done|finished)$/.test(status)?'done':
+   /^(متاخر|متاخره|overdue)$/.test(status)?'overdue':
+   /^(مؤرشف|مؤرشفه|archived)$/.test(status)?'archived':'unknown';
   counts[key]++;
  }
  return counts;
@@ -2120,7 +2131,7 @@ function docsWorkRenderDetails(){
  const h=document.createElement('h3');h.textContent=docsWorkLabels[docsWorkSelected]+' ('+rows.length+')';
  const close=document.createElement('button');close.type='button';close.className='btn';close.textContent='إغلاق القائمة';close.onclick=()=>{docsWorkSelected='';docsWorkRenderWorkSelection();docsWorkRenderDetails()};
  header.append(h,close);details.append(header);
- if(docsWorkSelected==='unknown'){const note=document.createElement('p');note.className='muted';note.textContent='هذه السجلات لا تتضمن حالة مصنفة بصورة موثوقة. افتح كل سجل وراجع بياناته قبل اعتماد حالة أو تغييرها. العدد لا يعني أنها أعمال ناقصة.';details.append(note)}
+ if(docsWorkSelected==='unknown'){const note=document.createElement('p');note.className='muted';note.textContent='هذه السجلات إما بلا حالة محفوظة أو تحمل مسمى غير معروف. تظهر الحالة الأصلية تحت كل عمل، ولا تُستنتج حالة الاكتمال من النصوص أو الشواهد. افتح السجل للتحقق والتعديل عند وجود صلاحية، والعدد لا يعني أنها أعمال ناقصة.';details.append(note)}
  if(!rows.length){const p=document.createElement('p');p.className='muted';p.textContent='لا توجد أعمال ضمن هذه الحالة حاليًا.';details.append(p);return}
  const visible=rows.slice(0,docsWorkPageLimit);
  const list=document.createElement('div');list.className='docs-work-status-list';
@@ -2128,7 +2139,7 @@ function docsWorkRenderDetails(){
   const item=document.createElement('article');item.className='docs-work-status-entry';
   const info=document.createElement('div'),title=document.createElement('strong'),meta=document.createElement('small'),open=document.createElement('button');
   title.textContent=docsWorkTitle(row);
-  meta.textContent=[row.status?'الحالة: '+row.status:'الحالة غير محددة',row.date_hijri||row.hijriDate||row.date_text||'',row.source_table||row.kind||''].filter(Boolean).join(' · ');
+  meta.textContent=[row.status?'الحالة الأصلية: '+row.status:'لا توجد حالة موثقة',row.workStatusOrigin==='linked-local-status'?'الحالة من نسخة التحرير المحلية المرتبطة':'',row.date_hijri||row.hijriDate||row.date_text||'',row.source_table||row.kind||''].filter(Boolean).join(' · ');
   info.append(title,meta);
   open.type='button';open.className='btn';open.textContent='فتح العمل';open.setAttribute('aria-label','فتح: '+docsWorkTitle(row));open.onclick=()=>docsWorkOpen(row);
   item.append(info,open);list.append(item);
