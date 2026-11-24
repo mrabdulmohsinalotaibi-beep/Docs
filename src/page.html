@@ -1919,7 +1919,7 @@ function docsAccountOriginals(){
 // Status comes from the original account record; absence of a status is never a finding of incomplete work.
 /* DOCS_FOLLOWUP_START */
 function docsFollowupKey(type,id){
- if(!/^[a-z_]+$/.test(String(type))||!String(id||'').trim()||String(id).length>180)return '';
+ if(!/^[a-z][a-z0-9_]*$/.test(String(type))||!String(id||'').trim()||String(id).length>180)return '';
  return 'followup:'+type+':'+String(id);
 }
 function docsFollowupDate(value){
@@ -1954,10 +1954,25 @@ async function docsFollowupRows(owner=activeUser,ownerDb=db){
  if(owner!==activeUser||ownerDb!==db)return [];
  return rows.filter(r=>r.kind==='local-followup'&&r.plan&&r.id===docsFollowupKey(r.plan.type,r.plan.sourceId));
 }
+// Compare the saved revision inside the same local transaction; stale tabs cannot overwrite approved plans.
+function docsCommitFollowup(database,entry,expected){
+ return new Promise((resolve,reject)=>{
+  const tx=database.transaction('cloudSnapshots','readwrite'),store=tx.objectStore('cloudSnapshots');
+  let conflict=false;const request=store.get(entry.id);
+  request.onsuccess=()=>{
+   const old=request.result;
+   if(old&&(old.kind!=='local-followup'||old.plan?.status==='approved')||(old?.plan?.updated||null)!==expected){conflict=true;tx.abort();return}
+   store.put(entry);
+  };
+  tx.oncomplete=()=>resolve();
+  tx.onabort=()=>reject(conflict?Error('تغيرت المتابعة في تبويب آخر؛ أغلقها وافتح النسخة المحفوظة.'):tx.error||Error('تعذر حفظ المتابعة'));
+  tx.onerror=()=>reject(tx.error||Error('تعذر حفظ المتابعة'));
+ });
+}
 let docsFollowupCenterToken=0;
 async function docsRenderFollowupCenter(){
  const root=$('docsFollowupCenter');if(!root)return;
- const token=++docsFollowupCenterToken,owner=activeUser,ownerDb=db;root.replaceChildren();
+ const token=++docsFollowupCenterToken,owner=activeUser,ownerDb=db,selectedSource=root.querySelector('select')?.value||'';root.replaceChildren();
  if(!owner||!ownerDb)return;
  const title=document.createElement('h3');title.textContent='المتابعة التربوية';root.append(title);
  const note=document.createElement('p');note.className='muted';note.textContent='خطط متابعة محلية مستقلة عن حالة السجل الأصلي، ويُحدد التأخر من موعد المتابعة الهجري.';root.append(note);
@@ -1970,7 +1985,7 @@ async function docsRenderFollowupCenter(){
   const sources=new Map();
   for(const row of docsAccountOriginals()){const source=docsFollowupSource(row);if(source&&!sources.has(source.id))sources.set(source.id,source)}
   for(const source of sources.values())selector.add(new Option(source.title,source.id));
-  const add=document.createElement('button');add.type='button';add.className='btn';add.textContent='فتح خطة متابعة السجل';add.disabled=true;selector.onchange=()=>add.disabled=!sources.has(selector.value);add.onclick=()=>{const source=sources.get(selector.value);if(source)docsOpenFollowup(source)};
+  const add=document.createElement('button');add.type='button';add.className='btn';add.textContent='فتح خطة متابعة السجل';if(sources.has(selectedSource))selector.value=selectedSource;add.disabled=!sources.has(selector.value);selector.onchange=()=>add.disabled=!sources.has(selector.value);add.onclick=()=>{const source=sources.get(selector.value);if(source)docsOpenFollowup(source)};
   const actions=document.createElement('div');actions.className='row';actions.append(selector,add);root.append(actions);
   for(const row of rows.sort((a,b)=>String(a.plan.due).localeCompare(String(b.plan.due)))){
    const btn=document.createElement('button');btn.type='button';btn.className='docs-guidance-row';btn.textContent=row.plan.title+' · '+docsFollowupStatus(row.plan,today)+' · '+row.plan.due+' هـ';btn.onclick=()=>docsOpenFollowup(row.plan);root.append(btn);
@@ -2000,23 +2015,25 @@ async function docsOpenFollowup(source){
    else if(key==='before'||key==='after'){el.type='number';el.step='any'}
    else el.maxLength=160;
    el.value=stored?.[key]??(key==='status'?'draft':'');if(key==='status'&&stored?.status==='approved')el.value='active';
-   inputs[key]=el;wrap.append(el);form.append(wrap);
+   el.dataset.followupField=key;inputs[key]=el;wrap.append(el);form.append(wrap);
   }
   const update=()=>{const locked=stored?.status==='approved';for(const el of Object.values(inputs))el.disabled=locked;save.disabled=locked;approve.disabled=locked;print.disabled=!locked;notice.textContent=locked?'متابعة معتمدة محفوظة محليًا؛ الطباعة من النسخة المحفوظة فقط.':stored?'متابعة محفوظة محليًا. لا يعتبر حفظ المسودة اعتمادًا.':'متابعة جديدة؛ تحفظ على هذا الجهاز فقط.'};
+  let saving=false;
   const commit=async final=>{
-   if(!current()||stored?.status==='approved')return;
+   if(!current()||saving||stored?.status==='approved')return;
    try{
     const values=docsFollowupValidate(Object.fromEntries(Object.entries(inputs).map(([k,v])=>[k,v.value])),final);
     if(final&&!confirm('هل راجعت الإجراء والنتيجة وتوافق على اعتماد هذه المتابعة؟'))return;
     if(!current())return;
-    save.disabled=true;approve.disabled=true;close.disabled=true;
+    saving=true;save.disabled=true;approve.disabled=true;close.disabled=true;
     const plan={id:source.id,type:source.type,sourceId:source.sourceId,title:source.title,studentKey:source.studentKey||'',studentName:source.studentName||'',...values,approvedHijri:final?hijriToday():'',updated:new Date().toISOString()};
-    await dsStoreSnapshot({id:source.id,kind:'local-followup',plan,downloadedAt:plan.updated});
+    await docsCommitFollowup(ownerDb,{id:source.id,kind:'local-followup',plan,downloadedAt:plan.updated},stored?.updated||null);
     if(!current())return;
     stored=plan;update();docsRenderFollowupCenter();if(studentActive)docsRenderStudentFollowups(studentActive);
    }catch(e){if(current()){notice.textContent=e.message;save.disabled=false;approve.disabled=false}}
-   finally{if(current())close.disabled=false}
+   finally{saving=false;if(current())close.disabled=false}
   };
+  dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault()});
   save.onclick=()=>commit(false);approve.onclick=()=>commit(true);
   print.onclick=()=>{if(!current()||stored?.status!=='approved')return;const labels=[['السجل المرتبط',stored.title],['اسم الطالب',stored.studentName],['الإجراء',stored.action],['الهدف',stored.goal],['موعد المتابعة',stored.due],['المؤشر',stored.metric],['القياس القبلي',stored.before],['القياس البعدي',stored.after],['التغير في القياس',stored.change],['نتيجة المتابعة',stored.result],['حالة المتابعة','معتمدة']];printOriginalA4Docs([],[{id:stored.id,title:'تقرير متابعة تربوية',showEmptyFields:false,organization:{country:'المملكة العربية السعودية',authority:'وزارة التعليم',department:a4Profile.department,school:a4Profile.school},reference:{hijriDate:stored.approvedHijri},fields:labels.map(([label,value],i)=>({id:'followup-'+i,label,value,kind:'paragraph'})),attachments:[],signers:[{role:'الموجّه الطلابي',name:a4Profile.counselor}],site:{logoUrl:'/icon.png',url:location.origin}}])};
   update();

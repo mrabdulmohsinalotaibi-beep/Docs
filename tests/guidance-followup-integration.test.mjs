@@ -23,7 +23,8 @@ test('Hijri due date and explicit approval with measured outcome',()=>{
  assert.equal(status(validate(draft,true),'1448/06/10'),'معتمدة');
 });
 test('plan saved in existing backup snapshot store and approved print uses saved content',()=>{
- assert.match(page,/dsStoreSnapshot\(\{id:source.id,kind:'local-followup',plan/);
+ assert.match(page,/docsCommitFollowup\(ownerDb,\{id:source.id,kind:'local-followup',plan/);
+ assert.match(page,/old.plan\?\.status==='approved'/);
  assert.match(page,/stored\?\.status!=='approved'\)return/);
  assert.match(page,/docsRenderStudentFollowups\(key\)/);
  assert.match(page,/confirm\('هل راجعت الإجراء والنتيجة/);
