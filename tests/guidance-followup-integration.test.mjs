@@ -29,3 +29,12 @@ test('plan saved in existing backup snapshot store and approved print uses saved
  assert.match(page,/docsRenderStudentFollowups\(key\)/);
  assert.match(page,/confirm\('هل راجعت الإجراء والنتيجة/);
 });
+
+test('shared snapshot helpers are declared outside the workspace initialization block',()=>{
+ const workspace=page.indexOf('try{\ndocsStudentsNav=');
+ assert.ok(workspace>0);
+ for(const helper of ['async function docsCachedItem(', 'async function dsStoreSnapshot(']){
+  assert.ok(page.indexOf(helper)>=0&&page.indexOf(helper)<workspace);
+  assert.equal(page.split(helper).length,2);
+ }
+});
