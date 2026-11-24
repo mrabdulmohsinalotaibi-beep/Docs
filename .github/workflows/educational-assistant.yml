@@ -1,0 +1,35 @@
+name: Educational assistant integration checks
+on:
+  pull_request:
+    paths:
+      - 'src/page.html'
+      - 'src/educational-assistant.mjs'
+      - 'src/worker-runtime.js'
+      - 'worker.js'
+      - 'tests/educational-assistant*.test.mjs'
+      - '.github/workflows/educational-assistant.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/page.html'
+      - 'src/educational-assistant.mjs'
+      - 'src/worker-runtime.js'
+      - 'worker.js'
+      - 'tests/educational-assistant*.test.mjs'
+      - '.github/workflows/educational-assistant.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check built worker and embedded scripts
+        run: node scripts/build-worker.mjs --check
+      - name: Test educational intervention rules
+        run: node --test tests/educational-assistant.test.mjs
+      - name: Test profile and followup integration
+        run: node --test tests/educational-assistant-integration.test.mjs
