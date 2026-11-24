@@ -9,7 +9,7 @@ test('status tiles are interactive and open underlying records',()=>{
  assert.match(page,/id="docsWorkDetails"/);
 });
 test('counts and status lists share a classifier over original rows',()=>{
- assert.match(page,/counts\[docsWorkStatus\(row\)\]\+\+/);
+ assert.match(page,/const counts=docsWorkCenterCounts\(\[row\]\)/);
  assert.match(page,/docsWorkSourceRows\.filter\(row=>docsWorkStatus\(row\)===docsWorkSelected\)/);
  assert.match(page,/docsRenderWorkCenter\(allOriginals\)/);
 });
