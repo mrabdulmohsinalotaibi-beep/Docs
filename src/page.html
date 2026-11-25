@@ -6151,20 +6151,23 @@ function gradeUpdateCompareOptions(){
  if(!gradeComparison.rows.length)el('gradeCompareStatus').textContent=state.imports.length<2?'احفظ اختبارين على الأقل للمقارنة.':'اختر الاختبار السابق واللاحق ثم اضغط تحليل التحسن.';
 }
 function gradeCompareKey(record){
- const id=norm(record.id),student=id?'id:'+id:'name:'+norm(record.name)+'|'+norm(record.grade)+'|'+norm(record.cls);
- return student+'|'+norm(record.subject);
+ const id=norm(record.id),subject=norm(record.subject);
+ return id&&subject?JSON.stringify([id,subject]):null;
 }
 function gradeCompareImports(first,second){
- const previous=new Map(),ambiguous=new Set(),out=[];
- for(const r of first.records){
-  const key=gradeCompareKey(r);
-  if(previous.has(key)){ambiguous.add(key);previous.delete(key)}
-  else if(!ambiguous.has(key))previous.set(key,r);
- }
- const used=new Set();
- for(const r of second.records){
-  const key=gradeCompareKey(r);if(used.has(key)){ambiguous.add(key);continue}used.add(key);
-  const before=previous.get(key);if(!before||ambiguous.has(key))continue;
+ const index=records=>{
+  const map=new Map(),ambiguous=new Set();
+  for(const r of records){
+   const key=gradeCompareKey(r);if(!key)continue;
+   if(map.has(key)){ambiguous.add(key);map.delete(key)}
+   else if(!ambiguous.has(key))map.set(key,r);
+  }
+  return map;
+ };
+ const previous=index(first.records),next=index(second.records),out=[];
+ for(const [key,r] of next){
+  const before=previous.get(key);
+  if(!before||![before.pct,r.pct].every(v=>Number.isFinite(v)&&v>=0&&v<=100))continue;
   out.push({name:r.name,grade:r.grade,cls:r.cls,subject:r.subject,before:before.pct,after:r.pct,change:Math.round((r.pct-before.pct)*100)/100});
  }
  return out.sort((a,b)=>a.change-b.change);
@@ -6175,10 +6178,10 @@ el('gradeCompareRun').onclick=()=>{
  if(!idA||!idB||idA===idB){status.textContent='اختر ملفي اختبار مختلفين للمقارنة.';return}
  const a=state.imports.find(x=>x.id===idA),b=state.imports.find(x=>x.id===idB);
  if(!a||!b){status.textContent='أحد الملفين غير موجود في الجهاز.';return}
- const rows=gradeCompareImports(a,b);if(!rows.length){status.textContent='لم أعثر على طالب ومادة مشتركة بين الملفين. راجع أسماء الطلاب والصفوف والمواد.';return}
+ const rows=gradeCompareImports(a,b);if(!rows.length){status.textContent='لم أعثر على درجات فريدة مشتركة بمعرّف الطالب والمادة. تحقق من أرقام الطلاب والتكرارات.';return}
  gradeComparison.rows=rows;el('gradeCompareExport').disabled=false;
  const improved=rows.filter(x=>x.change>0).length,declined=rows.filter(x=>x.change<0).length,stable=rows.length-improved-declined;
- status.textContent='قورنت درجات '+rows.length+' مادة لطالب، وفق الأسماء أو الأرقام المتطابقة. التغير بالنقاط المئوية.';
+ status.textContent='قورنت درجات '+rows.length+' مادة لطالب، وفق أرقام الطلاب والمواد المتطابقة فقط؛ استُبعدت السجلات بلا معرف أو المتكررة في أي ملف. التغير بالنقاط المئوية.';
  for(const [caption,value] of [['الدرجات المتطابقة',rows.length],['تحسن',improved],['انخفاض',declined],['دون تغيير',stable]]){
   const article=document.createElement('article'),strong=document.createElement('b'),small=document.createElement('small');strong.textContent=String(value);small.textContent=caption;article.append(strong,small);metrics.append(article)
  }
