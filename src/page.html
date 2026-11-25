@@ -2040,7 +2040,7 @@ async function docsOpenFollowup(source){
    else if(tag==='textarea'){el.rows=3;el.maxLength=2000}
    else if(key==='before'||key==='after'){el.type='number';el.step='any'}
    else el.maxLength=160;
-   el.value=stored?.[key]??(key==='goal'?String(source.suggestedGoal||'').slice(0,2000):key==='action'?String(source.suggestedAction||'').slice(0,2000):key==='status'?'draft':'');if(key==='status'&&stored?.status==='approved')el.value='active';
+   el.value=stored?.[key]??(key==='goal'?String(source.suggestedGoal||'').slice(0,2000):key==='action'?String(source.suggestedAction||'').slice(0,2000):key==='metric'?String(source.suggestedMetric||'').slice(0,160):key==='before'?(source.suggestedBefore??''):key==='status'?'draft':'');if(key==='status'&&stored?.status==='approved')el.value='active';
    el.dataset.followupField=key;inputs[key]=el;wrap.append(el);form.append(wrap);
   }
   const update=()=>{const locked=stored?.status==='approved';for(const el of Object.values(inputs))el.disabled=locked;save.disabled=locked;approve.disabled=locked;print.disabled=!locked;notice.textContent=locked?'متابعة معتمدة محفوظة محليًا؛ الطباعة من النسخة المحفوظة فقط.':stored?'متابعة محفوظة محليًا. لا يعتبر حفظ المسودة اعتمادًا.':'متابعة جديدة؛ تحفظ على هذا الجهاز فقط.'};
@@ -2049,6 +2049,10 @@ async function docsOpenFollowup(source){
    if(!current()||saving||stored?.status==='approved')return;
    try{
     const values=docsFollowupValidate(Object.fromEntries(Object.entries(inputs).map(([k,v])=>[k,v.value])),final);
+    if(source.type==='educational_measure'||source.type==='educational_survey'){
+     if(values.before===null||values.before<1||values.before>5||(values.after!==null&&(values.after<1||values.after>5)))throw Error('قياس الاستطلاع الجماعي يجب أن يكون بين 1 و5، مع توثيق القياس القبلي.');
+     if(final&&values.after===null)throw Error('أكمل القياس البعدي قبل اعتماد أثر التدخل الجماعي.');
+    }
     if(final&&!confirm('هل راجعت الإجراء والنتيجة وتوافق على اعتماد هذه المتابعة؟'))return;
     if(!current())return;
     saving=true;save.disabled=true;approve.disabled=true;close.disabled=true;
@@ -6468,6 +6472,16 @@ function displaySummary(entry){
  const note=document.createElement('p');note.className='muted';note.textContent='النتائج وصفية. التوزيع للإجابات الأصلية، والمتوسط بعد التصحيح.';result.append(note);
  const table=document.createElement('table');table.className='grade-table';
  for(const item of r.items){const tr=document.createElement('tr');for(const value of ['الفقرة '+item.item,item.mean===null?'—':item.mean.toFixed(2),item.distribution.join(' / ')]){const td=document.createElement('td');td.textContent=value;tr.append(td)}table.append(tr)}result.append(table);
+ if(r.count>=5&&Number.isFinite(r.mean)){
+  const track=document.createElement('button');track.type='button';track.className='btn';track.textContent='فتح خطة تدخل جماعية من نتائج القياس';
+  track.onclick=()=>{
+   if(!activeUser||entry.owner!==activeUser||current?.id!==entry.id)return;
+   const sourceId=String(entry.id),type='educational_measure';
+   docsOpenFollowup({id:docsFollowupKey(type,sourceId),type,sourceId,title:'تدخل جماعي: '+entry.title,studentKey:'',studentName:'',suggestedMetric:'متوسط الاستجابات بعد التصحيح (1–5)، الأداة نفسها ومجموعة قابلة للمقارنة',suggestedBefore:Number(r.mean.toFixed(4))}).catch(e=>{archiveStatus.textContent='تعذر فتح المتابعة: '+e.message});
+  };
+  const caution=document.createElement('p');caution.className='muted';caution.textContent='تُفتح مسودة جماعية فقط. اختر الإجراء والهدف بعد مراجعة النتائج، وأعد تطبيق الأداة نفسها على مجموعة قابلة للمقارنة قبل إدخال القياس البعدي. لا يعني ارتفاع المتوسط تحسنًا في جميع الأدوات.';
+  result.append(track,caution);
+ }
 }
 input.addEventListener('input',()=>{current=null;get('[data-save]').disabled=true;get('[data-report]').disabled=true});
 get('[data-save]').onclick=()=>{
