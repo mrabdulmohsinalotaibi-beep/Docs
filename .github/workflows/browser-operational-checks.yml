@@ -125,6 +125,40 @@ jobs:
                           console.log('PASS account-scoped 100 students '+label+' '+owner);
                         }
                       }
+                      // Exercise the real editor and IndexedDB, not a mock storage API.
+                      const owner=users.indexOf(user);
+                      await page.locator('#workspaceNav [data-workspace="documents"]').click();
+                      await page.locator('#newBtn').click();
+                      await page.locator('#editor.visible').waitFor();
+                      const title='Fixture document '+owner+' '+label;
+                      await page.locator('#docTitle').fill(title);
+                      await page.locator('#saveDoc').click();
+                      const readDocuments=()=>page.evaluate(async id=>new Promise((resolve,reject)=>{
+                        const request=indexedDB.open('athat-docs-unified-v2-'+id,3);
+                        request.onupgradeneeded=()=>request.transaction.abort();
+                        request.onerror=()=>reject(request.error);
+                        request.onsuccess=()=>{
+                          const db=request.result;
+                          const query=db.transaction('documents','readonly').objectStore('documents').getAll();
+                          query.onsuccess=()=>{db.close();resolve(query.result)};
+                          query.onerror=()=>{db.close();reject(query.error)};
+                        };
+                      }),user.id);
+                      let rows=[];
+                      for(let attempt=0;attempt<50;attempt++){
+                        rows=await readDocuments();
+                        if(rows.some(row=>row.title===title))break;
+                        await page.waitForTimeout(200);
+                      }
+                      assert.equal(rows.filter(row=>row.title===title).length,1,'exactly one persisted document');
+                      assert.ok(rows.every(row=>!row.title.startsWith('Fixture document '+(1-owner)+' ')),'other account document must not exist');
+                      await page.locator('#previewDoc').click();
+                      await page.locator('#docsUnifiedPreview').waitFor({state:'visible'});
+                      await page.locator('#docsUnifiedClose').click();
+                      await page.locator('#closeEditor').click();
+                      await page.locator('#editor.visible').waitFor({state:'hidden'});
+                      assert.ok((await readDocuments()).some(row=>row.title===title),'document persists after closing editor');
+                      console.log('PASS document persistence and A4 preview '+label+' '+owner);
                       await page.locator('#logoutDocs').click();
                       await page.locator('#authGate').waitFor({state:'visible'});
                       assert.equal(await page.locator('#appMain').isVisible(),false);
