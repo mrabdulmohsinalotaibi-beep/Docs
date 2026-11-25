@@ -18,3 +18,18 @@ test('approved and future work are not overdue',()=>{
  const r=reviewGuidanceWork([{...base,status:'approved'},{...base,sourceId:'2',due:'1448-07-01'}], '1448-06-02');
  assert.equal(r.approved.length,1);assert.equal(r.pending.length,1);assert.equal(r.due.length,0);
 });
+
+import {classifyDocsWorkStatus,summarizeDocsOriginals} from '../src/guidance/work-review.mjs';
+test('Arabic explicit completion and approval remain distinct',()=>{
+ assert.equal(classifyDocsWorkStatus('مُكتملة'),'done');
+ assert.equal(classifyDocsWorkStatus('معتمد'),'approved');
+ assert.equal(classifyDocsWorkStatus('غير مكتمل'),'unknown');
+});
+test('student summaries use keys rather than names',()=>{
+ const r=summarizeDocsOriginals([{student_key:'a',status:'مكتمل'},{studentKey:'b',status:'مسودة'},{studentName:'a',status:'معتمد'}],{signedIn:true});
+ assert.equal(r.coverage,'partial');assert.equal(r.students.length,2);assert.equal(r.unlinked,1);assert.equal(r.counts.approved,1);
+});
+test('signed out summaries never expose account rows',()=>{
+ const r=summarizeDocsOriginals([{student_key:'a',status:'مكتمل'}]);
+ assert.equal(r.counts,null);assert.deepEqual(r.students,[]);
+});
