@@ -1992,6 +1992,22 @@ function docsCommitFollowup(database,entry,expected){
   tx.onerror=()=>reject(tx.error||Error('تعذر حفظ المتابعة'));
  });
 }
+function docsFollowupReviewQueue(rows,today){
+ const out=[];
+ for(const row of rows){
+  const p=row?.plan;if(!p||p.status==='approved'||!p.id)continue;
+  const reasons=[];
+  const due=docsFollowupDate(p.due);
+  if(due&&today&&due<today)reasons.push('موعد المتابعة مضى');
+  if(!due)reasons.push('موعد المتابعة غير موثق');
+  if(!String(p.action||'').trim()||!String(p.goal||'').trim())reasons.push('الإجراء أو الهدف غير مكتمل');
+  if(p.before!==null&&p.before!==undefined&&String(p.before).trim()!==''&&(p.after===null||p.after===undefined||String(p.after).trim()===''))reasons.push('القياس البعدي غير مسجل');
+  if(!String(p.result||'').trim())reasons.push('النتيجة غير موثقة');
+  if(!reasons.length)reasons.push('جاهزة للمراجعة اليدوية');
+  out.push({id:p.id,plan:p,reasons,overdue:!!(due&&today&&due<today)});
+ }
+ return out.sort((a,b)=>Number(b.overdue)-Number(a.overdue)||String(a.plan.due||'').localeCompare(String(b.plan.due||''))||String(a.id).localeCompare(String(b.id)));
+}
 let docsFollowupCenterToken=0;
 async function docsRenderFollowupCenter(){
  const root=$('docsFollowupCenter');if(!root)return;
@@ -2009,6 +2025,13 @@ async function docsRenderFollowupCenter(){
   const title=document.createElement('h3');title.textContent='المتابعة التربوية';root.append(title);
   const note=document.createElement('p');note.className='muted';note.textContent='خطط متابعة محلية مستقلة عن حالة السجل الأصلي، ويُحدد التأخر من موعد المتابعة الهجري.';root.append(note);
   const stats=document.createElement('p');stats.textContent=['مسودة','قيد التنفيذ','متأخرة','معتمدة'].map(k=>k+': '+(counts.get(k)||0)).join(' · ');root.append(stats);
+  const queue=docsFollowupReviewQueue(rows,today);
+  const review=document.createElement('details');review.className='panel';
+  const heading=document.createElement('summary');heading.textContent='مراجعة الأعمال المطلوبة ('+queue.length+')';review.append(heading);
+  const explanation=document.createElement('p');explanation.className='muted';explanation.textContent='قائمة مستخرجة من المتابعات المحفوظة على الجهاز فقط، وليست حكمًا على جميع أعمال الموجّه. لا تُنشأ سجلات ولا تُعتمد تلقائيًا.';review.append(explanation);
+  if(!queue.length){const p=document.createElement('p');p.textContent='لا توجد متابعات غير معتمدة ضمن البيانات المتاحة.';review.append(p)}
+  for(const item of queue){const button=document.createElement('button');button.type='button';button.className='docs-guidance-row';button.textContent=item.plan.title+' · '+item.reasons.join('؛ ');button.onclick=()=>{if(owner===activeUser&&ownerDb===db)docsOpenFollowup(item.plan).catch(e=>say('تعذر فتح المتابعة: '+e.message))};review.append(button)}
+  root.append(review);
   const selector=document.createElement('select');selector.setAttribute('aria-label','السجل الأصلي للمتابعة');selector.add(new Option('اختر سجلًا لبدء المتابعة',''));
   for(const source of sources.values())selector.add(new Option(source.title,source.id));
   const add=document.createElement('button');add.type='button';add.className='btn';add.textContent='فتح خطة متابعة السجل';if(sources.has(selectedSource))selector.value=selectedSource;add.disabled=!sources.has(selector.value);selector.onchange=()=>add.disabled=!sources.has(selector.value);add.onclick=()=>{const source=sources.get(selector.value);if(source)docsOpenFollowup(source).catch(e=>say('تعذر فتح المتابعة: '+e.message))};
