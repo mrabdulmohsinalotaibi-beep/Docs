@@ -73,7 +73,13 @@ jobs:
                     },null,{timeout:30000});
                     await context.setOffline(true);
                     try{
-                      const response=await page.reload({waitUntil:'load'});
+                      // Reopen via a new URL in WebKit: reload in its Linux test engine
+                      // previously aborted with an internal error before a response.
+                      // Keep actual offline mode and require a working cached page.
+                      const response=name==='webkit'
+                        ?await page.goto(origin+'/?offline-reopen=1',{waitUntil:'load'})
+                        :await page.reload({waitUntil:'load'});
+                      console.log('Offline navigation method: '+(name==='webkit'?'reopen':'reload')+' '+label);
                       assert.ok(response?.ok(),'offline shell must load from cache');
                       assert.equal(await page.evaluate(()=>navigator.onLine),false);
                       await page.locator('#authGate').waitFor({state:'visible'});
