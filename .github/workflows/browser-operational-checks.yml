@@ -23,7 +23,7 @@ jobs:
         run: |
           mkdir -p browser-results
           cat > browser-smoke.mjs <<'EOF'
-          import {chromium,firefox,webkit} from '@playwright/test';
+          import {chromium,firefox,webkit,expect} from '@playwright/test';
           import {createServer} from 'node:http';
           import {readFile} from 'node:fs/promises';
           import assert from 'node:assert/strict';
@@ -202,10 +202,10 @@ jobs:
                       const status=page.locator('#dsTransferStatus');
                       backupPassword='IncorrectFixturePassword';
                       await restore(bytes);
-                      await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('كلمة مرور النسخة غير صحيحة'),null,{timeout:20000});
+                      await expect(page.locator('#dsTransferStatus')).toContainText('كلمة مرور النسخة غير صحيحة',{timeout:20000});
                       backupPassword='FixturePassword123';
                       await restore(bytes);
-                      await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('لم يُستبدل أي أصل'),null,{timeout:30000});
+                      await expect(page.locator('#dsTransferStatus')).toContainText('لم يُستبدل أي أصل',{timeout:30000});
                       assert.equal((await readDocuments()).filter(row=>row.title===title).length,1);
                       // Simulate loss of exactly the synthetic record, then recover via the exported encrypted file.
                       const lost=(await readDocuments()).find(row=>row.title===title);
@@ -223,13 +223,13 @@ jobs:
                       }),{owner:user.id,id:lost.id});
                       assert.ok(!(await readDocuments()).some(row=>row.id===lost.id));
                       await restore(bytes);
-                      await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('الاستعادة: 1 عنصر مضاف'),null,{timeout:30000});
+                      await expect(page.locator('#dsTransferStatus')).toContainText('الاستعادة: 1 عنصر مضاف',{timeout:30000});
                       assert.deepEqual((await readDocuments()).find(row=>row.id===lost.id),lost,'restored record must match original exactly');
                       console.log('PASS missing synthetic document recovery '+label+' '+owner);
                       if(owner===0)firstBackup=bytes;
                       else{
                         await restore(firstBackup);
-                        await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('النسخة تخص حسابًا مختلفًا'),null,{timeout:20000});
+                        await expect(page.locator('#dsTransferStatus')).toContainText('النسخة تخص حسابًا مختلفًا',{timeout:20000});
                         assert.ok((await readDocuments()).every(row=>!row.title.startsWith('Fixture document 0 ')));
                       }
                       console.log('PASS encrypted backup and restore protections '+label+' '+owner);
