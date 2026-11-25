@@ -32,6 +32,10 @@ jobs:
           globalThis.fetch=async()=>{throw Error('Outbound worker network forbidden')};
           const origin='http://127.0.0.1:4173';
           const users=['usr_browser_fixture_a','usr_browser_fixture_b'].map((id,i)=>({id,name:'Test account '+i,role:'teacher',loginIdentifier:'fixture'+i+'@example.invalid'}));
+          const studentFixtures=users.map((user,owner)=>Array.from({length:100},(_,i)=>({
+            key:'fixture-'+owner+'-'+i,name:'طالب تجريبي '+owner+'-'+String(i+1).padStart(3,'0'),
+            student_no:'TEST-'+owner+'-'+String(i+1).padStart(3,'0'),stage:'متوسط',grade:'الأول المتوسط',classroom:String(i%4+1)
+          })));
           let session=null;
           let serverUnavailable=false;
           let blockedRequests=0;
@@ -52,6 +56,10 @@ jobs:
                 if(action==='logout'&&req.method==='POST'){session=null;reply(200,{ok:true});return}
                 if((action==='login'||action==='me')&&session){reply(200,{ok:true,user:session});return}
                 reply(401,{ok:false,code:'UNAUTHORIZED'});return;
+              }
+              if(url.pathname==='/api/students'&&req.method==='GET'&&session){
+                const students=studentFixtures[users.findIndex(u=>u.id===session.id)];
+                res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify({ok:true,students}));return;
               }
               if(url.pathname.startsWith('/api/')||url.pathname==='/health'){
                 res.writeHead(401,{'content-type':'application/json'}).end(JSON.stringify({ok:false,code:'UNAUTHORIZED'}));return;
@@ -96,6 +104,17 @@ jobs:
                         const button=page.locator('#workspaceNav [data-workspace="'+tab+'"]');
                         await button.click();
                         assert.equal(await button.getAttribute('aria-current'),'page');
+                        if(tab==='students'){
+                          const owner=users.indexOf(user);
+                          await page.waitForFunction(()=>document.querySelector('#s360Total')?.textContent==='100',null,{timeout:20000});
+                          const search=page.locator('#student360Search');
+                          await search.fill('TEST-'+owner+'-100');
+                          await page.waitForFunction(expected=>document.querySelector('#studentRoster')?.textContent.includes(expected),'طالب تجريبي '+owner+'-100');
+                          await search.fill('TEST-'+(1-owner)+'-100');
+                          await page.waitForFunction(()=>document.querySelector('#studentRoster .s360-result-count')?.textContent.includes('0 من 100'));
+                          await search.fill('');
+                          console.log('PASS account-scoped 100 students '+label+' '+owner);
+                        }
                       }
                       await page.locator('#logoutDocs').click();
                       await page.locator('#authGate').waitFor({state:'visible'});
