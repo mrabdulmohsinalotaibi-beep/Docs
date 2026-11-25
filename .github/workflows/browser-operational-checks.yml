@@ -163,6 +163,23 @@ jobs:
                       await page.locator('#authGate').waitFor({state:'visible'});
                       assert.equal(await page.locator('#appMain').isVisible(),false);
                     }
+                    // Re-enter account A after using account B and verify the persisted document via the actual interface.
+                    const first=users[0];
+                    await page.locator('#emailInput').fill(first.loginIdentifier);
+                    await page.locator('#passwordInput').fill('FixturePassword123');
+                    await page.locator('#submitAuth').click();
+                    await page.locator('#appMain').waitFor({state:'visible'});
+                    await page.waitForFunction(name=>document.querySelector('#accountName')?.textContent===name,first.name);
+                    await page.locator('#workspaceNav [data-workspace="documents"]').click();
+                    const savedTitle='Fixture document 0 '+label;
+                    await page.locator('#search').fill(savedTitle);
+                    await page.getByText(savedTitle,{exact:true}).first().waitFor({state:'visible',timeout:15000});
+                    await page.locator('#search').fill('Fixture document 1 '+label);
+                    assert.equal(await page.getByText('Fixture document 1 '+label,{exact:true}).count(),0,'account A must not expose account B document');
+                    await page.locator('#search').fill('');
+                    await page.locator('#logoutDocs').click();
+                    await page.locator('#authGate').waitFor({state:'visible'});
+                    console.log('PASS document persistence across account switching '+label);
                     console.log('PASS mock-account navigation '+label);
                     // Verify real service-worker caching and offline navigation, without an account.
                     await page.waitForFunction(async()=>{
