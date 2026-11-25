@@ -55,6 +55,17 @@ jobs:
           let session=null;
           let serverUnavailable=false;
           let blockedRequests=0;
+          // Independent minimal reproduction of upstream Playwright issue #42775.
+          const probeServer=createServer((req,res)=>{
+            if(req.url==='/sw.js'){
+              res.writeHead(200,{'content-type':'application/javascript','cache-control':'no-store'});
+              return res.end("self.addEventListener('install',e=>e.waitUntil(self.skipWaiting()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{if(e.request.mode==='navigate')e.respondWith(new Response('<html><body>OFFLINE_PROBE</body></html>',{headers:{'content-type':'text/html'}}))});");
+            }
+            res.writeHead(200,{'content-type':'text/html'});
+            res.end('<html><body>ONLINE_PROBE<script>navigator.serviceWorker.register("/sw.js")</script></body></html>');
+          });
+          await new Promise(resolve=>probeServer.listen(0,'127.0.0.1',resolve));
+          const probeOrigin='http://127.0.0.1:'+probeServer.address().port;
           const server=createServer(async(req,res)=>{
             if(serverUnavailable){blockedRequests++;req.socket.destroy();return}
             try{
@@ -308,16 +319,23 @@ jobs:
                     const onlineResponse=await page.goto(origin+'/?online-reset=1',{waitUntil:'load'});
                     assert.ok(onlineResponse?.ok(),'online reset must succeed');
                     await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller),null,{timeout:30000});
-                    // Diagnose whether the browser's offline emulation works at all,
-                    // independently of navigation and service-worker interception.
                     if(name==='webkit'){
-                      const probe=await context.newPage();
+                      const probeContext=await browser.newContext({serviceWorkers:'allow'});
+                      const probe=await probeContext.newPage();
                       try{
-                        await probe.goto('about:blank');
-                        await context.setOffline(true);
-                        console.log('WebKit offline probe '+label+' navigator.onLine='+await probe.evaluate(()=>navigator.onLine));
-                        await context.setOffline(false);
-                      }finally{await context.setOffline(false);await probe.close()}
+                        await probe.goto(probeOrigin);
+                        await probe.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
+                        await probe.reload();
+                        await expect(probe.locator('body')).toHaveText('OFFLINE_PROBE');
+                        await probeContext.setOffline(true);
+                        try{
+                          await probe.reload({waitUntil:'load'});
+                          await expect(probe.locator('body')).toHaveText('OFFLINE_PROBE');
+                          console.log('UPSTREAM PROBE PASS '+label);
+                        }catch(error){
+                          console.error('UPSTREAM PROBE FAIL '+label+' '+error.message);
+                        }
+                      }finally{await probeContext.close()}
                     }
                     // Keep the native offline test mandatory in every engine.
                     await context.setOffline(true);
@@ -344,7 +362,7 @@ jobs:
                 }
               }finally{await browser.close()}
             }
-          }finally{server.close()}
+          }finally{server.close();probeServer.close()}
           if(failures)process.exitCode=1;
           EOF
           node browser-smoke.mjs
