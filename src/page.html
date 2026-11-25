@@ -6450,25 +6450,62 @@ function summarizeMeasure(rows, itemCount, reverse=[]){
 
 const host=document.getElementById('workspace-grades');if(!host)return;
 const section=document.createElement('section');section.className='panel';section.id='docsMeasureCenter';
-section.innerHTML='<h2>مركز المقاييس التربوية</h2><p class="muted" data-disclaimer></p><label>الأداة الاستطلاعية <select data-measure></select></label><ol data-questions></ol><p class="muted">أدخل استجابات مجهولة، كل سطر استجابة واحدة بخمس درجات من 1 إلى 5 مفصولة بفواصل. لا تدخل أسماء أو معرفات. التحليل مؤقت على هذه الصفحة فقط.</p><textarea data-answers rows="6" maxlength="100000" aria-label="استجابات الاستطلاع" style="width:100%"></textarea><div class="actions"><button type="button" class="primary" data-analyze>تحليل الاستجابات</button><button type="button" class="btn" data-clear>مسح</button></div><div data-result role="status" aria-live="polite"></div>';
+section.innerHTML='<h2>مركز المقاييس التربوية</h2><p class="muted" data-disclaimer></p><label>الأداة الاستطلاعية <select data-measure></select></label><ol data-questions></ol><p class="muted">أدخل استجابات مجهولة، كل سطر استجابة واحدة بخمس درجات من 1 إلى 5 مفصولة بفواصل. لا تدخل أسماء أو معرفات. تُحفظ النتائج المجمعة فقط عند اختيار الحفظ، ولا تُحفظ الإجابات الفردية.</p><textarea data-answers rows="6" maxlength="100000" aria-label="استجابات الاستطلاع" style="width:100%"></textarea><div class="actions"><button type="button" class="primary" data-analyze>تحليل الاستجابات</button><button type="button" class="btn" data-clear>مسح</button></div><div data-result role="status" aria-live="polite"></div><div class="actions"><button type="button" class="btn" data-save disabled>حفظ التحليل المجمع</button><button type="button" class="btn" data-report disabled>تنزيل تقرير A4</button></div><label>التحليلات المحفوظة على هذا الجهاز <select data-archive></select></label><button type="button" class="btn" data-open>فتح التحليل</button><p data-archive-status role="status" class="muted"></p>';
 host.append(section);
 const get=s=>section.querySelector(s),select=get('[data-measure]'),input=get('[data-answers]'),result=get('[data-result]');
 get('[data-disclaimer]').textContent=MEASURE_DISCLAIMER;
 for(const [i,t] of STARTER_MEASURES.entries())select.add(new Option(t.title,String(i)));
 function questions(){const t=STARTER_MEASURES[Number(select.value)],list=get('[data-questions]');list.replaceChildren();for(const q of t.questions){const li=document.createElement('li');li.textContent=q;list.append(li)}}
-function clear(){input.value='';result.replaceChildren()}
+let current=null;
+const archive=get('[data-archive]'),archiveStatus=get('[data-archive-status]');
+const archiveKey=()=>activeUser?'athat-docs-measure-aggregate-v1:'+activeUser:null;
+function readArchive(){const key=archiveKey();if(!key)return [];const rows=JSON.parse(localStorage.getItem(key)||'[]');if(!Array.isArray(rows))throw Error('تعذر قراءة الأرشيف');return rows}
+function refreshArchive(){archive.replaceChildren(new Option('اختر تحليلًا محفوظًا',''));if(!activeUser)return;try{for(const entry of readArchive())archive.add(new Option(entry.title+' · '+entry.date+' · '+entry.summary.count+' استجابة',entry.id))}catch{archiveStatus.textContent='تعذر قراءة الأرشيف المحلي.'}}
+function clear(){input.value='';result.replaceChildren();current=null;get('[data-save]').disabled=true;get('[data-report]').disabled=true}
+function displaySummary(entry){
+ result.replaceChildren();
+ const r=entry.summary,p=document.createElement('p');p.textContent=entry.title+' · الاستجابات الصالحة: '+r.count+' · المستبعدة: '+r.rejected+' · المتوسط: '+(r.mean===null?'غير متاح':r.mean.toFixed(2))+' · ألفا كرونباخ: '+(r.alpha===null?'غير متاح':r.alpha.toFixed(3));result.append(p);
+ const note=document.createElement('p');note.className='muted';note.textContent='النتائج وصفية. التوزيع للإجابات الأصلية، والمتوسط بعد التصحيح.';result.append(note);
+ const table=document.createElement('table');table.className='grade-table';
+ for(const item of r.items){const tr=document.createElement('tr');for(const value of ['الفقرة '+item.item,item.mean===null?'—':item.mean.toFixed(2),item.distribution.join(' / ')]){const td=document.createElement('td');td.textContent=value;tr.append(td)}table.append(tr)}result.append(table);
+}
+input.addEventListener('input',()=>{current=null;get('[data-save]').disabled=true;get('[data-report]').disabled=true});
+get('[data-save]').onclick=()=>{
+ if(!activeUser||!current||current.owner!==activeUser||current.summary.count<5)return;
+ try{const list=readArchive();if(!list.some(e=>e.id===current.id)){if(list.length>=100)throw Error('بلغ الأرشيف الحد المسموح؛ نزّل التقارير قبل إدارة التخزين.');list.unshift(current);localStorage.setItem(archiveKey(),JSON.stringify(list))}
+ refreshArchive();archive.value=current.id;archiveStatus.textContent='حُفظ التحليل المجمع محليًا لهذا الحساب.';get('[data-save]').disabled=true}catch(e){archiveStatus.textContent='تعذر الحفظ: '+e.message}
+};
+get('[data-open]').onclick=()=>{
+ if(!activeUser)return;
+ try{const entry=readArchive().find(e=>e.id===archive.value&&e.owner===activeUser);if(!entry)return;clear();current=entry;select.value=String(entry.measure);questions();displaySummary(entry);get('[data-report]').disabled=false;archiveStatus.textContent='تم فتح التحليل المحفوظ.'}catch{archiveStatus.textContent='تعذر فتح التحليل.'}
+};
+get('[data-report]').onclick=()=>{
+ if(!activeUser||!current||current.owner!==activeUser||current.summary.count<5)return;
+ const doc=document.implementation.createHTMLDocument('تقرير المقاييس التربوية');doc.documentElement.lang='ar';doc.documentElement.dir='rtl';
+ const style=doc.createElement('style');style.textContent='@page{size:A4;margin:15mm}body{font:15px/1.7 Arial,sans-serif;color:#222}table{width:100%;border-collapse:collapse}td,th{padding:8px;border:1px solid #aaa}h1,h2{text-align:center}';doc.head.append(style);
+ const add=(tag,t)=>{const e=doc.createElement(tag);e.textContent=t;doc.body.append(e)};
+ add('h1','وزارة التعليم');add('h2','تقرير استطلاع تربوي');add('p',current.title+' · التاريخ الهجري: '+current.date);add('p',MEASURE_DISCLAIMER);
+ add('p','الاستجابات الصالحة: '+current.summary.count+' · المستبعدة: '+current.summary.rejected+' · المتوسط: '+(current.summary.mean===null?'غير متاح':current.summary.mean.toFixed(2))+' · ألفا كرونباخ: '+(current.summary.alpha===null?'غير متاح':current.summary.alpha.toFixed(3)));
+ add('p','التوزيع للإجابات الأصلية من 1 إلى 5، والمتوسط بعد التصحيح. لا يمثل التقرير تشخيصًا أو إثباتًا لصلاحية الأداة.');
+ const table=doc.createElement('table');for(const cells of [['الفقرة','المتوسط','توزيع الاستجابات'],...current.summary.items.map(i=>[current.questions[i.item-1],i.mean===null?'—':i.mean.toFixed(2),i.distribution.join(' / ')])]){const tr=doc.createElement('tr');for(const v of cells){const td=doc.createElement('td');td.textContent=v;tr.append(td)}table.append(tr)}doc.body.append(table);
+ add('p','الموجّه الطلابي: ____________________    التوقيع: ____________________');
+ const url=URL.createObjectURL(new Blob(['<!doctype html>'+doc.documentElement.outerHTML],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='تقرير-استطلاع-A4.html';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
 select.onchange=()=>{clear();questions()};get('[data-clear]').onclick=clear;
 get('[data-analyze]').onclick=()=>{
  result.replaceChildren();if(!activeUser){result.textContent='سجّل الدخول أولًا.';return}
  const t=STARTER_MEASURES[Number(select.value)];
- const rows=input.value.split(/\r?\n/).filter(v=>v.trim()).map(v=>v.split(/[,،;\t ]+/).map(x=>Number(x.replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)))));
+ const rows=input.value.split(/\r?\n/).filter(v=>v.trim()).map(v=>v.trim().split(/[,،;\t ]+/).map(x=>Number(x.replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)))));
  const r=summarizeMeasure(rows,t.questions.length,t.reverse);
- const p=document.createElement('p');p.textContent='الاستجابات الصالحة: '+r.count+' · المستبعدة: '+r.rejected+' · المتوسط بعد التصحيح: '+(r.mean===null?'غير متاح':r.mean.toFixed(2))+' · ألفا كرونباخ: '+(r.alpha===null?'غير متاح':r.alpha.toFixed(3));result.append(p);
- const note=document.createElement('p');note.className='muted';note.textContent='الثبات يتطلب 30 استجابة صالحة على الأقل وتباينًا في الدرجة الكلية؛ لا يثبت وحده صلاحية الأداة. التوزيع يمثل الإجابات الأصلية والمتوسط بعد عكس الفقرات المحددة.';result.append(note);
- const table=document.createElement('table');table.className='grade-table';
- for(const item of r.items){const tr=document.createElement('tr');for(const value of ['الفقرة '+item.item,item.mean===null?'—':item.mean.toFixed(2),item.distribution.join(' / ')]){const td=document.createElement('td');td.textContent=value;tr.append(td)}table.append(tr)}result.append(table);
+ current={id:crypto.randomUUID(),owner:activeUser,measure:Number(select.value),title:t.title,questions:[...t.questions],date:hijriToday(),summary:r};
+ displaySummary(current);
+ get('[data-save]').disabled=r.count<5;get('[data-report]').disabled=r.count<5;
+ archiveStatus.textContent=r.count<5?'يلزم خمس استجابات صالحة على الأقل لحفظ أو تصدير النتائج المجمعة حفاظًا على الخصوصية.':'يمكن حفظ أو تنزيل التحليل المجمع؛ لا تُحفظ الإجابات الفردية.';
 };
-document.addEventListener('athat-docs-logout',clear);questions();
+document.addEventListener('athat-docs-logout',()=>{clear();archive.replaceChildren();archiveStatus.textContent=''});
+section.addEventListener('focusin',()=>{if(archive.dataset.owner!==String(activeUser||'')){clear();archive.dataset.owner=String(activeUser||'');refreshArchive()}});
+questions();
+
 })();
 /* DOCS_MEASURE_CENTER_END */
 
