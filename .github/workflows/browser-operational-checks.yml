@@ -139,6 +139,7 @@ jobs:
                       await page.locator('#editor.visible').waitFor();
                       const title='Fixture document '+owner+' '+label;
                       await page.locator('#docTitle').fill(title);
+                      await page.locator('#editor [data-jump="saveDoc"]').click();
                       await page.locator('#saveDoc').click();
                       const readDocuments=()=>page.evaluate(async id=>new Promise((resolve,reject)=>{
                         const request=indexedDB.open('athat-docs-unified-v2-'+id,3);
@@ -183,7 +184,7 @@ jobs:
                       assert.ok((await readDocuments()).some(row=>row.title===title),'document persists after closing editor');
                       console.log('PASS document persistence and A4 preview '+label+' '+owner);
                       // Export through the real UI, inspect ciphertext, then restore through the real file input.
-                      await page.locator('#workspaceNav [data-workspace="settings"]').click();
+                      await page.locator('#workspaceSettingsLink').click();
                       const downloadPromise=page.waitForEvent('download',{timeout:30000});
                       await page.locator('#dsBackup').click();
                       const download=await downloadPromise;
