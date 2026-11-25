@@ -12,8 +12,16 @@ permissions:
   contents: read
 jobs:
   browser-smoke:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            engines: chromium,firefox
+          - runner: macos-15
+            engines: webkit
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,8 +29,13 @@ jobs:
           node-version: '22'
       - run: node scripts/build-worker.mjs --check
       - run: npm install --no-save --package-lock=false @playwright/test@1.51.1
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium firefox
+      - if: runner.os == 'macOS'
+        run: npx playwright install webkit
       - name: Execute isolated browser checks
+        env:
+          TEST_ENGINES: ${{ matrix.engines }}
         run: |
           mkdir -p browser-results
           cat > browser-smoke.mjs <<'EOF'
@@ -79,7 +92,8 @@ jobs:
           await new Promise(resolve=>server.listen(4173,'127.0.0.1',resolve));
           let failures=0;
           try{
-            for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
+            const enabled=process.env.TEST_ENGINES.split(',');
+            for(const [name,engine] of Object.entries({chromium,firefox,webkit}).filter(([name])=>enabled.includes(name))){
               const browser=await engine.launch();
               try{
                 for(const viewport of [{width:1280,height:900},{width:390,height:844},{width:820,height:1180}]){
@@ -326,6 +340,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-results
+          name: browser-results-${{ runner.os }}
           path: browser-results/
           if-no-files-found: ignore
