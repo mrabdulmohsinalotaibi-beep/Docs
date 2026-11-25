@@ -4406,6 +4406,31 @@ workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-wor
 workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
 workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards);
 quickHeading.before(workCenter);
+/* DOCS_COMMAND_CENTER_START */
+const commandCenter=document.createElement('section');commandCenter.id='docsCommandCenter';commandCenter.className='panel';
+commandCenter.innerHTML='<h2>مركز القيادة التربوية</h2><p class="muted">انتقل إلى أعمالك الفعلية من مكان واحد. الأعداد التفصيلية تظهر في مراكزها الأصلية.</p><div data-command-links style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:8px"></div>';
+workCenter.before(commandCenter);
+function docsCommandJump(page,id,filter){
+ if(!activeUser){say('سجّل الدخول لعرض أعمالك.');return}
+ workspaceGoto(page);
+ if(filter){docsWorkSelected=filter;docsWorkPageLimit=50;docsWorkRenderWorkSelection();docsWorkRenderDetails()}
+ if(id){const target=$(id);if(target){if(id==='docsFollowupCenter'){const review=target.querySelector('details');if(review)review.open=true}target.scrollIntoView({block:'start',behavior:'smooth'})}}
+}
+for(const [title,description,page,id,filter] of [
+ ['الأعمال المطلوبة','المسودات والأعمال المسجلة','home','docsWorkCenter','required'],
+ ['مراجعة المتابعات','المواعيد والنواقص وقياس الأثر','home','docsFollowupCenter',''],
+ ['الأعمال المعتمدة','السجلات ذات الاعتماد الموثق','home','docsWorkCenter','approved'],
+ ['الطلاب','ملفات الطلاب والمتابعة الفردية','students','',''],
+ ['تحليل النتائج','نتائج نور والخطط العلاجية','grades','workspace-grades',''],
+ ['المقاييس التربوية','التحليل المحلي والتقارير','grades','docsMeasureCenter',''],
+ ['الاستبانات الإلكترونية','المشاركة والنتائج المجمعة','grades','docsSurveyAdmin',''],
+ ['التقارير','عرض التقارير والطباعة','reports','','']
+]){
+ const b=document.createElement('button');b.type='button';b.className='btn';b.style.cssText='display:grid;gap:4px;text-align:start;align-content:start;min-width:0;padding:12px;white-space:normal';
+ const label=document.createElement('strong'),caption=document.createElement('small');label.textContent=title;caption.textContent=description;b.append(label,caption);b.onclick=()=>docsCommandJump(page,id,filter);commandCenter.querySelector('[data-command-links]').append(b);
+}
+/* DOCS_COMMAND_CENTER_END */
+
 const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
 docsRenderWorkCenter([]);
 document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
