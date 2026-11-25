@@ -1,0 +1,17 @@
+name: Integrated guidance checks
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/build-worker.mjs --check
+      - run: node --check worker.js
+      - run: node --test tests/guidance-work-review.test.mjs tests/guidance-noor-comparison.test.mjs tests/guidance-measure-model.test.mjs tests/guidance-surveys.test.mjs tests/guidance-followup-queue.test.mjs

@@ -1,0 +1,402 @@
+name: Browser operational checks
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 9,21 * * *'
+permissions:
+  contents: read
+jobs:
+  browser-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            engines: chromium,firefox
+          - runner: macos-15
+            engines: webkit
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/build-worker.mjs --check
+      - run: npm install --no-save --package-lock=false @playwright/test@1.51.1
+      - if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium firefox
+      - if: runner.os == 'macOS'
+        run: npx playwright install webkit
+      - name: Execute isolated browser checks
+        env:
+          TEST_ENGINES: ${{ matrix.engines }}
+        run: |
+          mkdir -p browser-results
+          cat > browser-smoke.mjs <<'EOF'
+          import {chromium,firefox,webkit,expect} from '@playwright/test';
+          import {createServer} from 'node:http';
+          import {readFile} from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const source=await readFile('worker.js','utf8');
+          const {default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+          globalThis.fetch=async()=>{throw Error('Outbound worker network forbidden')};
+          const origin='http://127.0.0.1:4173';
+          const users=['usr_browser_fixture_a','usr_browser_fixture_b'].map((id,i)=>({id,name:'Test account '+i,role:'teacher',loginIdentifier:'fixture'+i+'@example.invalid'}));
+          const studentFixtures=users.map((user,owner)=>Array.from({length:100},(_,i)=>({
+            key:'fixture-'+owner+'-'+i,name:'طالب تجريبي '+owner+'-'+String(i+1).padStart(3,'0'),
+            student_no:'TEST-'+owner+'-'+String(i+1).padStart(3,'0'),stage:'متوسط',grade:i<60?'الأول المتوسط':'الثاني المتوسط',classroom:String(i%4+1)
+          })));
+          let session=null;
+          let serverUnavailable=false;
+          let blockedRequests=0;
+          // Independent minimal reproduction of upstream Playwright issue #42775.
+          const probeServer=createServer((req,res)=>{
+            if(req.url==='/sw.js'){
+              res.writeHead(200,{'content-type':'application/javascript','cache-control':'no-store'});
+              return res.end("self.addEventListener('install',e=>e.waitUntil(self.skipWaiting()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{if(e.request.mode==='navigate')e.respondWith(new Response('<html><body>OFFLINE_PROBE</body></html>',{headers:{'content-type':'text/html'}}))});");
+            }
+            res.writeHead(200,{'content-type':'text/html'});
+            res.end('<html><body>ONLINE_PROBE<script>navigator.serviceWorker.register("/sw.js")</script></body></html>');
+          });
+          await new Promise(resolve=>probeServer.listen(0,'127.0.0.1',resolve));
+          const probeOrigin='http://127.0.0.1:'+probeServer.address().port;
+          const server=createServer(async(req,res)=>{
+            if(serverUnavailable){blockedRequests++;req.socket.destroy();return}
+            try{
+              const url=new URL(req.url,origin);
+              if(url.origin!==origin){res.writeHead(403).end();return}
+              // Fixture authentication is served only by the isolated loopback test server.
+              if(url.pathname.startsWith('/api/auth/')){
+                const action=url.pathname.split('/').pop();
+                const reply=(status,body)=>res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify(body));
+                if(action==='login'&&req.method==='POST'){
+                  let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192){reply(413,{ok:false});return}}
+                  const body=JSON.parse(raw);
+                  session=users.find(u=>u.loginIdentifier===body.loginIdentifier&&body.password==='FixturePassword123')||null;
+                }
+                if(action==='verify-deletion'&&req.method==='POST'&&session){
+                  let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192){reply(413,{ok:false});return}}
+                  reply(JSON.parse(raw).password==='FixturePassword123'?200:403,{ok:JSON.parse(raw).password==='FixturePassword123'});return;
+                }
+                if(action==='logout'&&req.method==='POST'){session=null;reply(200,{ok:true});return}
+                if((action==='login'||action==='me')&&session){reply(200,{ok:true,user:session});return}
+                reply(401,{ok:false,code:'UNAUTHORIZED'});return;
+              }
+              if(url.pathname==='/api/students'&&req.method==='GET'&&session){
+                const students=studentFixtures[users.findIndex(u=>u.id===session.id)];
+                res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify({ok:true,students}));return;
+              }
+              if(url.pathname.startsWith('/api/')||url.pathname==='/health'){
+                res.writeHead(401,{'content-type':'application/json'}).end(JSON.stringify({ok:false,code:'UNAUTHORIZED'}));return;
+              }
+              const response=await worker.fetch(new Request(url,{method:req.method,headers:req.headers}),{});
+              res.writeHead(response.status,Object.fromEntries(response.headers));
+              res.end(Buffer.from(await response.arrayBuffer()));
+            }catch(e){console.error(e);res.writeHead(500).end()}
+          });
+          await new Promise(resolve=>server.listen(4173,'127.0.0.1',resolve));
+          let failures=0;
+          try{
+            const enabled=process.env.TEST_ENGINES.split(',');
+            for(const [name,engine] of Object.entries({chromium,firefox,webkit}).filter(([name])=>enabled.includes(name))){
+              const browser=await engine.launch();
+              try{
+                for(const viewport of [{width:1280,height:900},{width:390,height:844},{width:820,height:1180}]){
+                  session=null;
+                  const context=await browser.newContext({viewport});
+                  const page=await context.newPage();
+                  const errors=[];
+                  page.on('pageerror',e=>errors.push(e.message));
+                  const label=name+'-'+viewport.width;
+                  try{
+                    await page.goto(origin,{waitUntil:'load'});
+                    await page.locator('#authGate').waitFor({state:'visible'});
+                    await page.locator('#tabRegister').click();
+                    await page.locator('#registerName').waitFor({state:'visible'});
+                    await page.locator('#tabLogin').click();
+                    await page.locator('#registerName').waitFor({state:'hidden'});
+                    assert.equal(await page.locator('#emailInput').count(),1);
+                    assert.equal(await page.locator('#passwordInput').count(),1);
+                    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'horizontal overflow');
+                    let backupPassword='FixturePassword123';
+                    page.on('dialog',dialog=>dialog.type()==='prompt'?dialog.accept(backupPassword):dialog.accept());
+                    let firstBackup=null;
+                    for(const user of users){
+                      await page.locator('#emailInput').fill(user.loginIdentifier);
+                      await page.locator('#passwordInput').fill('FixturePassword123');
+                      await page.locator('#submitAuth').click();
+                      try{await page.locator('#appMain').waitFor({state:'visible',timeout:15000})}catch(e){console.error('Mock login diagnostic '+label,await page.locator('#authMsg').textContent(), 'online=',await page.evaluate(()=>navigator.onLine));throw e}
+                      await page.waitForFunction(name=>document.querySelector('#accountName')?.textContent===name,user.name);
+                      await page.locator('#workspaceNav').waitFor({state:'visible'});
+                      for(const tab of ['documents','students','reports','messages','home']){
+                        const button=page.locator('#workspaceNav [data-workspace="'+tab+'"]');
+                        await button.click();
+                        assert.equal(await button.getAttribute('aria-current'),'page');
+                        if(tab==='students'){
+                          const owner=users.indexOf(user);
+                          await page.waitForFunction(()=>document.querySelector('#s360Total')?.textContent==='100',null,{timeout:20000});
+                          const search=page.locator('#student360Search');
+                          await search.fill('TEST-'+owner+'-100');
+                          await page.waitForFunction(expected=>document.querySelector('#studentRoster')?.textContent.includes(expected),'طالب تجريبي '+owner+'-100');
+                          await search.fill('TEST-'+(1-owner)+'-100');
+                          await page.waitForFunction(()=>document.querySelector('#studentRoster .s360-result-count')?.textContent.includes('0 من 100'));
+                          await search.fill('');
+                          const grade=page.locator('#student360Grade'),classroom=page.locator('#student360Class');
+                          const count=async n=>page.waitForFunction(expected=>document.querySelector('#studentRoster .s360-result-count')?.textContent.includes('النتائج: '+expected+' من 100'),n,{timeout:10000});
+                          await count(100);
+                          await grade.selectOption('الأول المتوسط');await count(60);
+                          await classroom.selectOption('1');await count(15);
+                          await grade.selectOption('الثاني المتوسط');await count(10);
+                          await grade.selectOption('');await count(25);
+                          await classroom.selectOption('');await count(100);
+                          console.log('PASS grade and classroom filters '+label+' '+owner);
+                          console.log('PASS account-scoped 100 students '+label+' '+owner);
+                        }
+                      }
+                      // Exercise the real editor and IndexedDB, not a mock storage API.
+                      const owner=users.indexOf(user);
+                      await page.locator('#workspaceNav [data-workspace="documents"]').click();
+                      await page.locator('#docsViewSelector [data-view="templates"]').click();
+                      await page.locator('#templates button.template').first().click();
+                      await page.locator('#editor.visible').waitFor();
+                      const title='Fixture document '+owner+' '+label;
+                      await page.locator('#docTitle').fill(title);
+                      await page.locator('#editor [data-jump="saveDoc"]').click();
+                      await page.locator('#saveDoc').click();
+                      const readDocuments=()=>page.evaluate(async id=>new Promise((resolve,reject)=>{
+                        const request=indexedDB.open('athat-docs-unified-v2-'+id,3);
+                        request.onupgradeneeded=()=>request.transaction.abort();
+                        request.onerror=()=>reject(request.error);
+                        request.onsuccess=()=>{
+                          const db=request.result;
+                          const query=db.transaction('documents','readonly').objectStore('documents').getAll();
+                          query.onsuccess=()=>{db.close();resolve(query.result)};
+                          query.onerror=()=>{db.close();reject(query.error)};
+                        };
+                      }),user.id);
+                      let rows=[];
+                      for(let attempt=0;attempt<50;attempt++){
+                        rows=await readDocuments();
+                        if(rows.some(row=>row.title===title))break;
+                        await page.waitForTimeout(200);
+                      }
+                      assert.equal(rows.filter(row=>row.title===title).length,1,'exactly one persisted document');
+                      assert.ok(rows.every(row=>!row.title.startsWith('Fixture document '+(1-owner)+' ')),'other account document must not exist');
+                      await page.locator('#previewDoc').click();
+                      await page.locator('#docsUnifiedPreview').waitFor({state:'visible'});
+                      // Test the actual print popup in every engine; Chromium also renders a PDF artifact.
+                      const popupPromise=page.waitForEvent('popup');
+                      await page.locator('#docsUnifiedPrint').click();
+                      const printPage=await popupPromise;
+                      try{
+                        await printPage.locator('.doc-a4').waitFor({state:'visible'});
+                        assert.equal(await printPage.locator('.doc-a4').count(),1);
+                        assert.ok((await printPage.locator('.doc-a4').innerText()).includes(title),'printed document must contain its title');
+                        await printPage.getByRole('button',{name:'طباعة / حفظ PDF',exact:true}).waitFor({state:'visible'});
+                        if(name==='chromium'){
+                          const pdf=await printPage.pdf({path:'browser-results/'+label+'-account-'+owner+'.pdf',format:'A4',preferCSSPageSize:true,printBackground:true});
+                          assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+                          assert.ok(pdf.length>1000,'PDF must contain rendered content');
+                        }
+                        console.log('PASS print popup '+label+' '+owner);
+                      }finally{await printPage.close()}
+                      await page.locator('#docsUnifiedClose').click();
+                      await page.locator('#closeEditor').click();
+                      await page.locator('#editor.visible').waitFor({state:'hidden'});
+                      assert.ok((await readDocuments()).some(row=>row.title===title),'document persists after closing editor');
+                      console.log('PASS document persistence and A4 preview '+label+' '+owner);
+                      // Export through the real UI, inspect ciphertext, then restore through the real file input.
+                      await page.locator('#workspaceSettingsLink').click();
+                      await page.locator('[data-ds-tab="storage"]').click();
+                      await page.locator('#dsBackup').waitFor({state:'visible'});
+                      const downloadPromise=page.waitForEvent('download',{timeout:30000}).then(value=>({value}),error=>({error}));
+                      await page.locator('#dsBackup').click();
+                      const downloaded=await downloadPromise;
+                      if(downloaded.error)throw Error('Backup download failed: '+await page.locator('#dsTransferStatus').textContent()+' | '+downloaded.error.message);
+                      const download=downloaded.value;
+                      const bytes=await readFile(await download.path());
+                      const envelope=JSON.parse(bytes.toString());
+                      assert.equal(envelope.format,'ATHAT-DOCS-ENCRYPTED-BACKUP');
+                      assert.equal(envelope.algorithm,'AES-256-GCM');
+                      assert.ok(envelope.ciphertext.length>0&&!bytes.toString().includes(title));
+                      const restore=async(buffer)=>{
+                        const chooserPromise=page.waitForEvent('filechooser',{timeout:10000});
+                        await page.locator('#dsRestore').click();
+                        const chooser=await chooserPromise;
+                        await chooser.setFiles({name:'fixture-backup.json',mimeType:'application/json',buffer});
+                      };
+                      const status=page.locator('#dsTransferStatus');
+                      backupPassword='IncorrectFixturePassword';
+                      await restore(bytes);
+                      await expect(page.locator('#dsTransferStatus')).toContainText('كلمة مرور النسخة غير صحيحة',{timeout:20000});
+                      backupPassword='FixturePassword123';
+                      await restore(bytes);
+                      await expect(page.locator('#dsTransferStatus')).toContainText('لم يُستبدل أي أصل',{timeout:30000});
+                      assert.equal((await readDocuments()).filter(row=>row.title===title).length,1);
+                      // Simulate loss of exactly the synthetic record, then recover via the exported encrypted file.
+                      const lost=(await readDocuments()).find(row=>row.title===title);
+                      await page.evaluate(async ({owner,id})=>new Promise((resolve,reject)=>{
+                        const request=indexedDB.open('athat-docs-unified-v2-'+owner,3);
+                        request.onupgradeneeded=()=>request.transaction.abort();
+                        request.onerror=()=>reject(request.error);
+                        request.onsuccess=()=>{
+                          const db=request.result,tx=db.transaction('documents','readwrite');
+                          tx.objectStore('documents').delete(id);
+                          tx.oncomplete=()=>{db.close();resolve()};
+                          tx.onerror=()=>{db.close();reject(tx.error)};
+                          tx.onabort=()=>{db.close();reject(tx.error)};
+                        };
+                      }),{owner:user.id,id:lost.id});
+                      assert.ok(!(await readDocuments()).some(row=>row.id===lost.id));
+                      await restore(bytes);
+                      await expect(page.locator('#dsTransferStatus')).toContainText('الاستعادة: 1 عنصر مضاف',{timeout:30000});
+                      assert.deepEqual((await readDocuments()).find(row=>row.id===lost.id),lost,'restored record must match original exactly');
+                      console.log('PASS missing synthetic document recovery '+label+' '+owner);
+                      if(owner===0)firstBackup=bytes;
+                      else{
+                        await restore(firstBackup);
+                        await expect(page.locator('#dsTransferStatus')).toContainText('النسخة تخص حسابًا مختلفًا',{timeout:20000});
+                        assert.ok((await readDocuments()).every(row=>!row.title.startsWith('Fixture document 0 ')));
+                      }
+                      console.log('PASS encrypted backup and restore protections '+label+' '+owner);
+                      await page.locator('#logoutDocs').click();
+                      await page.locator('#authGate').waitFor({state:'visible'});
+                      assert.equal(await page.locator('#appMain').isVisible(),false);
+                    }
+                    // Re-enter account A after using account B and verify the persisted document via the actual interface.
+                    const first=users[0];
+                    await page.locator('#emailInput').fill(first.loginIdentifier);
+                    await page.locator('#passwordInput').fill('FixturePassword123');
+                    await page.locator('#submitAuth').click();
+                    await page.locator('#appMain').waitFor({state:'visible'});
+                    await page.waitForFunction(name=>document.querySelector('#accountName')?.textContent===name,first.name);
+                    await page.locator('#workspaceNav [data-workspace="documents"]').click();
+                    const savedTitle='Fixture document 0 '+label;
+                    await page.locator('#search').fill(savedTitle);
+                    const savedCard=page.locator('#docs article.doc').filter({has:page.getByText(savedTitle,{exact:true})});
+                    await expect(savedCard).toHaveCount(1);
+                    await expect(savedCard).toBeVisible();
+                    await savedCard.getByRole('button',{name:'فتح',exact:true}).click();
+                    await expect(page.locator('#docTitle')).toHaveValue(savedTitle);
+                    await page.locator('#closeEditor').click();
+                    await page.locator('#editor.visible').waitFor({state:'hidden'});
+                    await page.locator('#search').fill('Fixture document 1 '+label);
+                    await expect(page.locator('#docs article.doc').filter({has:page.getByText('Fixture document 1 '+label,{exact:true})})).toHaveCount(0);
+                    await page.locator('#search').fill('');
+                    await page.locator('#logoutDocs').click();
+                    await page.locator('#authGate').waitFor({state:'visible'});
+                    console.log('PASS document persistence across account switching '+label);
+                    console.log('PASS mock-account navigation '+label);
+                    // Verify real service-worker caching and offline navigation, without an account.
+                    await page.waitForFunction(async()=>{
+                      if(!navigator.serviceWorker.controller)return false;
+                      const entries=await Promise.all(['/','/peer-sync.js','/auto-sync.js'].map(p=>caches.match(p)));
+                      return entries.every(r=>r?.ok);
+                    },null,{timeout:30000});
+                    // Independently test loss of connectivity to the origin without
+                    // using the browser engine's offline emulation.
+                    const blockedBefore=blockedRequests;
+                    serverUnavailable=true;
+                    try{
+                      const cached=await page.goto(origin+'/?origin-unavailable=1',{waitUntil:'load'});
+                      assert.ok(cached?.ok(),'cached shell must load when origin is unreachable');
+                      await page.locator('#authGate').waitFor({state:'visible'});
+                      await page.locator('#tabRegister').click();
+                      await page.locator('#registerName').waitFor({state:'visible'});
+                      await page.locator('#tabLogin').click();
+                      await page.locator('#registerName').waitFor({state:'hidden'});
+                      assert.ok(blockedRequests>blockedBefore,'must exercise a failed origin request');
+                      console.log('PASS origin-unavailable '+label);
+                    }finally{serverUnavailable=false}
+                    // Restore a normal online navigation after the intentional origin failure.
+                    // This separates the native offline check from the previous failed socket.
+                    const onlineResponse=await page.goto(origin+'/?online-reset=1',{waitUntil:'load'});
+                    assert.ok(onlineResponse?.ok(),'online reset must succeed');
+                    await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller),null,{timeout:30000});
+                    let upstreamOfflineDefect=false;
+                    if(name==='webkit'){
+                      const probeContext=await browser.newContext({serviceWorkers:'allow'});
+                      const probe=await probeContext.newPage();
+                      try{
+                        await probe.goto(probeOrigin);
+                        await probe.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
+                        await probe.reload();
+                        await expect(probe.locator('body')).toHaveText('OFFLINE_PROBE');
+                        await probeContext.setOffline(true);
+                        try{
+                          await probe.reload({waitUntil:'load'});
+                          await expect(probe.locator('body')).toHaveText('OFFLINE_PROBE');
+                          console.log('UPSTREAM PROBE PASS '+label);
+                        }catch(error){
+                          upstreamOfflineDefect=/WebKit encountered an internal error/.test(error.message);
+                          if(!upstreamOfflineDefect)throw error;
+                          console.error('UPSTREAM PROBE FAIL '+label+' '+error.message);
+                        }
+                      }finally{await probeContext.close()}
+                    }
+                    // Always attempt native offline navigation. A reproduced engine
+                    // defect requires additional independent product checks, not a blanket skip.
+                    await context.setOffline(true);
+                    try{
+                      assert.equal(await page.evaluate(()=>navigator.onLine),false);
+                      let nativeError=null;
+                      let response;
+                      try{response=await page.reload({waitUntil:'load'});}
+                      catch(error){nativeError=error;}
+                      if(nativeError){
+                        if(name!=='webkit'||!upstreamOfflineDefect||!/WebKit encountered an internal error/.test(nativeError.message))throw nativeError;
+                        console.log('KNOWN UPSTREAM LIMITATION '+label+' issue #42775; native reopen unverified');
+                        // Independently require cached executable assets under native offline mode.
+                        // Reload an intact page before switching to offline mode.
+                        await context.setOffline(false);
+                        await page.goto(origin,{waitUntil:'load'});
+                        await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
+                        await context.setOffline(true);
+                        assert.equal(await page.evaluate(()=>navigator.onLine),false);
+                        const cacheEvidence=await page.evaluate(async()=>{
+                          const results=await Promise.all(['/','/peer-sync.js','/auto-sync.js'].map(async p=>{
+                            const r=await caches.match(p);
+                            return Boolean(r?.ok&&(await r.text()).length>100);
+                          }));
+                          return results.every(Boolean);
+                        });
+                        assert.ok(cacheEvidence,'offline cache must contain complete executable assets');
+                        await page.locator('#authGate').waitFor({state:'visible'});
+                        await page.locator('#tabRegister').click();
+                        await page.locator('#registerName').waitFor({state:'visible'});
+                        await page.locator('#tabLogin').click();
+                        await page.locator('#registerName').waitFor({state:'hidden'});
+                        console.log('PASS offline cached assets and live interface '+label+'; real origin-loss navigation passed separately');
+                      }else{
+                        assert.ok(response?.ok(),'offline shell must load from cache');
+                        assert.equal(await page.evaluate(()=>navigator.onLine),false);
+                        await page.locator('#authGate').waitFor({state:'visible'});
+                        await page.locator('#tabRegister').click();
+                        await page.locator('#registerName').waitFor({state:'visible'});
+                        await page.locator('#tabLogin').click();
+                        await page.locator('#registerName').waitFor({state:'hidden'});
+                      }
+                    }finally{await context.setOffline(false)}
+                    assert.deepEqual(errors,[]);
+                    console.log('PASS '+label);
+                  }catch(e){failures++;console.error('FAIL '+label,e);await page.screenshot({path:'browser-results/'+label+'.png',fullPage:true}).catch(()=>{})}
+                  finally{await context.close()}
+                }
+              }finally{await browser.close()}
+            }
+          }finally{server.close();probeServer.close()}
+          if(failures)process.exitCode=1;
+          EOF
+          node browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results-${{ runner.os }}
+          path: browser-results/
+          if-no-files-found: ignore

@@ -1,0 +1,39 @@
+name: Release readiness
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact candidate commit SHA to verify
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
+permissions:
+  actions: read
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require successful checks for the exact candidate
+        uses: actions/github-script@v7
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        with:
+          script: |
+            const sha=process.env.CANDIDATE_SHA;
+            if(!/^[0-9a-f]{40}$/.test(sha))throw Error('An exact full commit SHA is required');
+            const required=['Account local backup protection checks','DeepSeek integration checks','Official Docs A4 checks','Educational assistant integration checks','Account local mirror checks','ATHAT Original A4 Parity','Docs settings UI checks','Integrated guidance checks','Student grade analysis','Docs source and storage checks','Browser operational checks','Docs peer-sync checks'];
+            const runs=await github.paginate(github.rest.actions.listWorkflowRunsForRepo,{...context.repo,head_sha:sha,per_page:100});
+            const failures=[];
+            for(const name of required){
+              const latest=runs.filter(r=>r.name===name&&r.head_sha===sha).sort((a,b)=>b.id-a.id)[0];
+              if(!latest||latest.status!=='completed'||latest.conclusion!=='success')failures.push(name+': '+(latest?.conclusion||latest?.status||'missing'));
+              else core.info(name+': success');
+            }
+            if(failures.length)core.setFailed('Release blocked: '+failures.join('; '));
+            else core.info('All twelve required workflows passed for '+sha);

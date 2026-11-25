@@ -1992,6 +1992,22 @@ function docsCommitFollowup(database,entry,expected){
   tx.onerror=()=>reject(tx.error||Error('تعذر حفظ المتابعة'));
  });
 }
+function docsFollowupReviewQueue(rows,today){
+ const out=[];
+ for(const row of rows){
+  const p=row?.plan;if(!p||p.status==='approved'||!p.id)continue;
+  const reasons=[];
+  const due=docsFollowupDate(p.due);
+  if(due&&today&&due<today)reasons.push('موعد المتابعة مضى');
+  if(!due)reasons.push('موعد المتابعة غير موثق');
+  if(!String(p.action||'').trim()||!String(p.goal||'').trim())reasons.push('الإجراء أو الهدف غير مكتمل');
+  if(p.before!==null&&p.before!==undefined&&String(p.before).trim()!==''&&(p.after===null||p.after===undefined||String(p.after).trim()===''))reasons.push('القياس البعدي غير مسجل');
+  if(!String(p.result||'').trim())reasons.push('النتيجة غير موثقة');
+  if(!reasons.length)reasons.push('جاهزة للمراجعة اليدوية');
+  out.push({id:p.id,plan:p,reasons,overdue:!!(due&&today&&due<today)});
+ }
+ return out.sort((a,b)=>Number(b.overdue)-Number(a.overdue)||String(a.plan.due||'').localeCompare(String(b.plan.due||''))||String(a.id).localeCompare(String(b.id)));
+}
 let docsFollowupCenterToken=0;
 async function docsRenderFollowupCenter(){
  const root=$('docsFollowupCenter');if(!root)return;
@@ -2009,6 +2025,13 @@ async function docsRenderFollowupCenter(){
   const title=document.createElement('h3');title.textContent='المتابعة التربوية';root.append(title);
   const note=document.createElement('p');note.className='muted';note.textContent='خطط متابعة محلية مستقلة عن حالة السجل الأصلي، ويُحدد التأخر من موعد المتابعة الهجري.';root.append(note);
   const stats=document.createElement('p');stats.textContent=['مسودة','قيد التنفيذ','متأخرة','معتمدة'].map(k=>k+': '+(counts.get(k)||0)).join(' · ');root.append(stats);
+  const queue=docsFollowupReviewQueue(rows,today);
+  const review=document.createElement('details');review.className='panel';
+  const heading=document.createElement('summary');heading.textContent='مراجعة الأعمال المطلوبة ('+queue.length+')';review.append(heading);
+  const explanation=document.createElement('p');explanation.className='muted';explanation.textContent='قائمة مستخرجة من المتابعات المحفوظة على الجهاز فقط، وليست حكمًا على جميع أعمال الموجّه. لا تُنشأ سجلات ولا تُعتمد تلقائيًا.';review.append(explanation);
+  if(!queue.length){const p=document.createElement('p');p.textContent='لا توجد متابعات غير معتمدة ضمن البيانات المتاحة.';review.append(p)}
+  for(const item of queue){const button=document.createElement('button');button.type='button';button.className='docs-guidance-row';button.textContent=item.plan.title+' · '+item.reasons.join('؛ ');button.onclick=()=>{if(owner===activeUser&&ownerDb===db)docsOpenFollowup(item.plan).catch(e=>say('تعذر فتح المتابعة: '+e.message))};review.append(button)}
+  root.append(review);
   const selector=document.createElement('select');selector.setAttribute('aria-label','السجل الأصلي للمتابعة');selector.add(new Option('اختر سجلًا لبدء المتابعة',''));
   for(const source of sources.values())selector.add(new Option(source.title,source.id));
   const add=document.createElement('button');add.type='button';add.className='btn';add.textContent='فتح خطة متابعة السجل';if(sources.has(selectedSource))selector.value=selectedSource;add.disabled=!sources.has(selector.value);selector.onchange=()=>add.disabled=!sources.has(selector.value);add.onclick=()=>{const source=sources.get(selector.value);if(source)docsOpenFollowup(source).catch(e=>say('تعذر فتح المتابعة: '+e.message))};
@@ -2040,7 +2063,7 @@ async function docsOpenFollowup(source){
    else if(tag==='textarea'){el.rows=3;el.maxLength=2000}
    else if(key==='before'||key==='after'){el.type='number';el.step='any'}
    else el.maxLength=160;
-   el.value=stored?.[key]??(key==='goal'?String(source.suggestedGoal||'').slice(0,2000):key==='action'?String(source.suggestedAction||'').slice(0,2000):key==='status'?'draft':'');if(key==='status'&&stored?.status==='approved')el.value='active';
+   el.value=stored?.[key]??(key==='goal'?String(source.suggestedGoal||'').slice(0,2000):key==='action'?String(source.suggestedAction||'').slice(0,2000):key==='metric'?String(source.suggestedMetric||'').slice(0,160):key==='before'?(source.suggestedBefore??''):key==='status'?'draft':'');if(key==='status'&&stored?.status==='approved')el.value='active';
    el.dataset.followupField=key;inputs[key]=el;wrap.append(el);form.append(wrap);
   }
   const update=()=>{const locked=stored?.status==='approved';for(const el of Object.values(inputs))el.disabled=locked;save.disabled=locked;approve.disabled=locked;print.disabled=!locked;notice.textContent=locked?'متابعة معتمدة محفوظة محليًا؛ الطباعة من النسخة المحفوظة فقط.':stored?'متابعة محفوظة محليًا. لا يعتبر حفظ المسودة اعتمادًا.':'متابعة جديدة؛ تحفظ على هذا الجهاز فقط.'};
@@ -2049,6 +2072,10 @@ async function docsOpenFollowup(source){
    if(!current()||saving||stored?.status==='approved')return;
    try{
     const values=docsFollowupValidate(Object.fromEntries(Object.entries(inputs).map(([k,v])=>[k,v.value])),final);
+    if(source.type==='educational_measure'||source.type==='educational_survey'){
+     if(values.before===null||values.before<1||values.before>5||(values.after!==null&&(values.after<1||values.after>5)))throw Error('قياس الاستطلاع الجماعي يجب أن يكون بين 1 و5، مع توثيق القياس القبلي.');
+     if(final&&values.after===null)throw Error('أكمل القياس البعدي قبل اعتماد أثر التدخل الجماعي.');
+    }
     if(final&&!confirm('هل راجعت الإجراء والنتيجة وتوافق على اعتماد هذه المتابعة؟'))return;
     if(!current())return;
     saving=true;save.disabled=true;approve.disabled=true;close.disabled=true;
@@ -2079,28 +2106,35 @@ async function docsRenderStudentFollowups(key){
 /* DOCS_FOLLOWUP_END */
 
 /* WORK_CENTER_DRILLDOWN_START */
-const docsWorkLabels={required:'مطلوبة أو مسودات',active:'قيد التنفيذ',done:'موسومة مكتملة',overdue:'موسومة متأخرة',archived:'مؤرشفة',unknown:'حالة غير مصنفة'};
+const docsWorkLabels={required:'مطلوبة أو مسودات',active:'قيد التنفيذ',done:'موسومة مكتملة',approved:'معتمدة',overdue:'موسومة متأخرة',archived:'مؤرشفة',unknown:'حالة غير مصنفة'};
 let docsWorkSelected='';
 let docsWorkSourceRows=[];
-function docsWorkStatus(row){
- const counts=docsWorkCenterCounts([row]);
- return Object.keys(counts).find(key=>counts[key]===1)||'unknown';
+function classifyDocsWorkStatus(value){
+ const status=String(value??'').normalize('NFKC').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[\s_-]+/g,' ').trim().toLowerCase();
+ if(/^(مسوده|مطلوب|مطلوبه|قيد الانتظار|بانتظار التنفيذ|لم يبدا|لم يتم البدء|pending|draft|required|not started)$/.test(status))return 'required';
+ if(/^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|جاري العمل|جار العمل|قيد الانجاز|قيد المتابعه|in progress|active|ongoing)$/.test(status))return 'active';
+ if(/^(مكتمل|مكتمله|تم التنفيذ|منجز|منجزه|تم الانجاز|انجز|completed|done|finished)$/.test(status))return 'done';
+ if(/^(معتمد|معتمده|approved)$/.test(status))return 'approved';
+ if(/^(متاخر|متاخره|overdue)$/.test(status))return 'overdue';
+ if(/^(مؤرشف|مؤرشفه|archived)$/.test(status))return 'archived';
+ return 'unknown';
 }
-function docsWorkCenterCounts(rows){
- const counts={required:0,active:0,done:0,overdue:0,archived:0,unknown:0};
+function summarizeDocsOriginals(rows, {signedIn=false,indexReady=false}={}){
+ const counts={required:0,active:0,done:0,approved:0,overdue:0,archived:0,unknown:0};
+ if(!signedIn)return {counts:null,coverage:'unavailable',students:[],unlinked:0};
+ const students=new Map();let unlinked=0;
  for(const row of rows){
-  // Only explicit status fields. Do not interpret date, signature, attachments or filled content as completion.
-  const raw=String(row.status??'').trim();
-  const status=raw.normalize('NFKC').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[\s_-]+/g,' ').trim().toLowerCase();
-  const key=/^(مسوده|مطلوب|مطلوبه|قيد الانتظار|بانتظار التنفيذ|لم يبدا|لم يتم البدء|pending|draft|required|not started)$/.test(status)?'required':
-   /^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|جاري العمل|جار العمل|قيد الانجاز|قيد المتابعه|in progress|active|ongoing|in progress)$/.test(status)?'active':
-   /^(مكتمل|مكتمله|تم التنفيذ|منجز|منجزه|تم الانجاز|انجز|completed|done|finished)$/.test(status)?'done':
-   /^(متاخر|متاخره|overdue)$/.test(status)?'overdue':
-   /^(مؤرشف|مؤرشفه|archived)$/.test(status)?'archived':'unknown';
-  counts[key]++;
+  const status=classifyDocsWorkStatus(row.status);counts[status]++;
+  const key=row.student_key??row.studentKey;
+  if(typeof key!=='string'||!key.trim()){unlinked++;continue;}
+  if(!students.has(key))students.set(key,{studentKey:key,required:0,active:0,done:0,approved:0,overdue:0,archived:0,unknown:0});
+  students.get(key)[status]++;
  }
- return counts;
+ return {counts,coverage:indexReady?'indexed':'partial',students:[...students.values()],unlinked};
 }
+
+function docsWorkStatus(row){return classifyDocsWorkStatus(row.status);}
+function docsWorkCenterCounts(rows){return summarizeDocsOriginals(rows,{signedIn:true}).counts;}
 function docsWorkTitle(row){
  return String(row.title||row.kind||row.canonicalTitle||row.source_student_name||'سجل بلا عنوان').trim().slice(0,250);
 }
@@ -3843,6 +3877,14 @@ async function openStudent360(key){
  const student=studentIndex.find(s=>s.key===key);if(!student)return;studentActive=key;
  $('student360Detail').hidden=false;$('studentRoster').hidden=true;activateStudentProfileTab('basics');$('student360Title').textContent=student.name+' · ملف الطالب 360°';
  const basics=$('student360Basics');basics.replaceChildren();
+ const review=summarizeDocsOriginals(docsAccountOriginals(),{signedIn:!!activeUser,indexReady:guidanceLoadedUser===activeUser});
+ const own=review.students.find(item=>item.studentKey===key);
+ const workSummary=document.createElement('div'),workTitle=document.createElement('small'),workText=document.createElement('b');
+ workTitle.textContent='الأعمال المرتبطة بالطالب حسب الحالة المسجلة';
+ workText.textContent=own?Object.entries(docsWorkLabels).map(([status,label])=>label+': '+own[status]).join(' · '):'لا توجد أعمال مرتبطة في الفهرس المتاح';
+ if(review.coverage!=='indexed')workText.textContent+=' — عرض جزئي';
+ workSummary.style.gridColumn='1/-1';workSummary.append(workTitle,workText);basics.append(workSummary);
+
  const linkedCare=studentCareIndex[key]||{};
  const healthLabel=student.health_status||(linkedCare.health?'حالة صحية موثقة ضمن سجل مرتبط':'');
  const socialLabel=student.social_status||(linkedCare.special?'رعاية خاصة موثقة ضمن سجل مرتبط':'');
@@ -4344,11 +4386,9 @@ const quickHeading=document.createElement('h2');quickHeading.className='docs-pre
 const latestHeading=document.createElement('h2');latestHeading.className='docs-premium-title';latestHeading.textContent='أقسام المنصة';
 const cards=document.createElement('section');cards.className='docs-quick-grid';
 for(const [label,description,target,view] of [
- ['ملف الطالب 360','البحث في الطلاب والحالات والرعاية','students',''],
  ['مستنداتي وسجلاتي','مستنداتي الجديدة والسجلات القديمة في صفحة واحدة','documents','works'],
  ['ملف الإنجاز','البرامج والمقابلات والمهام وجميع الأعمال السابقة','documents','portfolio'],
  ['السجلات الرسمية A4','نماذج جاهزة للطباعة','documents','templates'],
- ['التقارير والتحليلات','مؤشرات وتقارير الأعمال','reports',''],
  ['البرامج والخطط','متابعة التنفيذ والأعمال','documents','programs'],
  ['الشواهد والمراجع','مرفقات ووثائق السجلات','documents','support'],
  ['مراجعة الجرد','فحص الاكتمال والأرشفة','documents','review'],
@@ -4362,8 +4402,32 @@ for(const [label,description,target,view] of [
 const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
 workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><section id="docsWorkDetails" data-work-details class="docs-work-details" hidden aria-label="الأعمال حسب الحالة"></section><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
 workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
-workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards);
-quickHeading.before(workCenter);
+workspacePages.home.append(originalHero,premiumMetrics,workCenter,latestHeading,cards);
+/* DOCS_COMMAND_CENTER_START */
+const commandCenter=document.createElement('section');commandCenter.id='docsCommandCenter';commandCenter.className='panel';
+commandCenter.innerHTML='<h2>مركز القيادة التربوية</h2><p class="muted">انتقل إلى أعمالك الفعلية من مكان واحد. الأعداد التفصيلية تظهر في مراكزها الأصلية.</p><div data-command-links class="docs-command-grid"></div>';
+workCenter.before(commandCenter);
+function docsCommandJump(page,id,filter){
+ if(!activeUser){say('سجّل الدخول لعرض أعمالك.');return}
+ workspaceGoto(page);
+ if(filter){docsWorkSelected=filter;docsWorkPageLimit=50;docsWorkRenderWorkSelection();docsWorkRenderDetails()}
+ if(id){const target=$(id);if(target){if(id==='docsFollowupCenter'){const review=target.querySelector('details');if(review)review.open=true}target.scrollIntoView({block:'start',behavior:'smooth'})}}
+}
+for(const [title,description,page,id,filter] of [
+ ['الأعمال المطلوبة','المسودات والأعمال المسجلة','home','docsWorkCenter','required'],
+ ['مراجعة المتابعات','المواعيد والنواقص وقياس الأثر','home','docsFollowupCenter',''],
+ ['الأعمال المعتمدة','السجلات ذات الاعتماد الموثق','home','docsWorkCenter','approved'],
+ ['الطلاب','ملفات الطلاب والمتابعة الفردية','students','',''],
+ ['تحليل النتائج','نتائج نور والخطط العلاجية','grades','workspace-grades',''],
+ ['المقاييس التربوية','التحليل المحلي والتقارير','grades','docsMeasureCenter',''],
+ ['الاستبانات الإلكترونية','المشاركة والنتائج المجمعة','grades','docsSurveyAdmin',''],
+ ['التقارير','عرض التقارير والطباعة','reports','','']
+]){
+ const b=document.createElement('button');b.type='button';b.className='btn';b.classList.add('docs-command-tile');
+ const label=document.createElement('strong'),caption=document.createElement('small');label.textContent=title;caption.textContent=description;b.append(label,caption);b.onclick=()=>docsCommandJump(page,id,filter);commandCenter.querySelector('[data-command-links]').append(b);
+}
+/* DOCS_COMMAND_CENTER_END */
+
 const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
 docsRenderWorkCenter([]);
 document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
@@ -5454,46 +5518,51 @@ const dsFullRestore=document.createElement('input');dsFullRestore.type='file';ds
 dsGet('dsRestore').onclick=()=>dsFullRestore.click();
 dsFullRestore.onchange=async()=>{
  const file=dsFullRestore.files?.[0];dsFullRestore.value='';if(!file||!activeUser||!db)return;
+ const restoreOwner=activeUser,restoreDb=db;
+ const ensureRestoreOwner=()=>{if(activeUser!==restoreOwner||db!==restoreDb)throw Error('تغير الحساب أثناء الاستعادة؛ أُوقفت العملية.');};
  try{
-  let backup=JSON.parse(await file.text());
+  let backup=JSON.parse(await file.text());ensureRestoreOwner();
   if(backup.format==='ATHAT-DOCS-ENCRYPTED-BACKUP'){
    const password=prompt('أدخل كلمة مرور الحساب التي استخدمتها عند إنشاء النسخة المشفرة');
    if(!password)return;
    try{backup=await docsOpenSecureBackup(backup,password)}catch{throw Error('كلمة مرور النسخة غير صحيحة أو الملف تالف')}
   }
   if(backup.app!=='ATHAT-DOCS-LOCAL-FULL'||![1,2,3].includes(backup.version)||!Array.isArray(backup.documents)||!Array.isArray(backup.snapshots)||!Array.isArray(backup.deletions))throw Error('صيغة النسخة غير مدعومة.');
-  if(backup.accountId!==activeUser)throw Error('النسخة تخص حسابًا مختلفًا؛ لا يمكن استيرادها.');
+  ensureRestoreOwner();if(backup.accountId!==restoreOwner)throw Error('النسخة تخص حسابًا مختلفًا؛ لا يمكن استيرادها.');
   if(backup.documents.length>3000||backup.snapshots.length>6000||backup.deletions.length>3000)throw Error('النسخة تتجاوز الحد الآمن.');
   if(!confirm('ستضاف البيانات غير الموجودة فقط إلى هذا الجهاز، ولن يُحذف أو يُستبدل أي سجل قائم. هل توافق؟'))return;
   let added=0,skipped=0;
   for(const [storeName,items] of [['documents',backup.documents],['cloudSnapshots',backup.snapshots],['deletions',backup.deletions]]){
    for(const item of items){
+    ensureRestoreOwner();
+    if(storeName==='cloudSnapshots'&&item?.kind==='local-measure-aggregate'&&(item.entry?.owner!==restoreOwner||item.id!=='measure-aggregate:'+item.entry?.id)){skipped++;continue;}
     if(!item||typeof item.id!=='string'||item.id.length>250)continue;
     await new Promise((ok,no)=>{
-     const tx=db.transaction(storeName,'readwrite'),store=tx.objectStore(storeName),req=store.get(item.id);
+     const tx=restoreDb.transaction(storeName,'readwrite'),store=tx.objectStore(storeName),req=store.get(item.id);
      req.onsuccess=()=>{if(req.result)skipped++;else{store.put(item);added++}};
      tx.oncomplete=ok;tx.onerror=()=>no(tx.error);tx.onabort=()=>no(tx.error);
     });
    }
   }
-  if(backup.version>=2){
- const results=await Promise.all([docsRestoreExtra('athat-docs-message-center-v1-'+activeUser,'messages','id',backup.messages),docsRestoreExtra('athat-docs-planfiles-v1-'+activeUser,'files','department',backup.planFiles)]);
- for(const v of results){added+=v.added;skipped+=v.skipped}
- for(const [k,v] of Object.entries(backup.localSettings||{})){if(k.startsWith('athat-docs-')&&k.includes(activeUser)&&typeof v==='string'&&!/token|session/i.test(k)){if(localStorage.getItem(k)===null){localStorage.setItem(k,v);added++}else skipped++}}
+  ensureRestoreOwner();if(backup.version>=2){
+ const results=await Promise.all([docsRestoreExtra('athat-docs-message-center-v1-'+restoreOwner,'messages','id',backup.messages),docsRestoreExtra('athat-docs-planfiles-v1-'+restoreOwner,'files','department',backup.planFiles)]);
+ ensureRestoreOwner();for(const v of results){added+=v.added;skipped+=v.skipped}
+ for(const [k,v] of Object.entries(backup.localSettings||{})){if(k.startsWith('athat-docs-')&&k.includes(restoreOwner)&&typeof v==='string'&&!/token|session/i.test(k)){if(localStorage.getItem(k)===null){localStorage.setItem(k,v);added++}else skipped++}}
 }
-  if(backup.version===3)await docsMirrorGetAll('responses');
+  ensureRestoreOwner();if(backup.version===3)await docsMirrorGetAll('responses');ensureRestoreOwner();
   if(backup.version===3&&Array.isArray(backup.mirrorFiles)){
     const filesResult=await docsRestoreExtra('athat-docs-account-mirror-v1-'+activeUser,'files','id',backup.mirrorFiles);
     added+=filesResult.added;skipped+=filesResult.skipped;
   }
   if(backup.version===3&&Array.isArray(backup.mirrorResponses)){
     for(const item of backup.mirrorResponses){
+     ensureRestoreOwner();
      if(!item||typeof item.id!=='string'||!item.id.startsWith('/api/')||!item.payload)continue;
      const existing=(await docsMirrorGetAll('responses')).find(row=>row.id===item.id);
-     if(!existing){await docsMirrorPut('responses',item);added++}else skipped++;
+     ensureRestoreOwner();if(!existing){await docsMirrorPut('responses',item);added++}else skipped++;
     }
   }
-  await refresh();await dsShowStorage();
+  ensureRestoreOwner();await refresh();ensureRestoreOwner();await dsShowStorage();
   dsGet('dsTransferStatus').textContent='الاستعادة: '+added+' عنصر مضاف، '+skipped+' محفوظ مسبقًا. لم يُستبدل أي أصل.';
  }catch(e){dsGet('dsTransferStatus').textContent='تعذرت الاستعادة: '+e.message}
 };
@@ -6136,20 +6205,23 @@ function gradeUpdateCompareOptions(){
  if(!gradeComparison.rows.length)el('gradeCompareStatus').textContent=state.imports.length<2?'احفظ اختبارين على الأقل للمقارنة.':'اختر الاختبار السابق واللاحق ثم اضغط تحليل التحسن.';
 }
 function gradeCompareKey(record){
- const id=norm(record.id),student=id?'id:'+id:'name:'+norm(record.name)+'|'+norm(record.grade)+'|'+norm(record.cls);
- return student+'|'+norm(record.subject);
+ const id=norm(record.id),subject=norm(record.subject);
+ return id&&subject?JSON.stringify([id,subject]):null;
 }
 function gradeCompareImports(first,second){
- const previous=new Map(),ambiguous=new Set(),out=[];
- for(const r of first.records){
-  const key=gradeCompareKey(r);
-  if(previous.has(key)){ambiguous.add(key);previous.delete(key)}
-  else if(!ambiguous.has(key))previous.set(key,r);
- }
- const used=new Set();
- for(const r of second.records){
-  const key=gradeCompareKey(r);if(used.has(key)){ambiguous.add(key);continue}used.add(key);
-  const before=previous.get(key);if(!before||ambiguous.has(key))continue;
+ const index=records=>{
+  const map=new Map(),ambiguous=new Set();
+  for(const r of records){
+   const key=gradeCompareKey(r);if(!key)continue;
+   if(map.has(key)){ambiguous.add(key);map.delete(key)}
+   else if(!ambiguous.has(key))map.set(key,r);
+  }
+  return map;
+ };
+ const previous=index(first.records),next=index(second.records),out=[];
+ for(const [key,r] of next){
+  const before=previous.get(key);
+  if(!before||![before.pct,r.pct].every(v=>Number.isFinite(v)&&v>=0&&v<=100))continue;
   out.push({name:r.name,grade:r.grade,cls:r.cls,subject:r.subject,before:before.pct,after:r.pct,change:Math.round((r.pct-before.pct)*100)/100});
  }
  return out.sort((a,b)=>a.change-b.change);
@@ -6160,10 +6232,10 @@ el('gradeCompareRun').onclick=()=>{
  if(!idA||!idB||idA===idB){status.textContent='اختر ملفي اختبار مختلفين للمقارنة.';return}
  const a=state.imports.find(x=>x.id===idA),b=state.imports.find(x=>x.id===idB);
  if(!a||!b){status.textContent='أحد الملفين غير موجود في الجهاز.';return}
- const rows=gradeCompareImports(a,b);if(!rows.length){status.textContent='لم أعثر على طالب ومادة مشتركة بين الملفين. راجع أسماء الطلاب والصفوف والمواد.';return}
+ const rows=gradeCompareImports(a,b);if(!rows.length){status.textContent='لم أعثر على درجات فريدة مشتركة بمعرّف الطالب والمادة. تحقق من أرقام الطلاب والتكرارات.';return}
  gradeComparison.rows=rows;el('gradeCompareExport').disabled=false;
  const improved=rows.filter(x=>x.change>0).length,declined=rows.filter(x=>x.change<0).length,stable=rows.length-improved-declined;
- status.textContent='قورنت درجات '+rows.length+' مادة لطالب، وفق الأسماء أو الأرقام المتطابقة. التغير بالنقاط المئوية.';
+ status.textContent='قورنت درجات '+rows.length+' مادة لطالب، وفق أرقام الطلاب والمواد المتطابقة فقط؛ استُبعدت السجلات بلا معرف أو المتكررة في أي ملف. التغير بالنقاط المئوية.';
  for(const [caption,value] of [['الدرجات المتطابقة',rows.length],['تحسن',improved],['انخفاض',declined],['دون تغيير',stable]]){
   const article=document.createElement('article'),strong=document.createElement('b'),small=document.createElement('small');strong.textContent=String(value);small.textContent=caption;article.append(strong,small);metrics.append(article)
  }
@@ -6403,6 +6475,161 @@ paint();
 })();
 /* DOCS_GRADE_MODULE_END */
 
+/* DOCS_MEASURE_CENTER_START */
+(function(){
+// Adapted from AAA/src/educational-measure-model.ts. Local descriptive analysis only.
+const OPTIONS=["لا أوافق بشدة","لا أوافق","محايد","أوافق","أوافق بشدة"];
+const MEASURE_DISCLAIMER="أداة استطلاعية تربوية غير مقننة؛ ليست تشخيصًا نفسيًا ولا تحدد حاجة الفرد إلى علاج. نتائجها وصفية للاسترشاد بتخطيط الدعم.";
+const STARTER_MEASURES=[
+ {title:"التكيف المدرسي",audience:"الطلاب",description:"الانطباعات العامة عن التأقلم مع البيئة المدرسية.",questions:["أشعر بالارتياح أثناء وجودي في المدرسة.","أستطيع طلب المساعدة عندما أواجه صعوبة مدرسية.","لدي علاقة إيجابية مع زملائي.","أفهم ما تتوقعه المدرسة مني.","أجد صعوبة مستمرة في التأقلم مع يومي الدراسي."] ,reverse:[4]},
+ {title:"الدافعية للتعلم",audience:"الطلاب",description:"اتجاهات الطالب نحو التعلم والمثابرة.",questions:["أحرص على فهم الدروس حتى عندما تكون صعبة.","أضع لنفسي هدفًا دراسيًا واضحًا.","أستمر في المحاولة بعد الخطأ.","أرى أن ما أتعلمه مهم لمستقبلي.","أؤجل أنشطتي الدراسية حتى اللحظة الأخيرة."] ,reverse:[4]},
+ {title:"قلق الاختبارات",audience:"الطلاب",description:"استطلاع خبرات الطلاب المتعلقة بمواقف الاختبارات، دون فرز سريري.",questions:["أشعر بتوتر يؤثر في تركيزي قبل الاختبارات.","يصعب علي النوم بسبب التفكير في الاختبارات.","أواجه صعوبة في تذكر المعلومات عند الاختبار.","أشعر براحة أكبر عندما أضع خطة للمذاكرة.","أحتاج إلى تعلم طرق تساعدني على إدارة التوتر أثناء الاختبارات."] ,reverse:[3]},
+ {title:"الانتماء المدرسي",audience:"الطلاب",description:"مؤشرات وصفية للإحساس بالأمان والاندماج والمشاركة.",questions:["أشعر أنني عضو مهم في مدرستي.","أجد من يستمع إلى رأيي في المدرسة.","أشارك في الأنشطة المدرسية عندما تتاح لي الفرصة.","أشعر باحترام الآخرين لي في المدرسة.","أشعر بالعزلة خلال اليوم الدراسي."] ,reverse:[4]},
+ {title:"الاحتياجات الإرشادية",audience:"الطلاب",description:"تحديد موضوعات الدعم التي يرغب الطلاب في الحصول عليها.",questions:["أحتاج إلى إرشادات تساعدني على تنظيم وقتي.","أحتاج إلى دعم في مهارات الاستذكار.","أرغب في تعلم مهارات التواصل وحل الخلافات.","أحتاج إلى مساعدة في التعامل مع ضغوط الدراسة.","أرغب في معرفة طرق الحصول على المساعدة عند مواجهة مشكلة."] ,reverse:[]}
+];
+
+function summarizeMeasure(rows, itemCount, reverse=[]){
+ if(!Number.isInteger(itemCount)||itemCount<3||itemCount>100)throw new RangeError('Invalid item count');
+ if(!Array.isArray(rows)||!Array.isArray(reverse)||reverse.some(i=>!Number.isInteger(i)||i<0||i>=itemCount))throw new TypeError('Invalid input');
+ const valid=rows.filter(r=>Array.isArray(r)&&r.length===itemCount&&r.every(v=>Number.isInteger(v)&&v>=1&&v<=5));
+ const adjusted=valid.map(r=>r.map((v,i)=>reverse.includes(i)?6-v:v));
+ const n=valid.length,mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+ const variance=a=>{const m=mean(a);return a.length>1?a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1):null};
+ const items=Array.from({length:itemCount},(_,i)=>({item:i+1,mean:mean(adjusted.map(r=>r[i])),distribution:[1,2,3,4,5].map(v=>valid.filter(r=>r[i]===v).length)}));
+ const totals=adjusted.map(r=>r.reduce((x,y)=>x+y,0));
+ const totalVariance=variance(totals);
+ const alpha=n>=30&&totalVariance>0?itemCount/(itemCount-1)*(1-items.reduce((s,_,i)=>s+variance(adjusted.map(r=>r[i])),0)/totalVariance):null;
+ return {count:n,rejected:rows.length-n,mean:mean(adjusted.map(r=>mean(r))),items,alpha,disclaimer:MEASURE_DISCLAIMER};
+}
+
+const host=document.getElementById('workspace-grades');if(!host)return;
+const section=document.createElement('section');section.className='panel';section.id='docsMeasureCenter';
+section.innerHTML='<h2>مركز المقاييس التربوية</h2><p class="muted" data-disclaimer></p><label>الأداة الاستطلاعية <select data-measure></select></label><ol data-questions></ol><p class="muted">أدخل استجابات مجهولة، كل سطر استجابة واحدة بخمس درجات من 1 إلى 5 مفصولة بفواصل. لا تدخل أسماء أو معرفات. تُحفظ النتائج المجمعة فقط عند اختيار الحفظ، ولا تُحفظ الإجابات الفردية.</p><textarea data-answers rows="6" maxlength="100000" aria-label="استجابات الاستطلاع" style="width:100%"></textarea><div class="actions"><button type="button" class="primary" data-analyze>تحليل الاستجابات</button><button type="button" class="btn" data-clear>مسح</button></div><div data-result role="status" aria-live="polite"></div><div class="actions"><button type="button" class="btn" data-save disabled>حفظ التحليل المجمع</button><button type="button" class="btn" data-report disabled>تنزيل تقرير A4</button></div><label>التحليلات المحفوظة على هذا الجهاز <select data-archive></select></label><button type="button" class="btn" data-open>فتح التحليل</button><p data-archive-status role="status" class="muted"></p>';
+host.append(section);
+const get=s=>section.querySelector(s),select=get('[data-measure]'),input=get('[data-answers]'),result=get('[data-result]');
+get('[data-disclaimer]').textContent=MEASURE_DISCLAIMER;
+for(const [i,t] of STARTER_MEASURES.entries())select.add(new Option(t.title,String(i)));
+function questions(){const t=STARTER_MEASURES[Number(select.value)],list=get('[data-questions]');list.replaceChildren();for(const q of t.questions){const li=document.createElement('li');li.textContent=q;list.append(li)}}
+let current=null;
+const archive=get('[data-archive]'),archiveStatus=get('[data-archive-status]');
+const archiveKey=owner=>'athat-docs-measure-aggregate-v1:'+owner;
+async function readArchive(){
+ const owner=activeUser,database=db;if(!owner||!database)return [];
+ const rows=await new Promise((resolve,reject)=>{const r=database.transaction('cloudSnapshots','readonly').objectStore('cloudSnapshots').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)});
+ if(owner!==activeUser||database!==db)return [];
+ return rows.filter(r=>r.kind==='local-measure-aggregate'&&r.entry?.owner===owner&&r.id==='measure-aggregate:'+r.entry.id).map(r=>r.entry).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+async function storeAggregate(entry,owner,database){
+ if(!owner||owner!==activeUser||database!==db||entry.owner!==owner||!entry.summary||entry.summary.count<5||!/^[a-f0-9-]{36}$/i.test(entry.id))throw Error('تعذر التحقق من الحساب أو التحليل');
+ return new Promise((resolve,reject)=>{const tx=database.transaction('cloudSnapshots','readwrite'),store=tx.objectStore('cloudSnapshots'),id='measure-aggregate:'+entry.id,r=store.get(id);r.onsuccess=()=>{if(!r.result)store.add({id,kind:'local-measure-aggregate',entry,downloadedAt:new Date().toISOString()});else if(r.result.kind!=='local-measure-aggregate'||r.result.entry?.owner!==owner)tx.abort()};tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('تعذر حفظ التحليل'))});
+}
+async function refreshArchive(){
+ const owner=activeUser,database=db;archive.replaceChildren(new Option('اختر تحليلًا محفوظًا',''));if(!owner||!database)return;
+ try{
+ const legacy=JSON.parse(localStorage.getItem(archiveKey(owner))||'[]');if(!Array.isArray(legacy))throw Error('تعذر قراءة الأرشيف السابق');
+ for(const entry of legacy){if(owner!==activeUser||database!==db)return;await storeAggregate(entry,owner,database)}
+ const rows=await readArchive();if(owner!==activeUser||database!==db)return;
+ for(const entry of rows)archive.add(new Option(entry.title+' · '+entry.date+' · '+entry.summary.count+' استجابة',entry.id));
+ }catch{if(owner===activeUser&&database===db)archiveStatus.textContent='تعذر قراءة الأرشيف المحلي؛ لم تُحذف النسخ السابقة.'}
+}
+function clear(){input.value='';result.replaceChildren();current=null;get('[data-save]').disabled=true;get('[data-report]').disabled=true}
+function displaySummary(entry){
+ result.replaceChildren();
+ const r=entry.summary,p=document.createElement('p');p.textContent=entry.title+' · الاستجابات الصالحة: '+r.count+' · المستبعدة: '+r.rejected+' · المتوسط: '+(r.mean===null?'غير متاح':r.mean.toFixed(2))+' · ألفا كرونباخ: '+(r.alpha===null?'غير متاح':r.alpha.toFixed(3));result.append(p);
+ const note=document.createElement('p');note.className='muted';note.textContent='النتائج وصفية. التوزيع للإجابات الأصلية، والمتوسط بعد التصحيح.';result.append(note);
+ const table=document.createElement('table');table.className='grade-table';
+ for(const item of r.items){const tr=document.createElement('tr');for(const value of ['الفقرة '+item.item,item.mean===null?'—':item.mean.toFixed(2),item.distribution.join(' / ')]){const td=document.createElement('td');td.textContent=value;tr.append(td)}table.append(tr)}result.append(table);
+ if(r.count>=5&&Number.isFinite(r.mean)){
+  const track=document.createElement('button');track.type='button';track.className='btn';track.textContent='فتح خطة تدخل جماعية من نتائج القياس';
+  track.onclick=()=>{
+   if(!activeUser||entry.owner!==activeUser||current?.id!==entry.id)return;
+   const sourceId=String(entry.id),type='educational_measure';
+   docsOpenFollowup({id:docsFollowupKey(type,sourceId),type,sourceId,title:'تدخل جماعي: '+entry.title,studentKey:'',studentName:'',suggestedMetric:'متوسط الاستجابات بعد التصحيح (1–5)، الأداة نفسها ومجموعة قابلة للمقارنة',suggestedBefore:Number(r.mean.toFixed(4))}).catch(e=>{archiveStatus.textContent='تعذر فتح المتابعة: '+e.message});
+  };
+  const caution=document.createElement('p');caution.className='muted';caution.textContent='تُفتح مسودة جماعية فقط. اختر الإجراء والهدف بعد مراجعة النتائج، وأعد تطبيق الأداة نفسها على مجموعة قابلة للمقارنة قبل إدخال القياس البعدي. لا يعني ارتفاع المتوسط تحسنًا في جميع الأدوات.';
+  result.append(track,caution);
+ }
+}
+input.addEventListener('input',()=>{current=null;get('[data-save]').disabled=true;get('[data-report]').disabled=true});
+get('[data-save]').onclick=async()=>{
+ const owner=activeUser,database=db,entry=current;
+ if(!owner||!database||!entry||entry.owner!==owner||entry.summary.count<5)return;
+ try{const list=await readArchive();if(owner!==activeUser||database!==db)return;if(list.length>=100&&!list.some(e=>e.id===entry.id))throw Error('بلغ الأرشيف الحد المسموح');await storeAggregate(entry,owner,database);if(owner!==activeUser||database!==db)return;await refreshArchive();if(owner!==activeUser||database!==db)return;archive.value=entry.id;archiveStatus.textContent='حُفظ التحليل المجمع في قاعدة الحساب المحلية.';if(current?.id===entry.id)get('[data-save]').disabled=true}catch(e){if(owner===activeUser&&database===db)archiveStatus.textContent='تعذر الحفظ: '+e.message}
+};
+get('[data-open]').onclick=async()=>{
+ const owner=activeUser,database=db,id=archive.value;if(!owner||!database)return;
+ try{const entry=(await readArchive()).find(e=>e.id===id&&e.owner===owner);if(!entry||owner!==activeUser||database!==db)return;clear();current=entry;select.value=String(entry.measure);questions();displaySummary(entry);get('[data-report]').disabled=false;archiveStatus.textContent='تم فتح التحليل المحفوظ.'}catch{if(owner===activeUser&&database===db)archiveStatus.textContent='تعذر فتح التحليل.'}
+};
+get('[data-report]').onclick=()=>{
+ if(!activeUser||!current||current.owner!==activeUser||current.summary.count<5)return;
+ const doc=document.implementation.createHTMLDocument('تقرير المقاييس التربوية');doc.documentElement.lang='ar';doc.documentElement.dir='rtl';
+ const style=doc.createElement('style');style.textContent='@page{size:A4;margin:15mm}body{font:15px/1.7 Arial,sans-serif;color:#222}table{width:100%;border-collapse:collapse}td,th{padding:8px;border:1px solid #aaa}h1,h2{text-align:center}';doc.head.append(style);
+ const add=(tag,t)=>{const e=doc.createElement(tag);e.textContent=t;doc.body.append(e)};
+ add('h1','وزارة التعليم');add('h2','تقرير استطلاع تربوي');add('p',current.title+' · التاريخ الهجري: '+current.date);add('p',MEASURE_DISCLAIMER);
+ add('p','الاستجابات الصالحة: '+current.summary.count+' · المستبعدة: '+current.summary.rejected+' · المتوسط: '+(current.summary.mean===null?'غير متاح':current.summary.mean.toFixed(2))+' · ألفا كرونباخ: '+(current.summary.alpha===null?'غير متاح':current.summary.alpha.toFixed(3)));
+ add('p','التوزيع للإجابات الأصلية من 1 إلى 5، والمتوسط بعد التصحيح. لا يمثل التقرير تشخيصًا أو إثباتًا لصلاحية الأداة.');
+ const table=doc.createElement('table');for(const cells of [['الفقرة','المتوسط','توزيع الاستجابات'],...current.summary.items.map(i=>[current.questions[i.item-1],i.mean===null?'—':i.mean.toFixed(2),i.distribution.join(' / ')])]){const tr=doc.createElement('tr');for(const v of cells){const td=doc.createElement('td');td.textContent=v;tr.append(td)}table.append(tr)}doc.body.append(table);
+ add('p','الموجّه الطلابي: ____________________    التوقيع: ____________________');
+ const url=URL.createObjectURL(new Blob(['<!doctype html>'+doc.documentElement.outerHTML],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='تقرير-استطلاع-A4.html';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+select.onchange=()=>{clear();questions()};get('[data-clear]').onclick=clear;
+get('[data-analyze]').onclick=()=>{
+ result.replaceChildren();if(!activeUser){result.textContent='سجّل الدخول أولًا.';return}
+ const t=STARTER_MEASURES[Number(select.value)];
+ const rows=input.value.split(/\r?\n/).filter(v=>v.trim()).map(v=>v.trim().split(/[,،;\t ]+/).map(x=>Number(x.replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)))));
+ const r=summarizeMeasure(rows,t.questions.length,t.reverse);
+ current={id:crypto.randomUUID(),owner:activeUser,measure:Number(select.value),title:t.title,questions:[...t.questions],date:hijriToday(),summary:r};
+ displaySummary(current);
+ get('[data-save]').disabled=r.count<5;get('[data-report]').disabled=r.count<5;
+ archiveStatus.textContent=r.count<5?'يلزم خمس استجابات صالحة على الأقل لحفظ أو تصدير النتائج المجمعة حفاظًا على الخصوصية.':'يمكن حفظ أو تنزيل التحليل المجمع؛ لا تُحفظ الإجابات الفردية.';
+};
+document.addEventListener('athat-docs-logout',()=>{clear();archive.replaceChildren();delete archive.dataset.owner;archiveStatus.textContent=''});
+document.addEventListener('athat-docs-login',()=>{clear();delete archive.dataset.owner;refreshArchive()});
+document.addEventListener('athat-docs-data-restored',event=>{if(event.detail?.userId===activeUser)refreshArchive()});
+section.addEventListener('focusin',()=>{if(archive.dataset.owner!==String(activeUser||'')){clear();archive.dataset.owner=String(activeUser||'');refreshArchive()}});
+questions();
+
+})();
+/* DOCS_MEASURE_CENTER_END */
+
+/* DOCS_SURVEY_ADMIN_START */
+(function(){
+ const host=document.getElementById('workspace-grades');if(!host)return;
+ const section=document.createElement('section');section.className='panel';section.id='docsSurveyAdmin';
+ section.innerHTML='<h2>الاستبانات الإلكترونية</h2><p class="muted">تحتاج المشاركة اتصالًا بالإنترنت. تُحفظ الإجابات على خادم الاستطلاعات دون أسماء أو أرقام طلاب، ولا تظهر لصاحب الاستبانة إلا النتائج المجمعة عند توفر خمس إجابات صالحة.</p><div class="grade-input-grid"><label>الأداة<select data-template></select></label><label>المدة بالأيام<input data-days type="number" min="1" max="30" value="7"></label></div><label><input type="checkbox" data-consent> أوافق على التخزين الخادمي للاستجابات، وألتزم بضوابط مشاركة الطلاب والخصوصية.</label><div class="actions"><button type="button" class="primary" data-create>إنشاء رابط</button><button type="button" class="btn" data-refresh>تحديث الاستبانات</button></div><p data-status role="status"></p><div data-list></div><div data-summary></div>';
+ host.append(section);
+ const get=s=>section.querySelector(s),status=get('[data-status]'),list=get('[data-list]'),summary=get('[data-summary]');
+ for(const [i,title] of ['التكيف المدرسي','الدافعية للتعلم','قلق الاختبارات','الانتماء المدرسي','الاحتياجات الإرشادية'].entries())get('[data-template]').add(new Option(title,String(i)));
+ let epoch=0,owner=null;
+ function reset(){epoch++;owner=activeUser||null;list.replaceChildren();summary.replaceChildren();status.textContent='';get('[data-consent]').checked=false}
+ async function api(query='',body){const res=await fetch('/api/surveys'+query,{cache:'no-store',...(body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})});const data=await res.json();if(!res.ok||!data.ok)throw Error(res.status===401?'سجّل الدخول أولًا.':'تعذر تنفيذ الطلب: '+String(data.code||res.status));return data}
+ function button(title,action){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=title;b.onclick=action;return b}
+ async function refresh(){
+  if(owner!==activeUser)reset();if(!activeUser){status.textContent='سجّل الدخول أولًا.';return}
+  const session=activeUser,seq=++epoch;
+  try{const data=await api();if(session!==activeUser||seq!==epoch)return;list.replaceChildren();status.textContent='الاستبانات المتاحة: '+data.surveys.length;
+   for(const row of data.surveys){
+    const card=document.createElement('article');card.className='panel';const h=document.createElement('h3');h.textContent=row.title;card.append(h);
+    const state=document.createElement('p');state.textContent=row.closed?'مغلقة':row.expires_at<=Date.now()?'منتهية':'مفتوحة للمشاركة';card.append(state);
+    const url=location.origin+'/survey#'+row.public_token;
+    const input=document.createElement('input');input.readOnly=true;input.value=url;input.setAttribute('aria-label','رابط الاستبانة');input.style.width='100%';card.append(input);
+    const actions=document.createElement('div');actions.className='actions';
+    actions.append(button('نسخ الرابط',async()=>{if(session!==activeUser)return;try{await navigator.clipboard.writeText(url);status.textContent='نُسخ الرابط.'}catch{input.select();status.textContent='حدد الرابط وانسخه يدويًا.'}}));
+    actions.append(button('عرض النتائج',async()=>{const requestEpoch=++epoch;summary.replaceChildren();try{const d=await api('?id='+encodeURIComponent(row.id));if(session!==activeUser||requestEpoch!==epoch)return;const p=document.createElement('p');p.textContent=d.summary?row.title+' · عدد الاستجابات: '+d.count+' · المتوسط: '+d.summary.mean.toFixed(2)+' · ألفا كرونباخ: '+(d.summary.alpha===null?'غير متاح':d.summary.alpha.toFixed(3)):'عدد الاستجابات: '+d.count+'؛ لا تظهر التفاصيل قبل خمس استجابات.';summary.append(p);if(d.summary){const table=document.createElement('table');table.className='grade-table';for(const item of d.summary.items){const tr=document.createElement('tr');for(const v of [d.questions[item.item-1],item.mean.toFixed(2),item.distribution.join(' / ')]){const td=document.createElement('td');td.textContent=v;tr.append(td)}table.append(tr)}summary.append(table);const track=button('فتح خطة تدخل جماعية',()=>{if(session!==activeUser||requestEpoch!==epoch)return;const type='educational_survey',sourceId=row.id;docsOpenFollowup({id:docsFollowupKey(type,sourceId),type,sourceId,title:'تدخل جماعي: '+row.title,studentKey:'',studentName:'',suggestedMetric:'متوسط الاستجابات بعد التصحيح (1–5)، الأداة نفسها ومجموعة قابلة للمقارنة',suggestedBefore:Number(d.summary.mean.toFixed(4))}).catch(e=>{if(session===activeUser)status.textContent=e.message})});summary.append(track);const note=document.createElement('p');note.className='muted';note.textContent='خطة جماعية وليست تشخيصًا فرديًا؛ راجع اتجاه المقياس وقابلية مقارنة المجموعتين قبل تفسير التغير.';summary.append(note)}}catch(e){if(session===activeUser&&requestEpoch===epoch)status.textContent=e.message}}));
+    if(!row.closed&&row.expires_at>Date.now())actions.append(button('إغلاق الاستبانة',async()=>{if(session!==activeUser||!confirm('إغلاق استقبال الإجابات؟'))return;try{await api('',{action:'close',id:row.id});if(session===activeUser)await refresh()}catch(e){if(session===activeUser)status.textContent=e.message}}));
+    card.append(actions);list.append(card);
+   }
+  }catch(e){if(session===activeUser&&seq===epoch)status.textContent=e.message}
+ }
+ get('[data-refresh]').onclick=refresh;
+ get('[data-create]').onclick=async()=>{if(owner!==activeUser)reset();if(!activeUser){status.textContent='سجّل الدخول أولًا.';return}if(!get('[data-consent]').checked){status.textContent='تجب الموافقة على التخزين الخادمي قبل إنشاء الرابط.';return}const session=activeUser,b=get('[data-create]');b.disabled=true;try{await api('',{action:'create',template:Number(get('[data-template]').value),days:Number(get('[data-days]').value),consent:true});if(session===activeUser)await refresh()}catch(e){if(session===activeUser)status.textContent=e.message}finally{b.disabled=false}};
+ document.addEventListener('athat-docs-logout',reset);
+ section.addEventListener('focusin',()=>{if(owner!==activeUser)reset()});
+})();
+/* DOCS_SURVEY_ADMIN_END */
+
+
+
 /* DOCS_SIX_TAB_NAV_START: icon + short label without changing route handlers */
 const docsTabItems=[
  ['home','الرئيسية','الرئيسية','M3 10 12 3l9 7v10H3z M9 20v-7h6v7'],
@@ -6445,6 +6672,17 @@ for(const [id,label,accessible,pathData] of docsTabItems){
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')show()});
 })();
 </script><script src="/peer-sync.js" defer></script><script src="/auto-sync.js" defer></script><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(r=>{if(navigator.onLine)r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)r.update().catch(()=>{})})}).catch(()=>{}))}</script><style id="docs-grade-styles">
+/* Integrated guidance responsive layout */
+.docs-command-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:8px}
+.docs-command-tile{display:grid!important;gap:5px;text-align:start;align-content:start;min-width:0;min-height:76px;padding:12px!important;white-space:normal;overflow-wrap:anywhere}
+.docs-command-tile small{font-size:12px;line-height:1.5;font-weight:400;color:inherit}
+#docsCommandCenter,#docsWorkCenter,#docsFollowupCenter,#docsMeasureCenter,#docsSurveyAdmin{min-width:0;max-width:100%;scroll-margin-top:90px}
+#docsMeasureCenter textarea,#docsMeasureCenter select,#docsSurveyAdmin input:not([type=checkbox]),#docsSurveyAdmin select{max-width:100%;min-width:0;box-sizing:border-box}
+#docsMeasureCenter [data-result],#docsSurveyAdmin [data-summary]{overflow-x:auto;max-width:100%}
+@media(max-width:480px){.docs-command-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.docs-command-tile{padding:10px!important;min-height:80px}.docs-grade-page .grade-input-grid{grid-template-columns:minmax(0,1fr)}#docsCommandCenter,#docsMeasureCenter,#docsSurveyAdmin{padding:12px}}
+@media(max-width:300px){.docs-command-grid{grid-template-columns:minmax(0,1fr)}}
+@media print{#docsCommandCenter{display:none!important}}
+
 #workspaceNav{display:flex;overflow-x:auto;gap:8px;scrollbar-width:thin;max-width:100%;overscroll-behavior-inline:contain}
 #workspaceNav button{flex:0 0 auto;white-space:nowrap;min-width:95px}
 .docs-grade-page .panel{max-width:100%;min-width:0}
