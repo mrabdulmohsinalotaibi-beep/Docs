@@ -31,7 +31,10 @@ jobs:
           const {default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
           globalThis.fetch=async()=>{throw Error('Outbound worker network forbidden')};
           const origin='http://127.0.0.1:4173';
+          let serverUnavailable=false;
+          let blockedRequests=0;
           const server=createServer(async(req,res)=>{
+            if(serverUnavailable){blockedRequests++;req.socket.destroy();return}
             try{
               const url=new URL(req.url,origin);
               if(url.origin!==origin){res.writeHead(403).end();return}
@@ -71,6 +74,22 @@ jobs:
                       const entries=await Promise.all(['/','/peer-sync.js','/auto-sync.js'].map(p=>caches.match(p)));
                       return entries.every(r=>r?.ok);
                     },null,{timeout:30000});
+                    // Independently test loss of connectivity to the origin without
+                    // using the browser engine's offline emulation.
+                    const blockedBefore=blockedRequests;
+                    serverUnavailable=true;
+                    try{
+                      const cached=await page.goto(origin+'/?origin-unavailable=1',{waitUntil:'load'});
+                      assert.ok(cached?.ok(),'cached shell must load when origin is unreachable');
+                      await page.locator('#authGate').waitFor({state:'visible'});
+                      await page.locator('#tabRegister').click();
+                      await page.locator('#registerName').waitFor({state:'visible'});
+                      await page.locator('#tabLogin').click();
+                      await page.locator('#registerName').waitFor({state:'hidden'});
+                      assert.ok(blockedRequests>blockedBefore,'must exercise a failed origin request');
+                      console.log('PASS origin-unavailable '+label);
+                    }finally{serverUnavailable=false}
+                    // Keep the original native offline test as a separate required check.
                     await context.setOffline(true);
                     try{
                       // Reopen via a new URL in WebKit: reload in its Linux test engine
