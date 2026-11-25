@@ -6,6 +6,11 @@ on:
         description: Exact tested commit on main
         required: true
         type: string
+      deploy:
+        description: Explicitly authorize production deployment after verification
+        required: true
+        default: false
+        type: boolean
 permissions:
   actions: read
   contents: read
@@ -53,3 +58,81 @@ jobs:
             candidate-sha.txt
           if-no-files-found: error
           retention-days: 14
+  deploy:
+    if: ${{ inputs.deploy }}
+    needs: prepare
+    runs-on: ubuntu-24.04
+    environment: docs-production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-worker-release
+      - name: Verify artifact and deploy with guarded rollback
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          sha256sum -c worker.sha256
+          test "$(cat candidate-sha.txt)" = "$CANDIDATE_SHA"
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const {CF_API_TOKEN,CF_ACCOUNT_ID,CANDIDATE_SHA,GH_TOKEN,REPO}=process.env;
+          assert.ok(CF_API_TOKEN&&CF_ACCOUNT_ID,'Production credentials required');
+          const base='https://api.cloudflare.com/client/v4/accounts/'+CF_ACCOUNT_ID+'/workers/scripts/athat-docs';
+          async function api(path,method='GET',body){
+            const r=await fetch(base+path,{method,headers:{Authorization:'Bearer '+CF_API_TOKEN,...(body instanceof FormData?{}:{'Content-Type':'application/json'})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});
+            const j=await r.json();
+            if(!r.ok||!j.success)throw Error('Cloudflare '+method+' '+path+' status '+r.status);
+            return j.result;
+          }
+          const current=async()=>{const d=await api('/deployments');return d.deployments[0];};
+          const main=async()=>{const r=await fetch('https://api.github.com/repos/'+REPO+'/git/ref/heads/main',{headers:{Authorization:'Bearer '+GH_TOKEN},signal:AbortSignal.timeout(15000)});assert.ok(r.ok);assert.equal((await r.json()).object.sha,CANDIDATE_SHA,'main has moved');};
+          await main();
+          const before=await current();
+          assert.equal(before.versions.length,1,'Unexpected existing traffic split; manual review required');
+          assert.equal(before.versions[0].percentage,100);
+          const settings=await api('/settings');
+          const expected={DEEPSEEK_API_KEY:'secret_text',DOCS_AUTH_KV:'kv_namespace',DOCS_DB:'d1',DOCS_EVIDENCE_R2:'r2_bucket'};
+          assert.deepEqual(Object.fromEntries(settings.bindings.map(b=>[b.name,b.type])),expected,'Unexpected bindings; manual review required');
+          const latest=await api('/versions');
+          const latestVersion=(latest.items||latest.versions||[])[0];
+          assert.equal(latestVersion?.id,before.versions[0].version_id,'Latest upload is not the currently deployed version; manual review required');
+          const metadata={main_module:'worker.js',bindings:settings.bindings.map(b=>({name:b.name,type:'inherit'})),annotations:{'workers/commit_sha':CANDIDATE_SHA}};
+          if(settings.compatibility_date)metadata.compatibility_date=settings.compatibility_date;
+          if(settings.compatibility_flags)metadata.compatibility_flags=settings.compatibility_flags;
+          const form=new FormData();
+          form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+          form.append('worker.js',new Blob([readFileSync('worker.js')],{type:'application/javascript+module'}),'worker.js');
+          const uploaded=await api('/versions','POST',form);
+          assert.ok(uploaded.id,'Version upload did not return an ID');
+          await main();
+          assert.equal((await current()).id,before.id,'Production deployment changed; stop');
+          const deploy=versions=>api('/deployments','POST',{strategy:'percentage',versions});
+          const candidate=[{version_id:uploaded.id,percentage:100}];
+          try{
+            await deploy(candidate);
+            for(const path of ['/','/peer-sync.js','/auto-sync.js']){
+              const r=await fetch('https://docs.athat.app'+path,{cache:'no-store',signal:AbortSignal.timeout(20000)});
+              assert.ok(r.ok,'Public smoke check failed '+path);
+              const body=await r.text();
+              assert.ok(body.length>100,'Empty response '+path);
+              if(path==='/')assert.ok(body.includes('مستندات الذات'),'Unexpected site');
+            }
+            assert.deepEqual((await current()).versions,candidate);
+            console.log('Verified production release '+CANDIDATE_SHA);
+          }catch(error){
+            const active=await current();
+            if(active.versions.length===1&&active.versions[0].version_id===uploaded.id){
+              await deploy(before.versions.map(v=>({version_id:v.version_id,percentage:v.percentage})));
+              assert.deepEqual((await current()).versions,before.versions);
+              console.error('Previous deployment restored');
+            }
+            throw error;
+          }
+          JS
