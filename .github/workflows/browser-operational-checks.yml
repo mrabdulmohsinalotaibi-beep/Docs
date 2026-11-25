@@ -34,7 +34,7 @@ jobs:
           const users=['usr_browser_fixture_a','usr_browser_fixture_b'].map((id,i)=>({id,name:'Test account '+i,role:'teacher',loginIdentifier:'fixture'+i+'@example.invalid'}));
           const studentFixtures=users.map((user,owner)=>Array.from({length:100},(_,i)=>({
             key:'fixture-'+owner+'-'+i,name:'طالب تجريبي '+owner+'-'+String(i+1).padStart(3,'0'),
-            student_no:'TEST-'+owner+'-'+String(i+1).padStart(3,'0'),stage:'متوسط',grade:'الأول المتوسط',classroom:String(i%4+1)
+            student_no:'TEST-'+owner+'-'+String(i+1).padStart(3,'0'),stage:'متوسط',grade:i<60?'الأول المتوسط':'الثاني المتوسط',classroom:String(i%4+1)
           })));
           let session=null;
           let serverUnavailable=false;
@@ -113,6 +113,15 @@ jobs:
                           await search.fill('TEST-'+(1-owner)+'-100');
                           await page.waitForFunction(()=>document.querySelector('#studentRoster .s360-result-count')?.textContent.includes('0 من 100'));
                           await search.fill('');
+                          const grade=page.locator('#student360Grade'),classroom=page.locator('#student360Class');
+                          const count=async n=>page.waitForFunction(expected=>document.querySelector('#studentRoster .s360-result-count')?.textContent.includes('النتائج: '+expected+' من 100'),n,{timeout:10000});
+                          await count(100);
+                          await grade.selectOption('الأول المتوسط');await count(60);
+                          await classroom.selectOption('1');await count(15);
+                          await grade.selectOption('الثاني المتوسط');await count(10);
+                          await grade.selectOption('');await count(25);
+                          await classroom.selectOption('');await count(100);
+                          console.log('PASS grade and classroom filters '+label+' '+owner);
                           console.log('PASS account-scoped 100 students '+label+' '+owner);
                         }
                       }
