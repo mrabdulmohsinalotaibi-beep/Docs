@@ -6509,6 +6509,43 @@ questions();
 })();
 /* DOCS_MEASURE_CENTER_END */
 
+/* DOCS_SURVEY_ADMIN_START */
+(function(){
+ const host=document.getElementById('workspace-grades');if(!host)return;
+ const section=document.createElement('section');section.className='panel';section.id='docsSurveyAdmin';
+ section.innerHTML='<h2>الاستبانات الإلكترونية</h2><p class="muted">تحتاج المشاركة اتصالًا بالإنترنت. تُحفظ الإجابات على خادم الاستطلاعات دون أسماء أو أرقام طلاب، ولا تظهر لصاحب الاستبانة إلا النتائج المجمعة عند توفر خمس إجابات صالحة.</p><div class="grade-input-grid"><label>الأداة<select data-template></select></label><label>المدة بالأيام<input data-days type="number" min="1" max="30" value="7"></label></div><label><input type="checkbox" data-consent> أوافق على التخزين الخادمي للاستجابات، وألتزم بضوابط مشاركة الطلاب والخصوصية.</label><div class="actions"><button type="button" class="primary" data-create>إنشاء رابط</button><button type="button" class="btn" data-refresh>تحديث الاستبانات</button></div><p data-status role="status"></p><div data-list></div><div data-summary></div>';
+ host.append(section);
+ const get=s=>section.querySelector(s),status=get('[data-status]'),list=get('[data-list]'),summary=get('[data-summary]');
+ for(const [i,title] of ['التكيف المدرسي','الدافعية للتعلم','قلق الاختبارات','الانتماء المدرسي','الاحتياجات الإرشادية'].entries())get('[data-template]').add(new Option(title,String(i)));
+ let epoch=0,owner=null;
+ function reset(){epoch++;owner=activeUser||null;list.replaceChildren();summary.replaceChildren();status.textContent='';get('[data-consent]').checked=false}
+ async function api(query='',body){const res=await fetch('/api/surveys'+query,{cache:'no-store',...(body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})});const data=await res.json();if(!res.ok||!data.ok)throw Error(res.status===401?'سجّل الدخول أولًا.':'تعذر تنفيذ الطلب: '+String(data.code||res.status));return data}
+ function button(title,action){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=title;b.onclick=action;return b}
+ async function refresh(){
+  if(owner!==activeUser)reset();if(!activeUser){status.textContent='سجّل الدخول أولًا.';return}
+  const session=activeUser,seq=++epoch;
+  try{const data=await api();if(session!==activeUser||seq!==epoch)return;list.replaceChildren();status.textContent='الاستبانات المتاحة: '+data.surveys.length;
+   for(const row of data.surveys){
+    const card=document.createElement('article');card.className='panel';const h=document.createElement('h3');h.textContent=row.title;card.append(h);
+    const state=document.createElement('p');state.textContent=row.closed?'مغلقة':row.expires_at<=Date.now()?'منتهية':'مفتوحة للمشاركة';card.append(state);
+    const url=location.origin+'/survey#'+row.public_token;
+    const input=document.createElement('input');input.readOnly=true;input.value=url;input.setAttribute('aria-label','رابط الاستبانة');input.style.width='100%';card.append(input);
+    const actions=document.createElement('div');actions.className='actions';
+    actions.append(button('نسخ الرابط',async()=>{if(session!==activeUser)return;try{await navigator.clipboard.writeText(url);status.textContent='نُسخ الرابط.'}catch{input.select();status.textContent='حدد الرابط وانسخه يدويًا.'}}));
+    actions.append(button('عرض النتائج',async()=>{const requestEpoch=++epoch;summary.replaceChildren();try{const d=await api('?id='+encodeURIComponent(row.id));if(session!==activeUser||requestEpoch!==epoch)return;const p=document.createElement('p');p.textContent=d.summary?row.title+' · عدد الاستجابات: '+d.count+' · المتوسط: '+d.summary.mean.toFixed(2)+' · ألفا كرونباخ: '+(d.summary.alpha===null?'غير متاح':d.summary.alpha.toFixed(3)):'عدد الاستجابات: '+d.count+'؛ لا تظهر التفاصيل قبل خمس استجابات.';summary.append(p);if(d.summary){const table=document.createElement('table');table.className='grade-table';for(const item of d.summary.items){const tr=document.createElement('tr');for(const v of [d.questions[item.item-1],item.mean.toFixed(2),item.distribution.join(' / ')]){const td=document.createElement('td');td.textContent=v;tr.append(td)}table.append(tr)}summary.append(table)}}catch(e){if(session===activeUser&&requestEpoch===epoch)status.textContent=e.message}}));
+    if(!row.closed&&row.expires_at>Date.now())actions.append(button('إغلاق الاستبانة',async()=>{if(session!==activeUser||!confirm('إغلاق استقبال الإجابات؟'))return;try{await api('',{action:'close',id:row.id});if(session===activeUser)await refresh()}catch(e){if(session===activeUser)status.textContent=e.message}}));
+    card.append(actions);list.append(card);
+   }
+  }catch(e){if(session===activeUser&&seq===epoch)status.textContent=e.message}
+ }
+ get('[data-refresh]').onclick=refresh;
+ get('[data-create]').onclick=async()=>{if(owner!==activeUser)reset();if(!activeUser){status.textContent='سجّل الدخول أولًا.';return}if(!get('[data-consent]').checked){status.textContent='تجب الموافقة على التخزين الخادمي قبل إنشاء الرابط.';return}const session=activeUser,b=get('[data-create]');b.disabled=true;try{await api('',{action:'create',template:Number(get('[data-template]').value),days:Number(get('[data-days]').value),consent:true});if(session===activeUser)await refresh()}catch(e){if(session===activeUser)status.textContent=e.message}finally{b.disabled=false}};
+ document.addEventListener('athat-docs-logout',reset);
+ section.addEventListener('focusin',()=>{if(owner!==activeUser)reset()});
+})();
+/* DOCS_SURVEY_ADMIN_END */
+
+
 
 /* DOCS_SIX_TAB_NAV_START: icon + short label without changing route handlers */
 const docsTabItems=[
