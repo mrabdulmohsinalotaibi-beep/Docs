@@ -1,0 +1,55 @@
+name: Prepare verified production release
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact tested commit on main
+        required: true
+        type: string
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: docs-production-release
+  cancel-in-progress: false
+jobs:
+  readiness:
+    uses: ./.github/workflows/release-readiness.yml
+    with:
+      candidate_sha: ${{ inputs.candidate_sha }}
+  prepare:
+    needs: readiness
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact current main and generated Worker
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SHA"
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const page=readFileSync('src/page.html','utf8');
+          const runtime=readFileSync('src/worker-runtime.js','utf8');
+          assert.equal(readFileSync('worker.js','utf8'),'const PAGE='+JSON.stringify(page)+';\n'+runtime);
+          JS
+          cp worker.js worker-release.mjs
+          node --check worker-release.mjs
+          sha256sum worker.js > worker.sha256
+          printf '%s\n' "$CANDIDATE_SHA" > candidate-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-worker-release
+          path: |
+            worker.js
+            worker.sha256
+            candidate-sha.txt
+          if-no-files-found: error
+          retention-days: 14
