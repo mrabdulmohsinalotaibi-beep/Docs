@@ -1,0 +1,84 @@
+name: Browser operational checks
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9,21 * * *'
+permissions:
+  contents: read
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/build-worker.mjs --check
+      - run: npm install --no-save --package-lock=false @playwright/test@1.51.1
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Execute isolated browser checks
+        run: |
+          mkdir -p browser-results
+          cat > browser-smoke.mjs <<'EOF'
+          import {chromium,firefox,webkit} from '@playwright/test';
+          import {createServer} from 'node:http';
+          import {readFile} from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const source=await readFile('worker.js','utf8');
+          const {default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+          globalThis.fetch=async()=>{throw Error('Outbound worker network forbidden')};
+          const origin='http://127.0.0.1:4173';
+          const server=createServer(async(req,res)=>{
+            try{
+              const url=new URL(req.url,origin);
+              if(url.origin!==origin){res.writeHead(403).end();return}
+              if(url.pathname.startsWith('/api/')||url.pathname==='/health'){
+                res.writeHead(401,{'content-type':'application/json'}).end(JSON.stringify({ok:false,code:'UNAUTHORIZED'}));return;
+              }
+              const response=await worker.fetch(new Request(url,{method:req.method,headers:req.headers}),{});
+              res.writeHead(response.status,Object.fromEntries(response.headers));
+              res.end(Buffer.from(await response.arrayBuffer()));
+            }catch(e){console.error(e);res.writeHead(500).end()}
+          });
+          await new Promise(resolve=>server.listen(4173,'127.0.0.1',resolve));
+          let failures=0;
+          try{
+            for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
+              const browser=await engine.launch();
+              try{
+                for(const viewport of [{width:1280,height:900},{width:390,height:844},{width:820,height:1180}]){
+                  const context=await browser.newContext({viewport});
+                  const page=await context.newPage();
+                  const errors=[];
+                  page.on('pageerror',e=>errors.push(e.message));
+                  const label=name+'-'+viewport.width;
+                  try{
+                    await page.goto(origin,{waitUntil:'load'});
+                    await page.locator('#authGate').waitFor({state:'visible'});
+                    await page.locator('#tabRegister').click();
+                    await page.locator('#registerName').waitFor({state:'visible'});
+                    await page.locator('#tabLogin').click();
+                    await page.locator('#registerName').waitFor({state:'hidden'});
+                    assert.equal(await page.locator('#emailInput').count(),1);
+                    assert.equal(await page.locator('#passwordInput').count(),1);
+                    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'horizontal overflow');
+                    assert.deepEqual(errors,[]);
+                    console.log('PASS '+label);
+                  }catch(e){failures++;console.error('FAIL '+label,e);await page.screenshot({path:'browser-results/'+label+'.png',fullPage:true}).catch(()=>{})}
+                  finally{await context.close()}
+                }
+              }finally{await browser.close()}
+            }
+          }finally{server.close()}
+          if(failures)process.exitCode=1;
+          EOF
+          node browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results
+          path: browser-results/
+          if-no-files-found: ignore
