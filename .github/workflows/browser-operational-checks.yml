@@ -68,6 +68,38 @@ jobs:
                     assert.equal(await page.locator('#emailInput').count(),1);
                     assert.equal(await page.locator('#passwordInput').count(),1);
                     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'horizontal overflow');
+                    // Mock authentication only inside this isolated browser context.
+                    // All other API requests remain denied by the loopback server.
+                    const users=['usr_browser_fixture_a','usr_browser_fixture_b'].map((id,i)=>({id,name:'Test account '+i,role:'teacher',loginIdentifier:'fixture'+i+'@example.invalid'}));
+                    let session=null;
+                    await page.route('**/api/auth/**',async route=>{
+                      const action=new URL(route.request().url()).pathname.split('/').pop();
+                      if(action==='login'){
+                        const body=route.request().postDataJSON();
+                        session=users.find(u=>u.loginIdentifier===body.loginIdentifier&&body.password==='FixturePassword123')||null;
+                      }
+                      if(action==='logout'){session=null;return route.fulfill({json:{ok:true}})}
+                      if((action==='login'||action==='me')&&session)return route.fulfill({json:{ok:true,user:session}});
+                      return route.fulfill({status:401,json:{ok:false,code:'UNAUTHORIZED'}});
+                    });
+                    page.on('dialog',dialog=>dialog.accept());
+                    for(const user of users){
+                      await page.locator('#emailInput').fill(user.loginIdentifier);
+                      await page.locator('#passwordInput').fill('FixturePassword123');
+                      await page.locator('#submitAuth').click();
+                      await page.locator('#appMain').waitFor({state:'visible'});
+                      await page.waitForFunction(name=>document.querySelector('#accountName')?.textContent===name,user.name);
+                      await page.locator('#workspaceNav').waitFor({state:'visible'});
+                      for(const tab of ['documents','students','reports','messages','home']){
+                        const button=page.locator('#workspaceNav [data-workspace="'+tab+'"]');
+                        await button.click();
+                        assert.equal(await button.getAttribute('aria-current'),'page');
+                      }
+                      await page.locator('#logoutDocs').click();
+                      await page.locator('#authGate').waitFor({state:'visible'});
+                      assert.equal(await page.locator('#appMain').isVisible(),false);
+                    }
+                    console.log('PASS mock-account navigation '+label);
                     // Verify real service-worker caching and offline navigation, without an account.
                     await page.waitForFunction(async()=>{
                       if(!navigator.serviceWorker.controller)return false;
