@@ -6421,6 +6421,58 @@ paint();
 })();
 /* DOCS_GRADE_MODULE_END */
 
+/* DOCS_MEASURE_CENTER_START */
+(function(){
+// Adapted from AAA/src/educational-measure-model.ts. Local descriptive analysis only.
+const OPTIONS=["لا أوافق بشدة","لا أوافق","محايد","أوافق","أوافق بشدة"];
+const MEASURE_DISCLAIMER="أداة استطلاعية تربوية غير مقننة؛ ليست تشخيصًا نفسيًا ولا تحدد حاجة الفرد إلى علاج. نتائجها وصفية للاسترشاد بتخطيط الدعم.";
+const STARTER_MEASURES=[
+ {title:"التكيف المدرسي",audience:"الطلاب",description:"الانطباعات العامة عن التأقلم مع البيئة المدرسية.",questions:["أشعر بالارتياح أثناء وجودي في المدرسة.","أستطيع طلب المساعدة عندما أواجه صعوبة مدرسية.","لدي علاقة إيجابية مع زملائي.","أفهم ما تتوقعه المدرسة مني.","أجد صعوبة مستمرة في التأقلم مع يومي الدراسي."] ,reverse:[4]},
+ {title:"الدافعية للتعلم",audience:"الطلاب",description:"اتجاهات الطالب نحو التعلم والمثابرة.",questions:["أحرص على فهم الدروس حتى عندما تكون صعبة.","أضع لنفسي هدفًا دراسيًا واضحًا.","أستمر في المحاولة بعد الخطأ.","أرى أن ما أتعلمه مهم لمستقبلي.","أؤجل أنشطتي الدراسية حتى اللحظة الأخيرة."] ,reverse:[4]},
+ {title:"قلق الاختبارات",audience:"الطلاب",description:"استطلاع خبرات الطلاب المتعلقة بمواقف الاختبارات، دون فرز سريري.",questions:["أشعر بتوتر يؤثر في تركيزي قبل الاختبارات.","يصعب علي النوم بسبب التفكير في الاختبارات.","أواجه صعوبة في تذكر المعلومات عند الاختبار.","أشعر براحة أكبر عندما أضع خطة للمذاكرة.","أحتاج إلى تعلم طرق تساعدني على إدارة التوتر أثناء الاختبارات."] ,reverse:[3]},
+ {title:"الانتماء المدرسي",audience:"الطلاب",description:"مؤشرات وصفية للإحساس بالأمان والاندماج والمشاركة.",questions:["أشعر أنني عضو مهم في مدرستي.","أجد من يستمع إلى رأيي في المدرسة.","أشارك في الأنشطة المدرسية عندما تتاح لي الفرصة.","أشعر باحترام الآخرين لي في المدرسة.","أشعر بالعزلة خلال اليوم الدراسي."] ,reverse:[4]},
+ {title:"الاحتياجات الإرشادية",audience:"الطلاب",description:"تحديد موضوعات الدعم التي يرغب الطلاب في الحصول عليها.",questions:["أحتاج إلى إرشادات تساعدني على تنظيم وقتي.","أحتاج إلى دعم في مهارات الاستذكار.","أرغب في تعلم مهارات التواصل وحل الخلافات.","أحتاج إلى مساعدة في التعامل مع ضغوط الدراسة.","أرغب في معرفة طرق الحصول على المساعدة عند مواجهة مشكلة."] ,reverse:[]}
+];
+
+function summarizeMeasure(rows, itemCount, reverse=[]){
+ if(!Number.isInteger(itemCount)||itemCount<3||itemCount>100)throw new RangeError('Invalid item count');
+ if(!Array.isArray(rows)||!Array.isArray(reverse)||reverse.some(i=>!Number.isInteger(i)||i<0||i>=itemCount))throw new TypeError('Invalid input');
+ const valid=rows.filter(r=>Array.isArray(r)&&r.length===itemCount&&r.every(v=>Number.isInteger(v)&&v>=1&&v<=5));
+ const adjusted=valid.map(r=>r.map((v,i)=>reverse.includes(i)?6-v:v));
+ const n=valid.length,mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+ const variance=a=>{const m=mean(a);return a.length>1?a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1):null};
+ const items=Array.from({length:itemCount},(_,i)=>({item:i+1,mean:mean(adjusted.map(r=>r[i])),distribution:[1,2,3,4,5].map(v=>valid.filter(r=>r[i]===v).length)}));
+ const totals=adjusted.map(r=>r.reduce((x,y)=>x+y,0));
+ const totalVariance=variance(totals);
+ const alpha=n>=30&&totalVariance>0?itemCount/(itemCount-1)*(1-items.reduce((s,_,i)=>s+variance(adjusted.map(r=>r[i])),0)/totalVariance):null;
+ return {count:n,rejected:rows.length-n,mean:mean(adjusted.map(r=>mean(r))),items,alpha,disclaimer:MEASURE_DISCLAIMER};
+}
+
+const host=document.getElementById('workspace-grades');if(!host)return;
+const section=document.createElement('section');section.className='panel';section.id='docsMeasureCenter';
+section.innerHTML='<h2>مركز المقاييس التربوية</h2><p class="muted" data-disclaimer></p><label>الأداة الاستطلاعية <select data-measure></select></label><ol data-questions></ol><p class="muted">أدخل استجابات مجهولة، كل سطر استجابة واحدة بخمس درجات من 1 إلى 5 مفصولة بفواصل. لا تدخل أسماء أو معرفات. التحليل مؤقت على هذه الصفحة فقط.</p><textarea data-answers rows="6" maxlength="100000" aria-label="استجابات الاستطلاع" style="width:100%"></textarea><div class="actions"><button type="button" class="primary" data-analyze>تحليل الاستجابات</button><button type="button" class="btn" data-clear>مسح</button></div><div data-result role="status" aria-live="polite"></div>';
+host.append(section);
+const get=s=>section.querySelector(s),select=get('[data-measure]'),input=get('[data-answers]'),result=get('[data-result]');
+get('[data-disclaimer]').textContent=MEASURE_DISCLAIMER;
+for(const [i,t] of STARTER_MEASURES.entries())select.add(new Option(t.title,String(i)));
+function questions(){const t=STARTER_MEASURES[Number(select.value)],list=get('[data-questions]');list.replaceChildren();for(const q of t.questions){const li=document.createElement('li');li.textContent=q;list.append(li)}}
+function clear(){input.value='';result.replaceChildren()}
+select.onchange=()=>{clear();questions()};get('[data-clear]').onclick=clear;
+get('[data-analyze]').onclick=()=>{
+ result.replaceChildren();if(!activeUser){result.textContent='سجّل الدخول أولًا.';return}
+ const t=STARTER_MEASURES[Number(select.value)];
+ const rows=input.value.split(/\r?\n/).filter(v=>v.trim()).map(v=>v.split(/[,،;\t ]+/).map(x=>Number(x.replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)))));
+ const r=summarizeMeasure(rows,t.questions.length,t.reverse);
+ const p=document.createElement('p');p.textContent='الاستجابات الصالحة: '+r.count+' · المستبعدة: '+r.rejected+' · المتوسط بعد التصحيح: '+(r.mean===null?'غير متاح':r.mean.toFixed(2))+' · ألفا كرونباخ: '+(r.alpha===null?'غير متاح':r.alpha.toFixed(3));result.append(p);
+ const note=document.createElement('p');note.className='muted';note.textContent='الثبات يتطلب 30 استجابة صالحة على الأقل وتباينًا في الدرجة الكلية؛ لا يثبت وحده صلاحية الأداة. التوزيع يمثل الإجابات الأصلية والمتوسط بعد عكس الفقرات المحددة.';result.append(note);
+ const table=document.createElement('table');table.className='grade-table';
+ for(const item of r.items){const tr=document.createElement('tr');for(const value of ['الفقرة '+item.item,item.mean===null?'—':item.mean.toFixed(2),item.distribution.join(' / ')]){const td=document.createElement('td');td.textContent=value;tr.append(td)}table.append(tr)}result.append(table);
+};
+document.addEventListener('athat-docs-logout',clear);questions();
+})();
+/* DOCS_MEASURE_CENTER_END */
+
+
 /* DOCS_SIX_TAB_NAV_START: icon + short label without changing route handlers */
 const docsTabItems=[
  ['home','الرئيسية','الرئيسية','M3 10 12 3l9 7v10H3z M9 20v-7h6v7'],
