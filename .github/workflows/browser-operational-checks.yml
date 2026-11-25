@@ -53,6 +53,10 @@ jobs:
                   const body=JSON.parse(raw);
                   session=users.find(u=>u.loginIdentifier===body.loginIdentifier&&body.password==='FixturePassword123')||null;
                 }
+                if(action==='verify-deletion'&&req.method==='POST'&&session){
+                  let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192){reply(413,{ok:false});return}}
+                  reply(JSON.parse(raw).password==='FixturePassword123'?200:403,{ok:JSON.parse(raw).password==='FixturePassword123'});return;
+                }
                 if(action==='logout'&&req.method==='POST'){session=null;reply(200,{ok:true});return}
                 if((action==='login'||action==='me')&&session){reply(200,{ok:true,user:session});return}
                 reply(401,{ok:false,code:'UNAUTHORIZED'});return;
@@ -92,7 +96,9 @@ jobs:
                     assert.equal(await page.locator('#emailInput').count(),1);
                     assert.equal(await page.locator('#passwordInput').count(),1);
                     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'horizontal overflow');
-                    page.on('dialog',dialog=>dialog.accept());
+                    let backupPassword='FixturePassword123';
+                    page.on('dialog',dialog=>dialog.type()==='prompt'?dialog.accept(backupPassword):dialog.accept());
+                    let firstBackup=null;
                     for(const user of users){
                       await page.locator('#emailInput').fill(user.loginIdentifier);
                       await page.locator('#passwordInput').fill('FixturePassword123');
@@ -175,6 +181,33 @@ jobs:
                       await page.locator('#editor.visible').waitFor({state:'hidden'});
                       assert.ok((await readDocuments()).some(row=>row.title===title),'document persists after closing editor');
                       console.log('PASS document persistence and A4 preview '+label+' '+owner);
+                      // Export through the real UI, inspect ciphertext, then restore through the real file input.
+                      await page.locator('#workspaceNav [data-workspace="settings"]').click();
+                      const downloadPromise=page.waitForEvent('download',{timeout:30000});
+                      await page.locator('#dsBackup').click();
+                      const download=await downloadPromise;
+                      const bytes=await readFile(await download.path());
+                      const envelope=JSON.parse(bytes.toString());
+                      assert.equal(envelope.format,'ATHAT-DOCS-ENCRYPTED-BACKUP');
+                      assert.equal(envelope.algorithm,'AES-256-GCM');
+                      assert.ok(envelope.ciphertext.length>0&&!bytes.toString().includes(title));
+                      const file=page.locator('#docsSettingsHub input[type="file"][accept=".json,application/json"]').last();
+                      const restore=async(buffer)=>file.setInputFiles({name:'fixture-backup.json',mimeType:'application/json',buffer});
+                      const status=page.locator('#dsTransferStatus');
+                      backupPassword='IncorrectFixturePassword';
+                      await restore(bytes);
+                      await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('كلمة مرور النسخة غير صحيحة'),null,{timeout:20000});
+                      backupPassword='FixturePassword123';
+                      await restore(bytes);
+                      await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('لم يُستبدل أي أصل'),null,{timeout:30000});
+                      assert.equal((await readDocuments()).filter(row=>row.title===title).length,1);
+                      if(owner===0)firstBackup=bytes;
+                      else{
+                        await restore(firstBackup);
+                        await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('النسخة تخص حسابًا مختلفًا'),null,{timeout:20000});
+                        assert.ok((await readDocuments()).every(row=>!row.title.startsWith('Fixture document 0 ')));
+                      }
+                      console.log('PASS encrypted backup and restore protections '+label+' '+owner);
                       await page.locator('#logoutDocs').click();
                       await page.locator('#authGate').waitFor({state:'visible'});
                       assert.equal(await page.locator('#appMain').isVisible(),false);
