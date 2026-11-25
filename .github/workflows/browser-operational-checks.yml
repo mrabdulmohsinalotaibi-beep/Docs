@@ -3,6 +3,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [main]
   schedule:
     - cron: '0 9,21 * * *'
 permissions:
@@ -286,7 +289,12 @@ jobs:
                       assert.ok(blockedRequests>blockedBefore,'must exercise a failed origin request');
                       console.log('PASS origin-unavailable '+label);
                     }finally{serverUnavailable=false}
-                    // Keep the original native offline test as a separate required check.
+                    // Restore a normal online navigation after the intentional origin failure.
+                    // This separates the native offline check from the previous failed socket.
+                    const onlineResponse=await page.goto(origin+'/?online-reset=1',{waitUntil:'load'});
+                    assert.ok(onlineResponse?.ok(),'online reset must succeed');
+                    await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller),null,{timeout:30000});
+                    // Keep the native offline test mandatory in every engine.
                     await context.setOffline(true);
                     try{
                       // Reopen via a new URL in WebKit: reload in its Linux test engine
