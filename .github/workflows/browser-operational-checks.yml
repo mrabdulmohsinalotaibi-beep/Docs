@@ -134,7 +134,8 @@ jobs:
                       // Exercise the real editor and IndexedDB, not a mock storage API.
                       const owner=users.indexOf(user);
                       await page.locator('#workspaceNav [data-workspace="documents"]').click();
-                      await page.locator('#newBtn').click();
+                      await page.locator('#docsViewSelector [data-view="templates"]').click();
+                      await page.locator('#templates button.template').first().click();
                       await page.locator('#editor.visible').waitFor();
                       const title='Fixture document '+owner+' '+label;
                       await page.locator('#docTitle').fill(title);
@@ -201,6 +202,25 @@ jobs:
                       await restore(bytes);
                       await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('لم يُستبدل أي أصل'),null,{timeout:30000});
                       assert.equal((await readDocuments()).filter(row=>row.title===title).length,1);
+                      // Simulate loss of exactly the synthetic record, then recover via the exported encrypted file.
+                      const lost=(await readDocuments()).find(row=>row.title===title);
+                      await page.evaluate(async ({owner,id})=>new Promise((resolve,reject)=>{
+                        const request=indexedDB.open('athat-docs-unified-v2-'+owner,3);
+                        request.onupgradeneeded=()=>request.transaction.abort();
+                        request.onerror=()=>reject(request.error);
+                        request.onsuccess=()=>{
+                          const db=request.result,tx=db.transaction('documents','readwrite');
+                          tx.objectStore('documents').delete(id);
+                          tx.oncomplete=()=>{db.close();resolve()};
+                          tx.onerror=()=>{db.close();reject(tx.error)};
+                          tx.onabort=()=>{db.close();reject(tx.error)};
+                        };
+                      }),{owner:user.id,id:lost.id});
+                      assert.ok(!(await readDocuments()).some(row=>row.id===lost.id));
+                      await restore(bytes);
+                      await page.waitForFunction(()=>document.querySelector('#dsTransferStatus')?.textContent.includes('الاستعادة: 1 عنصر مضاف'),null,{timeout:30000});
+                      assert.deepEqual((await readDocuments()).find(row=>row.id===lost.id),lost,'restored record must match original exactly');
+                      console.log('PASS missing synthetic document recovery '+label+' '+owner);
                       if(owner===0)firstBackup=bytes;
                       else{
                         await restore(firstBackup);
