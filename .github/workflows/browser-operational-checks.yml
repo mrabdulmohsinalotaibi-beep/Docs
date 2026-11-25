@@ -308,14 +308,25 @@ jobs:
                     const onlineResponse=await page.goto(origin+'/?online-reset=1',{waitUntil:'load'});
                     assert.ok(onlineResponse?.ok(),'online reset must succeed');
                     await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller),null,{timeout:30000});
+                    // Diagnose whether the browser's offline emulation works at all,
+                    // independently of navigation and service-worker interception.
+                    if(name==='webkit'){
+                      const probe=await context.newPage();
+                      try{
+                        await probe.goto('about:blank');
+                        await context.setOffline(true);
+                        console.log('WebKit offline probe '+label+' navigator.onLine='+await probe.evaluate(()=>navigator.onLine));
+                        await context.setOffline(false);
+                      }finally{await context.setOffline(false);await probe.close()}
+                    }
                     // Keep the native offline test mandatory in every engine.
                     await context.setOffline(true);
                     try{
-                      // Reopen via a new URL in WebKit: reload in its Linux test engine
-                      // previously aborted with an internal error before a response.
+                      // Reopen the exact precached shell URL in WebKit rather than a
+                      // novel query URL. The origin-failure test above still covers novel URLs.
                       // Keep actual offline mode and require a working cached page.
                       const response=name==='webkit'
-                        ?await page.goto(origin+'/?offline-reopen=1',{waitUntil:'load'})
+                        ?await page.goto(origin+'/',{waitUntil:'load'})
                         :await page.reload({waitUntil:'load'});
                       console.log('Offline navigation method: '+(name==='webkit'?'reopen':'reload')+' '+label);
                       assert.ok(response?.ok(),'offline shell must load from cache');
