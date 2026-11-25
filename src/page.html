@@ -4386,11 +4386,9 @@ const quickHeading=document.createElement('h2');quickHeading.className='docs-pre
 const latestHeading=document.createElement('h2');latestHeading.className='docs-premium-title';latestHeading.textContent='أقسام المنصة';
 const cards=document.createElement('section');cards.className='docs-quick-grid';
 for(const [label,description,target,view] of [
- ['ملف الطالب 360','البحث في الطلاب والحالات والرعاية','students',''],
  ['مستنداتي وسجلاتي','مستنداتي الجديدة والسجلات القديمة في صفحة واحدة','documents','works'],
  ['ملف الإنجاز','البرامج والمقابلات والمهام وجميع الأعمال السابقة','documents','portfolio'],
  ['السجلات الرسمية A4','نماذج جاهزة للطباعة','documents','templates'],
- ['التقارير والتحليلات','مؤشرات وتقارير الأعمال','reports',''],
  ['البرامج والخطط','متابعة التنفيذ والأعمال','documents','programs'],
  ['الشواهد والمراجع','مرفقات ووثائق السجلات','documents','support'],
  ['مراجعة الجرد','فحص الاكتمال والأرشفة','documents','review'],
@@ -4404,11 +4402,10 @@ for(const [label,description,target,view] of [
 const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
 workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><section id="docsWorkDetails" data-work-details class="docs-work-details" hidden aria-label="الأعمال حسب الحالة"></section><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
 workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
-workspacePages.home.append(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards);
-quickHeading.before(workCenter);
+workspacePages.home.append(originalHero,premiumMetrics,workCenter,latestHeading,cards);
 /* DOCS_COMMAND_CENTER_START */
 const commandCenter=document.createElement('section');commandCenter.id='docsCommandCenter';commandCenter.className='panel';
-commandCenter.innerHTML='<h2>مركز القيادة التربوية</h2><p class="muted">انتقل إلى أعمالك الفعلية من مكان واحد. الأعداد التفصيلية تظهر في مراكزها الأصلية.</p><div data-command-links style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:8px"></div>';
+commandCenter.innerHTML='<h2>مركز القيادة التربوية</h2><p class="muted">انتقل إلى أعمالك الفعلية من مكان واحد. الأعداد التفصيلية تظهر في مراكزها الأصلية.</p><div data-command-links class="docs-command-grid"></div>';
 workCenter.before(commandCenter);
 function docsCommandJump(page,id,filter){
  if(!activeUser){say('سجّل الدخول لعرض أعمالك.');return}
@@ -4426,7 +4423,7 @@ for(const [title,description,page,id,filter] of [
  ['الاستبانات الإلكترونية','المشاركة والنتائج المجمعة','grades','docsSurveyAdmin',''],
  ['التقارير','عرض التقارير والطباعة','reports','','']
 ]){
- const b=document.createElement('button');b.type='button';b.className='btn';b.style.cssText='display:grid;gap:4px;text-align:start;align-content:start;min-width:0;padding:12px;white-space:normal';
+ const b=document.createElement('button');b.type='button';b.className='btn';b.classList.add('docs-command-tile');
  const label=document.createElement('strong'),caption=document.createElement('small');label.textContent=title;caption.textContent=description;b.append(label,caption);b.onclick=()=>docsCommandJump(page,id,filter);commandCenter.querySelector('[data-command-links]').append(b);
 }
 /* DOCS_COMMAND_CENTER_END */
@@ -6651,6 +6648,17 @@ for(const [id,label,accessible,pathData] of docsTabItems){
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')show()});
 })();
 </script><script src="/peer-sync.js" defer></script><script src="/auto-sync.js" defer></script><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(r=>{if(navigator.onLine)r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)r.update().catch(()=>{})})}).catch(()=>{}))}</script><style id="docs-grade-styles">
+/* Integrated guidance responsive layout */
+.docs-command-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:8px}
+.docs-command-tile{display:grid!important;gap:5px;text-align:start;align-content:start;min-width:0;min-height:76px;padding:12px!important;white-space:normal;overflow-wrap:anywhere}
+.docs-command-tile small{font-size:12px;line-height:1.5;font-weight:400;color:inherit}
+#docsCommandCenter,#docsWorkCenter,#docsFollowupCenter,#docsMeasureCenter,#docsSurveyAdmin{min-width:0;max-width:100%;scroll-margin-top:90px}
+#docsMeasureCenter textarea,#docsMeasureCenter select,#docsSurveyAdmin input:not([type=checkbox]),#docsSurveyAdmin select{max-width:100%;min-width:0;box-sizing:border-box}
+#docsMeasureCenter [data-result],#docsSurveyAdmin [data-summary]{overflow-x:auto;max-width:100%}
+@media(max-width:480px){.docs-command-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.docs-command-tile{padding:10px!important;min-height:80px}.docs-grade-page .grade-input-grid{grid-template-columns:minmax(0,1fr)}#docsCommandCenter,#docsMeasureCenter,#docsSurveyAdmin{padding:12px}}
+@media(max-width:300px){.docs-command-grid{grid-template-columns:minmax(0,1fr)}}
+@media print{#docsCommandCenter{display:none!important}}
+
 #workspaceNav{display:flex;overflow-x:auto;gap:8px;scrollbar-width:thin;max-width:100%;overscroll-behavior-inline:contain}
 #workspaceNav button{flex:0 0 auto;white-space:nowrap;min-width:95px}
 .docs-grade-page .panel{max-width:100%;min-width:0}
