@@ -5518,46 +5518,51 @@ const dsFullRestore=document.createElement('input');dsFullRestore.type='file';ds
 dsGet('dsRestore').onclick=()=>dsFullRestore.click();
 dsFullRestore.onchange=async()=>{
  const file=dsFullRestore.files?.[0];dsFullRestore.value='';if(!file||!activeUser||!db)return;
+ const restoreOwner=activeUser,restoreDb=db;
+ const ensureRestoreOwner=()=>{if(activeUser!==restoreOwner||db!==restoreDb)throw Error('تغير الحساب أثناء الاستعادة؛ أُوقفت العملية.');};
  try{
-  let backup=JSON.parse(await file.text());
+  let backup=JSON.parse(await file.text());ensureRestoreOwner();
   if(backup.format==='ATHAT-DOCS-ENCRYPTED-BACKUP'){
    const password=prompt('أدخل كلمة مرور الحساب التي استخدمتها عند إنشاء النسخة المشفرة');
    if(!password)return;
    try{backup=await docsOpenSecureBackup(backup,password)}catch{throw Error('كلمة مرور النسخة غير صحيحة أو الملف تالف')}
   }
   if(backup.app!=='ATHAT-DOCS-LOCAL-FULL'||![1,2,3].includes(backup.version)||!Array.isArray(backup.documents)||!Array.isArray(backup.snapshots)||!Array.isArray(backup.deletions))throw Error('صيغة النسخة غير مدعومة.');
-  if(backup.accountId!==activeUser)throw Error('النسخة تخص حسابًا مختلفًا؛ لا يمكن استيرادها.');
+  ensureRestoreOwner();if(backup.accountId!==restoreOwner)throw Error('النسخة تخص حسابًا مختلفًا؛ لا يمكن استيرادها.');
   if(backup.documents.length>3000||backup.snapshots.length>6000||backup.deletions.length>3000)throw Error('النسخة تتجاوز الحد الآمن.');
   if(!confirm('ستضاف البيانات غير الموجودة فقط إلى هذا الجهاز، ولن يُحذف أو يُستبدل أي سجل قائم. هل توافق؟'))return;
   let added=0,skipped=0;
   for(const [storeName,items] of [['documents',backup.documents],['cloudSnapshots',backup.snapshots],['deletions',backup.deletions]]){
    for(const item of items){
+    ensureRestoreOwner();
+    if(storeName==='cloudSnapshots'&&item?.kind==='local-measure-aggregate'&&(item.entry?.owner!==restoreOwner||item.id!=='measure-aggregate:'+item.entry?.id)){skipped++;continue;}
     if(!item||typeof item.id!=='string'||item.id.length>250)continue;
     await new Promise((ok,no)=>{
-     const tx=db.transaction(storeName,'readwrite'),store=tx.objectStore(storeName),req=store.get(item.id);
+     const tx=restoreDb.transaction(storeName,'readwrite'),store=tx.objectStore(storeName),req=store.get(item.id);
      req.onsuccess=()=>{if(req.result)skipped++;else{store.put(item);added++}};
      tx.oncomplete=ok;tx.onerror=()=>no(tx.error);tx.onabort=()=>no(tx.error);
     });
    }
   }
-  if(backup.version>=2){
- const results=await Promise.all([docsRestoreExtra('athat-docs-message-center-v1-'+activeUser,'messages','id',backup.messages),docsRestoreExtra('athat-docs-planfiles-v1-'+activeUser,'files','department',backup.planFiles)]);
- for(const v of results){added+=v.added;skipped+=v.skipped}
- for(const [k,v] of Object.entries(backup.localSettings||{})){if(k.startsWith('athat-docs-')&&k.includes(activeUser)&&typeof v==='string'&&!/token|session/i.test(k)){if(localStorage.getItem(k)===null){localStorage.setItem(k,v);added++}else skipped++}}
+  ensureRestoreOwner();if(backup.version>=2){
+ const results=await Promise.all([docsRestoreExtra('athat-docs-message-center-v1-'+restoreOwner,'messages','id',backup.messages),docsRestoreExtra('athat-docs-planfiles-v1-'+restoreOwner,'files','department',backup.planFiles)]);
+ ensureRestoreOwner();for(const v of results){added+=v.added;skipped+=v.skipped}
+ for(const [k,v] of Object.entries(backup.localSettings||{})){if(k.startsWith('athat-docs-')&&k.includes(restoreOwner)&&typeof v==='string'&&!/token|session/i.test(k)){if(localStorage.getItem(k)===null){localStorage.setItem(k,v);added++}else skipped++}}
 }
-  if(backup.version===3)await docsMirrorGetAll('responses');
+  ensureRestoreOwner();if(backup.version===3)await docsMirrorGetAll('responses');ensureRestoreOwner();
   if(backup.version===3&&Array.isArray(backup.mirrorFiles)){
     const filesResult=await docsRestoreExtra('athat-docs-account-mirror-v1-'+activeUser,'files','id',backup.mirrorFiles);
     added+=filesResult.added;skipped+=filesResult.skipped;
   }
   if(backup.version===3&&Array.isArray(backup.mirrorResponses)){
     for(const item of backup.mirrorResponses){
+     ensureRestoreOwner();
      if(!item||typeof item.id!=='string'||!item.id.startsWith('/api/')||!item.payload)continue;
      const existing=(await docsMirrorGetAll('responses')).find(row=>row.id===item.id);
-     if(!existing){await docsMirrorPut('responses',item);added++}else skipped++;
+     ensureRestoreOwner();if(!existing){await docsMirrorPut('responses',item);added++}else skipped++;
     }
   }
-  await refresh();await dsShowStorage();
+  ensureRestoreOwner();await refresh();ensureRestoreOwner();await dsShowStorage();
   dsGet('dsTransferStatus').textContent='الاستعادة: '+added+' عنصر مضاف، '+skipped+' محفوظ مسبقًا. لم يُستبدل أي أصل.';
  }catch(e){dsGet('dsTransferStatus').textContent='تعذرت الاستعادة: '+e.message}
 };
