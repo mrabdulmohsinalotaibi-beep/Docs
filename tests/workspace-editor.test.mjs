@@ -62,7 +62,9 @@ test('five primary navigation pages exist and Settings is separate',()=>{
  assert.match(appScript,/workspacePages\.messages/);
  assert.match(appScript,/settingsButton\.onclick=\(\)=>workspaceGoto\('settings'\)/);
  assert.match(appScript,/workspacePages\.documents\.append\(recordsHeader,selector,originalWorks,docsGuidancePanel,originalTemplates,programBundle,originalArchive,review,originalEditor\)/);
- assert.match(appScript,/workspacePages\.home\.append\(originalHero,premiumMetrics,quickHeading,homeActions,latestHeading,cards\)/);
+ assert.match(appScript,/workspacePages\.home\.append\(originalHero,premiumMetrics,workCenter,latestHeading,cards\)/);
+ assert.match(appScript,/workCenter\.before\(commandCenter\)/);
+ assert.doesNotMatch(appScript,/workspacePages\.home\.append\([^\n]*homeActions/);
 });
 test('duplicate records are not repeated across documents, archives, or student panel',()=>{
  assert.match(appScript,/uniqueLocal=new Map\(\)/);
