@@ -185,9 +185,12 @@ jobs:
                       console.log('PASS document persistence and A4 preview '+label+' '+owner);
                       // Export through the real UI, inspect ciphertext, then restore through the real file input.
                       await page.locator('#workspaceSettingsLink').click();
-                      const downloadPromise=page.waitForEvent('download',{timeout:30000});
+                      const downloadPromise=page.waitForEvent('download',{timeout:30000}).then(value=>({value}),error=>({error}));
+                      await page.locator('#docsStorageBackup').count(); // Keep the settings flow on the real controls.
                       await page.locator('#dsBackup').click();
-                      const download=await downloadPromise;
+                      const downloaded=await downloadPromise;
+                      if(downloaded.error)throw Error('Backup download failed: '+await page.locator('#dsTransferStatus').textContent()+' | '+downloaded.error.message);
+                      const download=downloaded.value;
                       const bytes=await readFile(await download.path());
                       const envelope=JSON.parse(bytes.toString());
                       assert.equal(envelope.format,'ATHAT-DOCS-ENCRYPTED-BACKUP');
