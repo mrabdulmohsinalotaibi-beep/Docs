@@ -527,8 +527,92 @@ async function premiumAnalyze(request,env){
  }catch{return json({ok:false,code:"AI_UNAVAILABLE",message:"تعذر الاتصال بالمحلل الذكي."},503)}
 }
 
+
+/* DOCS_PUBLIC_SURVEYS_START */
+async function docsSurveyEndpoint(request,env){
+// Adapted from AAA/src/educational-measure-model.ts. Local descriptive analysis only.
+const OPTIONS=["لا أوافق بشدة","لا أوافق","محايد","أوافق","أوافق بشدة"];
+const MEASURE_DISCLAIMER="أداة استطلاعية تربوية غير مقننة؛ ليست تشخيصًا نفسيًا ولا تحدد حاجة الفرد إلى علاج. نتائجها وصفية للاسترشاد بتخطيط الدعم.";
+const STARTER_MEASURES=[
+ {title:"التكيف المدرسي",audience:"الطلاب",description:"الانطباعات العامة عن التأقلم مع البيئة المدرسية.",questions:["أشعر بالارتياح أثناء وجودي في المدرسة.","أستطيع طلب المساعدة عندما أواجه صعوبة مدرسية.","لدي علاقة إيجابية مع زملائي.","أفهم ما تتوقعه المدرسة مني.","أجد صعوبة مستمرة في التأقلم مع يومي الدراسي."] ,reverse:[4]},
+ {title:"الدافعية للتعلم",audience:"الطلاب",description:"اتجاهات الطالب نحو التعلم والمثابرة.",questions:["أحرص على فهم الدروس حتى عندما تكون صعبة.","أضع لنفسي هدفًا دراسيًا واضحًا.","أستمر في المحاولة بعد الخطأ.","أرى أن ما أتعلمه مهم لمستقبلي.","أؤجل أنشطتي الدراسية حتى اللحظة الأخيرة."] ,reverse:[4]},
+ {title:"قلق الاختبارات",audience:"الطلاب",description:"استطلاع خبرات الطلاب المتعلقة بمواقف الاختبارات، دون فرز سريري.",questions:["أشعر بتوتر يؤثر في تركيزي قبل الاختبارات.","يصعب علي النوم بسبب التفكير في الاختبارات.","أواجه صعوبة في تذكر المعلومات عند الاختبار.","أشعر براحة أكبر عندما أضع خطة للمذاكرة.","أحتاج إلى تعلم طرق تساعدني على إدارة التوتر أثناء الاختبارات."] ,reverse:[3]},
+ {title:"الانتماء المدرسي",audience:"الطلاب",description:"مؤشرات وصفية للإحساس بالأمان والاندماج والمشاركة.",questions:["أشعر أنني عضو مهم في مدرستي.","أجد من يستمع إلى رأيي في المدرسة.","أشارك في الأنشطة المدرسية عندما تتاح لي الفرصة.","أشعر باحترام الآخرين لي في المدرسة.","أشعر بالعزلة خلال اليوم الدراسي."] ,reverse:[4]},
+ {title:"الاحتياجات الإرشادية",audience:"الطلاب",description:"تحديد موضوعات الدعم التي يرغب الطلاب في الحصول عليها.",questions:["أحتاج إلى إرشادات تساعدني على تنظيم وقتي.","أحتاج إلى دعم في مهارات الاستذكار.","أرغب في تعلم مهارات التواصل وحل الخلافات.","أحتاج إلى مساعدة في التعامل مع ضغوط الدراسة.","أرغب في معرفة طرق الحصول على المساعدة عند مواجهة مشكلة."] ,reverse:[]}
+];
+
+function summarizeMeasure(rows, itemCount, reverse=[]){
+ if(!Number.isInteger(itemCount)||itemCount<3||itemCount>100)throw new RangeError('Invalid item count');
+ if(!Array.isArray(rows)||!Array.isArray(reverse)||reverse.some(i=>!Number.isInteger(i)||i<0||i>=itemCount))throw new TypeError('Invalid input');
+ const valid=rows.filter(r=>Array.isArray(r)&&r.length===itemCount&&r.every(v=>Number.isInteger(v)&&v>=1&&v<=5));
+ const adjusted=valid.map(r=>r.map((v,i)=>reverse.includes(i)?6-v:v));
+ const n=valid.length,mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+ const variance=a=>{const m=mean(a);return a.length>1?a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1):null};
+ const items=Array.from({length:itemCount},(_,i)=>({item:i+1,mean:mean(adjusted.map(r=>r[i])),distribution:[1,2,3,4,5].map(v=>valid.filter(r=>r[i]===v).length)}));
+ const totals=adjusted.map(r=>r.reduce((x,y)=>x+y,0));
+ const totalVariance=variance(totals);
+ const alpha=n>=30&&totalVariance>0?itemCount/(itemCount-1)*(1-items.reduce((s,_,i)=>s+variance(adjusted.map(r=>r[i])),0)/totalVariance):null;
+ return {count:n,rejected:rows.length-n,mean:mean(adjusted.map(r=>mean(r))),items,alpha,disclaimer:MEASURE_DISCLAIMER};
+}
+
+ const url=new URL(request.url),db=env.DOCS_DB,publicRoute=url.pathname==='/api/surveys/public',now=Date.now();
+ const fail=(code,status)=>json({ok:false,code},status);
+ const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');
+ const validToken=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
+ const method=request.method;
+ if(!['GET','POST'].includes(method))return fail('METHOD_NOT_ALLOWED',405);
+ let body={};
+ if(method==='POST'){
+  if(request.headers.get('origin')!==url.origin)return fail('ORIGIN_REQUIRED',403);
+  if(!/^application\/json(?:;|$)/i.test(request.headers.get('content-type')||''))return fail('JSON_REQUIRED',415);
+  if(Number(request.headers.get('content-length')||0)>4096)return fail('BODY_TOO_LARGE',413);
+  try{const reader=request.body?.getReader();if(!reader)return fail('INVALID_BODY',400);let bytes=0,chunks=[];while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>4096){await reader.cancel();return fail('BODY_TOO_LARGE',413)}chunks.push(value)}const combined=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){combined.set(chunk,offset);offset+=chunk.length}body=JSON.parse(new TextDecoder().decode(combined));if(!body||typeof body!=='object'||Array.isArray(body))return fail('INVALID_BODY',400)}catch{return fail('INVALID_BODY',400)}
+ }
+ try{
+  if(publicRoute){
+   const token=method==='GET'?url.searchParams.get('token'):body.token;
+   if(!validToken(token))return fail('NOT_FOUND',404);
+   const survey=await db.prepare('SELECT id,title,questions_json,expires_at,closed FROM docs_guidance_surveys WHERE public_token=?').bind(token).first();
+   if(!survey||survey.closed||survey.expires_at<=now)return fail('NOT_FOUND',404);
+   const questions=JSON.parse(survey.questions_json);
+   if(method==='GET')return json({ok:true,title:survey.title,questions,options:OPTIONS,disclaimer:MEASURE_DISCLAIMER});
+   if(body.consent!==true||!validToken(body.browserToken)||!Array.isArray(body.answers)||body.answers.length!==questions.length||body.answers.some(v=>!Number.isInteger(v)||v<1||v>5))return fail('INVALID_RESPONSE',400);
+   const claim=await docsSha(survey.id+':'+body.browserToken);
+   const write=await db.prepare('INSERT OR IGNORE INTO docs_guidance_survey_responses(survey_id,browser_claim,answers_json,submitted_at) SELECT id,?,?,? FROM docs_guidance_surveys WHERE id=? AND closed=0 AND expires_at>?').bind(claim,JSON.stringify(body.answers),now,survey.id,now).run();
+   if(write.meta?.changes!==1)return fail('DUPLICATE_OR_CLOSED',409);
+   return json({ok:true},201);
+  }
+  const user=await docsIdent(request,env);
+  if(!user||typeof user.id!=='string'||!user.id.startsWith('usr_'))return fail('UNAUTHORIZED',401);
+  if(method==='GET'){
+   const id=url.searchParams.get('id');
+   if(!id){const list=await db.prepare('SELECT id,title,public_token,created_at,expires_at,closed FROM docs_guidance_surveys WHERE owner_id=? ORDER BY created_at DESC LIMIT 100').bind(user.id).all();return json({ok:true,surveys:list.results||[]})}
+   const survey=await db.prepare('SELECT id,title,questions_json,reverse_json FROM docs_guidance_surveys WHERE id=? AND owner_id=?').bind(id,user.id).first();
+   if(!survey)return fail('NOT_FOUND',404);
+   const count=await db.prepare('SELECT COUNT(*) AS n FROM docs_guidance_survey_responses WHERE survey_id=?').bind(id).first();
+   if(count.n<5)return json({ok:true,count:count.n,summary:null});
+   if(count.n>10000)return fail('ANALYSIS_LIMIT',413);
+   const rows=await db.prepare('SELECT answers_json FROM docs_guidance_survey_responses WHERE survey_id=? LIMIT 10001').bind(id).all();
+   if(rows.results.length>10000)return fail('ANALYSIS_LIMIT',413);
+   const questions=JSON.parse(survey.questions_json),summary=summarizeMeasure(rows.results.map(r=>JSON.parse(r.answers_json)),questions.length,JSON.parse(survey.reverse_json));
+   return json({ok:true,count:summary.count,summary:summary.count>=5?summary:null,title:survey.title,questions});
+  }
+  if(body.action==='close'){
+   const result=await db.prepare('UPDATE docs_guidance_surveys SET closed=1 WHERE id=? AND owner_id=?').bind(String(body.id||''),user.id).run();
+   return result.meta?.changes===1?json({ok:true}):fail('NOT_FOUND',404);
+  }
+  if(body.action!=='create'||body.consent!==true||!Number.isInteger(body.template)||!STARTER_MEASURES[body.template]||!Number.isInteger(body.days)||body.days<1||body.days>30)return fail('INVALID_SURVEY',400);
+  const t=STARTER_MEASURES[body.template],id=crypto.randomUUID(),token=random(),expires=now+body.days*86400000;
+  const created=await db.prepare('INSERT INTO docs_guidance_surveys(id,owner_id,public_token,title,questions_json,reverse_json,created_at,expires_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM docs_guidance_surveys WHERE owner_id=?)<100').bind(id,user.id,token,t.title,JSON.stringify(t.questions),JSON.stringify(t.reverse),now,expires,user.id).run();
+  if(created.meta?.changes!==1)return fail('SURVEY_LIMIT',409);
+  return json({ok:true,id,token,expires},201);
+ }catch{return fail('SURVEY_UNAVAILABLE',503)}
+}
+/* DOCS_PUBLIC_SURVEYS_END */
+
 export default {async fetch(request,env){
  const url=new URL(request.url),path=url.pathname;
+ if(path==="/api/surveys"||path==="/api/surveys/public")return docsSurveyEndpoint(request,env);
  if(path==="/api/premium/analyze")return premiumAnalyze(request,env);
  if(path.startsWith("/api/premium/")||path==="/api/admin/premium"||path.startsWith("/api/admin/notifications"))return premiumEndpoint(request,env,path);
  if(path==="/brand.svg")return new Response("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1000 1000\" role=\"img\" aria-label=\"DOCS ATHAT\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop stop-color=\"#27241C\"/><stop offset=\"1\" stop-color=\"#95815A\"/></linearGradient></defs><path fill=\"url(#g)\" fill-rule=\"evenodd\" d=\"M418.8,571.6 L418.8,893.6 L468.2,893.4 L468.4,745.6 L527.2,779.6 L527.4,893.2 L576.4,893.6 L576.6,571.8 L528.2,571.2 L527.2,572.4 L527.4,725.8 L526.4,726.2 L468.2,695.0 L468.2,571.8Z M788.8,569.2 L787.8,569.8 L787.8,623.8 L831.0,624.2 L831.0,895.4 L885.0,895.4 L885.0,624.2 L928.0,623.4 L928.0,570.2 L927.2,569.2Z M256.4,569.2 L255.4,570.0 L255.6,623.8 L298.8,624.4 L298.8,895.4 L352.6,895.4 L352.8,624.2 L395.6,623.6 L395.8,570.4 L395.0,569.2Z M604.6,569.0 L604.6,894.4 L658.8,894.2 L659.0,760.0 L666.6,762.8 L712.8,786.2 L712.8,894.2 L767.6,894.4 L767.6,569.0Z M659.0,624.0 L712.8,624.0 L712.6,731.4 L684.0,717.8 L658.8,704.0Z M71.4,569.0 L71.4,894.4 L125.6,894.4 L126.0,760.0 L179.6,786.2 L179.6,894.2 L234.6,894.4 L234.6,569.2Z M125.8,624.0 L179.6,624.0 L179.4,731.4 L125.6,704.0Z M237.8,108.2 L129.2,109.0 L129.2,433.6 L130.2,434.4 L238.0,434.4 L292.2,380.2 L292.2,162.2Z M184.2,162.8 L215.6,162.8 L238.0,185.6 L238.0,356.8 L214.6,380.0 L183.6,379.2Z M708.4,107.0 L708.4,261.4 L816.6,311.0 L816.2,378.6 L762.4,378.4 L762.2,324.4 L708.4,324.4 L708.4,432.6 L870.6,432.6 L870.6,275.8 L762.4,226.0 L762.8,161.0 L816.6,161.4 L817.0,215.6 L870.6,215.6 L870.6,107.0Z M318.2,106.2 L317.8,432.4 L479.8,432.6 L480.8,431.8 L480.8,107.0Z M372.0,161.0 L426.0,161.2 L425.6,377.8 L371.8,377.6Z M511.8,105.4 L511.6,431.6 L673.8,431.8 L674.0,295.8 L620.2,268.8 L620.0,376.6 L565.8,376.8 L565.8,160.6 L619.6,160.2 L620.2,187.2 L673.8,187.2 L673.8,105.4Z\"/></svg>",{headers:{"content-type":"image/svg+xml; charset=utf-8","cache-control":"public,max-age=86400","x-content-type-options":"nosniff"}});
