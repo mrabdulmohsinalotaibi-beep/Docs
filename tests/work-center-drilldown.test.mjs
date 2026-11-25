@@ -9,7 +9,7 @@ test('status tiles are interactive and open underlying records',()=>{
  assert.match(page,/id="docsWorkDetails"/);
 });
 test('counts and status lists share a classifier over original rows',()=>{
- assert.match(page,/const counts=docsWorkCenterCounts\(\[row\]\)/);
+ assert.match(page,/function docsWorkStatus\(row\)\{return classifyDocsWorkStatus\(row.status\)/);assert.match(page,/const status=classifyDocsWorkStatus\(row.status\);counts\[status\]\+\+/);
  assert.match(page,/docsWorkSourceRows\.filter\(row=>docsWorkStatus\(row\)===docsWorkSelected\)/);
  assert.match(page,/docsRenderWorkCenter\(allOriginals\)/);
 });
