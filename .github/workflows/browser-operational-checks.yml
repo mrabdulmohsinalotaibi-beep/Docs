@@ -154,6 +154,22 @@ jobs:
                       assert.ok(rows.every(row=>!row.title.startsWith('Fixture document '+(1-owner)+' ')),'other account document must not exist');
                       await page.locator('#previewDoc').click();
                       await page.locator('#docsUnifiedPreview').waitFor({state:'visible'});
+                      // Test the actual print popup in every engine; Chromium also renders a PDF artifact.
+                      const popupPromise=page.waitForEvent('popup');
+                      await page.locator('#docsUnifiedPrint').click();
+                      const printPage=await popupPromise;
+                      try{
+                        await printPage.locator('.doc-a4').waitFor({state:'visible'});
+                        assert.equal(await printPage.locator('.doc-a4').count(),1);
+                        assert.ok((await printPage.locator('.doc-a4').innerText()).includes(title),'printed document must contain its title');
+                        await printPage.getByRole('button',{name:'طباعة / حفظ PDF',exact:true}).waitFor({state:'visible'});
+                        if(name==='chromium'){
+                          const pdf=await printPage.pdf({path:'browser-results/'+label+'-account-'+owner+'.pdf',format:'A4',preferCSSPageSize:true,printBackground:true});
+                          assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+                          assert.ok(pdf.length>1000,'PDF must contain rendered content');
+                        }
+                        console.log('PASS print popup '+label+' '+owner);
+                      }finally{await printPage.close()}
                       await page.locator('#docsUnifiedClose').click();
                       await page.locator('#closeEditor').click();
                       await page.locator('#editor.visible').waitFor({state:'hidden'});
