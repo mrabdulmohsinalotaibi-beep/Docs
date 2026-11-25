@@ -21,3 +21,28 @@ export function reviewGuidanceWork(records, today) {
   }
   return result;
 }
+
+ // Accept the existing Docs status vocabulary without inferring completion.
+export function classifyDocsWorkStatus(value){
+ const status=String(value??'').normalize('NFKC').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[\s_-]+/g,' ').trim().toLowerCase();
+ if(/^(مسوده|مطلوب|مطلوبه|قيد الانتظار|بانتظار التنفيذ|لم يبدا|لم يتم البدء|pending|draft|required|not started)$/.test(status))return 'required';
+ if(/^(جار التنفيذ|جاري التنفيذ|قيد التنفيذ|قيد العمل|جاري العمل|جار العمل|قيد الانجاز|قيد المتابعه|in progress|active|ongoing)$/.test(status))return 'active';
+ if(/^(مكتمل|مكتمله|تم التنفيذ|منجز|منجزه|تم الانجاز|انجز|completed|done|finished)$/.test(status))return 'done';
+ if(/^(معتمد|معتمده|approved)$/.test(status))return 'approved';
+ if(/^(متاخر|متاخره|overdue)$/.test(status))return 'overdue';
+ if(/^(مؤرشف|مؤرشفه|archived)$/.test(status))return 'archived';
+ return 'unknown';
+}
+export function summarizeDocsOriginals(rows, {signedIn=false,indexReady=false}={}){
+ const counts={required:0,active:0,done:0,approved:0,overdue:0,archived:0,unknown:0};
+ if(!signedIn)return {counts:null,coverage:'unavailable',students:[],unlinked:0};
+ const students=new Map();let unlinked=0;
+ for(const row of rows){
+  const status=classifyDocsWorkStatus(row.status);counts[status]++;
+  const key=row.student_key??row.studentKey;
+  if(typeof key!=='string'||!key.trim()){unlinked++;continue;}
+  if(!students.has(key))students.set(key,{studentKey:key,required:0,active:0,done:0,approved:0,overdue:0,archived:0,unknown:0});
+  students.get(key)[status]++;
+ }
+ return {counts,coverage:indexReady?'indexed':'partial',students:[...students.values()],unlinked};
+}
