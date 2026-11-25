@@ -6507,9 +6507,26 @@ for(const [i,t] of STARTER_MEASURES.entries())select.add(new Option(t.title,Stri
 function questions(){const t=STARTER_MEASURES[Number(select.value)],list=get('[data-questions]');list.replaceChildren();for(const q of t.questions){const li=document.createElement('li');li.textContent=q;list.append(li)}}
 let current=null;
 const archive=get('[data-archive]'),archiveStatus=get('[data-archive-status]');
-const archiveKey=()=>activeUser?'athat-docs-measure-aggregate-v1:'+activeUser:null;
-function readArchive(){const key=archiveKey();if(!key)return [];const rows=JSON.parse(localStorage.getItem(key)||'[]');if(!Array.isArray(rows))throw Error('تعذر قراءة الأرشيف');return rows}
-function refreshArchive(){archive.replaceChildren(new Option('اختر تحليلًا محفوظًا',''));if(!activeUser)return;try{for(const entry of readArchive())archive.add(new Option(entry.title+' · '+entry.date+' · '+entry.summary.count+' استجابة',entry.id))}catch{archiveStatus.textContent='تعذر قراءة الأرشيف المحلي.'}}
+const archiveKey=owner=>'athat-docs-measure-aggregate-v1:'+owner;
+async function readArchive(){
+ const owner=activeUser,database=db;if(!owner||!database)return [];
+ const rows=await new Promise((resolve,reject)=>{const r=database.transaction('cloudSnapshots','readonly').objectStore('cloudSnapshots').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)});
+ if(owner!==activeUser||database!==db)return [];
+ return rows.filter(r=>r.kind==='local-measure-aggregate'&&r.entry?.owner===owner&&r.id==='measure-aggregate:'+r.entry.id).map(r=>r.entry).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+async function storeAggregate(entry,owner,database){
+ if(!owner||owner!==activeUser||database!==db||entry.owner!==owner||!entry.summary||entry.summary.count<5||!/^[a-f0-9-]{36}$/i.test(entry.id))throw Error('تعذر التحقق من الحساب أو التحليل');
+ return new Promise((resolve,reject)=>{const tx=database.transaction('cloudSnapshots','readwrite'),store=tx.objectStore('cloudSnapshots'),id='measure-aggregate:'+entry.id,r=store.get(id);r.onsuccess=()=>{if(!r.result)store.add({id,kind:'local-measure-aggregate',entry,downloadedAt:new Date().toISOString()});else if(r.result.kind!=='local-measure-aggregate'||r.result.entry?.owner!==owner)tx.abort()};tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('تعذر حفظ التحليل'))});
+}
+async function refreshArchive(){
+ const owner=activeUser,database=db;archive.replaceChildren(new Option('اختر تحليلًا محفوظًا',''));if(!owner||!database)return;
+ try{
+ const legacy=JSON.parse(localStorage.getItem(archiveKey(owner))||'[]');if(!Array.isArray(legacy))throw Error('تعذر قراءة الأرشيف السابق');
+ for(const entry of legacy){if(owner!==activeUser||database!==db)return;await storeAggregate(entry,owner,database)}
+ const rows=await readArchive();if(owner!==activeUser||database!==db)return;
+ for(const entry of rows)archive.add(new Option(entry.title+' · '+entry.date+' · '+entry.summary.count+' استجابة',entry.id));
+ }catch{if(owner===activeUser&&database===db)archiveStatus.textContent='تعذر قراءة الأرشيف المحلي؛ لم تُحذف النسخ السابقة.'}
+}
 function clear(){input.value='';result.replaceChildren();current=null;get('[data-save]').disabled=true;get('[data-report]').disabled=true}
 function displaySummary(entry){
  result.replaceChildren();
@@ -6529,14 +6546,14 @@ function displaySummary(entry){
  }
 }
 input.addEventListener('input',()=>{current=null;get('[data-save]').disabled=true;get('[data-report]').disabled=true});
-get('[data-save]').onclick=()=>{
- if(!activeUser||!current||current.owner!==activeUser||current.summary.count<5)return;
- try{const list=readArchive();if(!list.some(e=>e.id===current.id)){if(list.length>=100)throw Error('بلغ الأرشيف الحد المسموح؛ نزّل التقارير قبل إدارة التخزين.');list.unshift(current);localStorage.setItem(archiveKey(),JSON.stringify(list))}
- refreshArchive();archive.value=current.id;archiveStatus.textContent='حُفظ التحليل المجمع محليًا لهذا الحساب.';get('[data-save]').disabled=true}catch(e){archiveStatus.textContent='تعذر الحفظ: '+e.message}
+get('[data-save]').onclick=async()=>{
+ const owner=activeUser,database=db,entry=current;
+ if(!owner||!database||!entry||entry.owner!==owner||entry.summary.count<5)return;
+ try{const list=await readArchive();if(owner!==activeUser||database!==db)return;if(list.length>=100&&!list.some(e=>e.id===entry.id))throw Error('بلغ الأرشيف الحد المسموح');await storeAggregate(entry,owner,database);if(owner!==activeUser||database!==db)return;await refreshArchive();if(owner!==activeUser||database!==db)return;archive.value=entry.id;archiveStatus.textContent='حُفظ التحليل المجمع في قاعدة الحساب المحلية.';if(current?.id===entry.id)get('[data-save]').disabled=true}catch(e){if(owner===activeUser&&database===db)archiveStatus.textContent='تعذر الحفظ: '+e.message}
 };
-get('[data-open]').onclick=()=>{
- if(!activeUser)return;
- try{const entry=readArchive().find(e=>e.id===archive.value&&e.owner===activeUser);if(!entry)return;clear();current=entry;select.value=String(entry.measure);questions();displaySummary(entry);get('[data-report]').disabled=false;archiveStatus.textContent='تم فتح التحليل المحفوظ.'}catch{archiveStatus.textContent='تعذر فتح التحليل.'}
+get('[data-open]').onclick=async()=>{
+ const owner=activeUser,database=db,id=archive.value;if(!owner||!database)return;
+ try{const entry=(await readArchive()).find(e=>e.id===id&&e.owner===owner);if(!entry||owner!==activeUser||database!==db)return;clear();current=entry;select.value=String(entry.measure);questions();displaySummary(entry);get('[data-report]').disabled=false;archiveStatus.textContent='تم فتح التحليل المحفوظ.'}catch{if(owner===activeUser&&database===db)archiveStatus.textContent='تعذر فتح التحليل.'}
 };
 get('[data-report]').onclick=()=>{
  if(!activeUser||!current||current.owner!==activeUser||current.summary.count<5)return;
