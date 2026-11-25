@@ -6583,7 +6583,9 @@ get('[data-analyze]').onclick=()=>{
  get('[data-save]').disabled=r.count<5;get('[data-report]').disabled=r.count<5;
  archiveStatus.textContent=r.count<5?'يلزم خمس استجابات صالحة على الأقل لحفظ أو تصدير النتائج المجمعة حفاظًا على الخصوصية.':'يمكن حفظ أو تنزيل التحليل المجمع؛ لا تُحفظ الإجابات الفردية.';
 };
-document.addEventListener('athat-docs-logout',()=>{clear();archive.replaceChildren();archiveStatus.textContent=''});
+document.addEventListener('athat-docs-logout',()=>{clear();archive.replaceChildren();delete archive.dataset.owner;archiveStatus.textContent=''});
+document.addEventListener('athat-docs-login',()=>{clear();delete archive.dataset.owner;refreshArchive()});
+document.addEventListener('athat-docs-data-restored',event=>{if(event.detail?.userId===activeUser)refreshArchive()});
 section.addEventListener('focusin',()=>{if(archive.dataset.owner!==String(activeUser||'')){clear();archive.dataset.owner=String(activeUser||'');refreshArchive()}});
 questions();
 
