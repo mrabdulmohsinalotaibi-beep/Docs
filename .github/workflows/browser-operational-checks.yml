@@ -197,8 +197,12 @@ jobs:
                       assert.equal(envelope.format,'ATHAT-DOCS-ENCRYPTED-BACKUP');
                       assert.equal(envelope.algorithm,'AES-256-GCM');
                       assert.ok(envelope.ciphertext.length>0&&!bytes.toString().includes(title));
-                      const file=page.locator('#docsSettingsHub input[type="file"][accept=".json,application/json"]').last();
-                      const restore=async(buffer)=>file.setInputFiles({name:'fixture-backup.json',mimeType:'application/json',buffer});
+                      const restore=async(buffer)=>{
+                        const chooserPromise=page.waitForEvent('filechooser',{timeout:10000});
+                        await page.locator('#dsRestore').click();
+                        const chooser=await chooserPromise;
+                        await chooser.setFiles({name:'fixture-backup.json',mimeType:'application/json',buffer});
+                      };
                       const status=page.locator('#dsTransferStatus');
                       backupPassword='IncorrectFixturePassword';
                       await restore(bytes);
