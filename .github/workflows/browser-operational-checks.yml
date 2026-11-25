@@ -65,6 +65,23 @@ jobs:
                     assert.equal(await page.locator('#emailInput').count(),1);
                     assert.equal(await page.locator('#passwordInput').count(),1);
                     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'horizontal overflow');
+                    // Verify real service-worker caching and offline navigation, without an account.
+                    await page.waitForFunction(async()=>{
+                      if(!navigator.serviceWorker.controller)return false;
+                      const entries=await Promise.all(['/','/peer-sync.js','/auto-sync.js'].map(p=>caches.match(p)));
+                      return entries.every(r=>r?.ok);
+                    },null,{timeout:30000});
+                    await context.setOffline(true);
+                    try{
+                      const response=await page.reload({waitUntil:'load'});
+                      assert.ok(response?.ok(),'offline shell must load from cache');
+                      assert.equal(await page.evaluate(()=>navigator.onLine),false);
+                      await page.locator('#authGate').waitFor({state:'visible'});
+                      await page.locator('#tabRegister').click();
+                      await page.locator('#registerName').waitFor({state:'visible'});
+                      await page.locator('#tabLogin').click();
+                      await page.locator('#registerName').waitFor({state:'hidden'});
+                    }finally{await context.setOffline(false)}
                     assert.deepEqual(errors,[]);
                     console.log('PASS '+label);
                   }catch(e){failures++;console.error('FAIL '+label,e);await page.screenshot({path:'browser-results/'+label+'.png',fullPage:true}).catch(()=>{})}
