@@ -251,9 +251,15 @@ jobs:
                     await page.locator('#workspaceNav [data-workspace="documents"]').click();
                     const savedTitle='Fixture document 0 '+label;
                     await page.locator('#search').fill(savedTitle);
-                    await page.getByText(savedTitle,{exact:true}).first().waitFor({state:'visible',timeout:15000});
+                    const savedCard=page.locator('#docs article.doc').filter({has:page.getByText(savedTitle,{exact:true})});
+                    await expect(savedCard).toHaveCount(1);
+                    await expect(savedCard).toBeVisible();
+                    await savedCard.getByRole('button',{name:'فتح',exact:true}).click();
+                    await expect(page.locator('#docTitle')).toHaveValue(savedTitle);
+                    await page.locator('#closeEditor').click();
+                    await page.locator('#editor.visible').waitFor({state:'hidden'});
                     await page.locator('#search').fill('Fixture document 1 '+label);
-                    assert.equal(await page.getByText('Fixture document 1 '+label,{exact:true}).count(),0,'account A must not expose account B document');
+                    await expect(page.locator('#docs article.doc').filter({has:page.getByText('Fixture document 1 '+label,{exact:true})})).toHaveCount(0);
                     await page.locator('#search').fill('');
                     await page.locator('#logoutDocs').click();
                     await page.locator('#authGate').waitFor({state:'visible'});
