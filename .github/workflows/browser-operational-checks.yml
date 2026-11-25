@@ -31,6 +31,8 @@ jobs:
           const {default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
           globalThis.fetch=async()=>{throw Error('Outbound worker network forbidden')};
           const origin='http://127.0.0.1:4173';
+          const users=['usr_browser_fixture_a','usr_browser_fixture_b'].map((id,i)=>({id,name:'Test account '+i,role:'teacher',loginIdentifier:'fixture'+i+'@example.invalid'}));
+          let session=null;
           let serverUnavailable=false;
           let blockedRequests=0;
           const server=createServer(async(req,res)=>{
@@ -38,6 +40,19 @@ jobs:
             try{
               const url=new URL(req.url,origin);
               if(url.origin!==origin){res.writeHead(403).end();return}
+              // Fixture authentication is served only by the isolated loopback test server.
+              if(url.pathname.startsWith('/api/auth/')){
+                const action=url.pathname.split('/').pop();
+                const reply=(status,body)=>res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify(body));
+                if(action==='login'&&req.method==='POST'){
+                  let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192){reply(413,{ok:false});return}}
+                  const body=JSON.parse(raw);
+                  session=users.find(u=>u.loginIdentifier===body.loginIdentifier&&body.password==='FixturePassword123')||null;
+                }
+                if(action==='logout'&&req.method==='POST'){session=null;reply(200,{ok:true});return}
+                if((action==='login'||action==='me')&&session){reply(200,{ok:true,user:session});return}
+                reply(401,{ok:false,code:'UNAUTHORIZED'});return;
+              }
               if(url.pathname.startsWith('/api/')||url.pathname==='/health'){
                 res.writeHead(401,{'content-type':'application/json'}).end(JSON.stringify({ok:false,code:'UNAUTHORIZED'}));return;
               }
@@ -53,6 +68,7 @@ jobs:
               const browser=await engine.launch();
               try{
                 for(const viewport of [{width:1280,height:900},{width:390,height:844},{width:820,height:1180}]){
+                  session=null;
                   const context=await browser.newContext({viewport});
                   const page=await context.newPage();
                   const errors=[];
@@ -68,20 +84,6 @@ jobs:
                     assert.equal(await page.locator('#emailInput').count(),1);
                     assert.equal(await page.locator('#passwordInput').count(),1);
                     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'horizontal overflow');
-                    // Mock authentication only inside this isolated browser context.
-                    // All other API requests remain denied by the loopback server.
-                    const users=['usr_browser_fixture_a','usr_browser_fixture_b'].map((id,i)=>({id,name:'Test account '+i,role:'teacher',loginIdentifier:'fixture'+i+'@example.invalid'}));
-                    let session=null;
-                    await context.route('**/api/auth/**',async route=>{
-                      const action=new URL(route.request().url()).pathname.split('/').pop();
-                      if(action==='login'){
-                        const body=route.request().postDataJSON();
-                        session=users.find(u=>u.loginIdentifier===body.loginIdentifier&&body.password==='FixturePassword123')||null;
-                      }
-                      if(action==='logout'){session=null;return route.fulfill({json:{ok:true}})}
-                      if((action==='login'||action==='me')&&session)return route.fulfill({json:{ok:true,user:session}});
-                      return route.fulfill({status:401,json:{ok:false,code:'UNAUTHORIZED'}});
-                    });
                     page.on('dialog',dialog=>dialog.accept());
                     for(const user of users){
                       await page.locator('#emailInput').fill(user.loginIdentifier);
