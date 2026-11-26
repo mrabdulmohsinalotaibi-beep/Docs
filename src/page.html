@@ -1683,6 +1683,7 @@ let docsSaveInFlight=false;
 async function docsSaveUpdated(asCopy=false){
  if(!activeUser||!db||!activeTemplate||docsSessionLeaving)return false;
  if(docsSaveInFlight){docsAutoSavePending=true;return false}
+ clearTimeout(docsAutoSaveTimer);docsAutoSaveTimer=null;docsAutoSavePending=false;
  docsSaveInFlight=true;
  const revision=docsEditorRevision,owner=activeUser,connection=db,session=docsEditorSession;
  const sameEditor=()=>owner===activeUser&&connection===db&&session===docsEditorSession;
