@@ -6239,7 +6239,8 @@ async function gradeRenderPlansForStudent(studentKey){
   for(const plan of plans.sort((a,b)=>String(b.updated).localeCompare(String(a.updated)))){
    const card=document.createElement('article');card.className='s360-real-record';
    const h=document.createElement('h5');h.textContent=plan.subject+' · '+(plan.period||'نتائج الطلاب')+' · '+(states[plan.status]||'مسودة');card.append(h);
-   for(const [label,value] of [['الدرجة القبلية',plan.baseline+'%'],['الدرجة البعدية',gradeImpact(plan.baseline,plan.post)===null?'لم تسجل بعد':plan.post+'%'],['التغير بالنقاط المئوية',gradeImpact(plan.baseline,plan.post)===null?'غير مقاس':String(gradeImpact(plan.baseline,plan.post))],['الهدف',plan.goal],['الإجراء',plan.action],['نتيجة المتابعة',plan.result||'لم تسجل بعد']]){const row=document.createElement('p');row.style.whiteSpace='pre-wrap';const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));card.append(row)}
+   for(const [label,value] of [['مصدر القياس',plan.sourceFile||'ملف نتائج محلي'],['فترة القياس',plan.period||'غير محددة'],['حجم مصدر القياس',plan.sourceCount?String(plan.sourceCount)+' سجلًا':'غير معروف'],['الدرجة القبلية',plan.baseline+'%'],['الدرجة البعدية',gradeImpact(plan.baseline,plan.post)===null?'لم تسجل بعد':plan.post+'%'],['التغير بالنقاط المئوية',gradeImpact(plan.baseline,plan.post)===null?'غير مقاس':String(gradeImpact(plan.baseline,plan.post))],['الهدف',plan.goal],['الإجراء',plan.action],['نتيجة المتابعة',plan.result||'لم تسجل بعد']]){const row=document.createElement('p');row.style.whiteSpace='pre-wrap';const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));card.append(row)}
+   const note=document.createElement('p');note.className='muted';note.textContent='التغير مقارنة وصفية بين قياسين من المصدر المحدد، ولا يثبت أن الإجراء سبب النتيجة. راجع طريقة القياس واكتمال السجلات قبل اعتمادها.';card.append(note)
    holder.append(card);
   }
  }catch(error){const note=document.createElement('p');note.className='muted';note.textContent='تعذر قراءة خطط التحصيل المحلية: '+error.message;holder.append(note)}
@@ -6249,9 +6250,10 @@ async function gradeOpenPlan(record){
  const student=matchStudent(record);
  const key=norm(record.id)||[norm(record.name),norm(record.grade),norm(record.cls)].join('|');
  const id=state.current+'|'+key+'|'+norm(record.subject);
- gradeEditingPlan={id,studentKey:student?.key||'',studentNo:record.id||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:state.imports.find(x=>x.id===state.current)?.period||''};
+ const source=state.imports.find(x=>x.id===state.current);
+ gradeEditingPlan={id,studentKey:student?.key||'',studentNo:record.id||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:source?.period||'',sourceFile:source?.filename||'ملف نتائج محلي',sourceCount:Array.isArray(source?.records)?source.records.length:null,measurementUnit:'النسبة المئوية'};
  const editor=el('gradePlanEditor');editor.hidden=false;
- el('gradePlanStudent').textContent=[record.name,record.grade,record.cls,record.subject,'الدرجة القبلية '+record.pct+'%'].filter(Boolean).join(' — ');
+ el('gradePlanStudent').textContent=[record.name,record.grade,record.cls,record.subject,'الدرجة القبلية '+record.pct+'%','المصدر: '+(source?.filename||'ملف نتائج محلي'),'الفترة: '+(source?.period||'غير محددة')].filter(Boolean).join(' — ');
  el('gradePlanNotice').textContent=student?'الطالب مرتبط بملف 360.':'لم يُعثر على تطابق وحيد في ملف الطالب؛ تُحفظ الخطة مع بيانات سجل النتائج حتى تتطابق.';
  try{
   const stored=(await gradePlanStore('getAll')).find(x=>x.id===id);
