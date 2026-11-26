@@ -4526,7 +4526,7 @@ document.addEventListener('athat-docs-logout',()=>{guidanceRecords=[];guidanceLo
 const reportIntro=document.createElement('section');reportIntro.className='panel docs-report-center';
 reportIntro.innerHTML='<div class="row"><div><h2>التقارير والتحليلات</h2><p class="muted">أرقام من الأصول فقط، مع توضيح حالة البيانات. لا نسخ جديدة من سجلات الطلاب.</p></div><button id="reportsRefresh" type="button" class="btn">تحديث البيانات</button></div>'+
 '<nav id="reportsSubnav" class="docs-reports-subnav" aria-label="أقسام التقارير"><button data-report-tab="dashboard" type="button">المؤشرات</button><button data-report-tab="analytics" type="button">التحليلات</button><button data-report-tab="official" type="button">التقارير الرسمية</button><button data-report-tab="export" type="button">التصدير والطباعة</button></nav>'+
-'<p id="reportsDataStatus" class="muted" role="status">جارٍ تجهيز مصادر التقارير…</p>'+
+'<p id="reportsDataStatus" class="muted" role="status">جارٍ تجهيز مصادر التقارير…</p><section id="reportsProvenance" class="unified-note docs-reports-provenance" aria-labelledby="reportsProvenanceTitle"><h3 id="reportsProvenanceTitle">سياق البيانات وحدود المؤشرات</h3><div id="reportsProvenanceBody">يظهر هنا مصدر كل مجموعة بيانات وحجم العينة بعد تحميل التقارير.</div></section>'+ 
 '<section id="reportsDashboard" data-report-pane="dashboard"><div class="docs-report-filters"><label>الفترة الهجرية<select id="reportsYear"><option value="all">جميع السنوات المتاحة</option><option value="1448">١٤٤٨ هـ</option><option value="1447">١٤٤٧ هـ</option></select></label><label>حالة العمل<select id="reportsStatus"><option value="all">كل الحالات</option><option value="done">موسوم مكتمل في المصدر</option><option value="pending">غير مكتمل أو غير موثّق</option></select></label></div><div id="reportsTopMetrics" class="docs-report-metrics docs-exec-kpis"></div><div class="docs-exec-layout"><section class="docs-exec-chart"><h3>توزيع الأعمال الأصلية</h3><div id="docsExecChart" class="docs-exec-plot"></div><div id="docsReportItems" class="docs-report-bars" hidden></div></section><aside class="docs-exec-summary"><h3>ملخص الحالة</h3><div id="docsExecSummary"></div><p id="docsExecNotice" class="muted"></p></aside></div><section class="docs-exec-shortcuts"><h3>أقسام التقارير</h3><div><button type="button" data-exec-target="official">التقارير الرسمية<small>المسودات والطباعة</small></button><button type="button" data-exec-target="analytics">تحليل الطلاب<small>المواظبة والسلوك والرعاية</small></button><button type="button" data-exec-target="export">التصدير والطباعة<small>PDF وExcel</small></button><button type="button" data-exec-target="dashboard">المؤشرات<small>ملخص الأعمال</small></button></div></section><p class="muted">البرامج المسجلة لا تعني المنفذة. حالة «مكتمل» لا تثبت الإنجاز دون شواهد.</p></section>'+
 '<section id="reportsAnalytics" data-report-pane="analytics" hidden><h3>تحليلات المواظبة والسلوك والرعاية</h3><p class="muted">مؤشرات مجمعة من السجلات المرتبطة بمعرّفات الطلاب المؤكدة. لا تُعرض أسماء أو تفاصيل الحالات الطبية هنا. تحليلات الطلاب تشمل كل الفترات المتاحة في المصدر.</p><div id="reportsStudentMetrics" class="docs-report-metrics"></div><div id="reportsStudentBars" class="docs-report-bars"></div><p id="reportsAnalyticsNote" class="muted"></p></section>'+
 '<section id="reportsOfficial" data-report-pane="official" hidden><h3>مسودات التقارير الرسمية</h3><p class="muted">تُنشأ المسودة من أرقام السجلات المتاحة. يمكنك تحرير النص قبل الطباعة، ولا تُحفظ نسخة مكررة في الأعمال تلقائيًا.</p><div class="docs-report-filters"><label>نوع التقرير<select id="reportsOfficialType"><option value="monthly">تقرير شهري</option><option value="term">تقرير فصلي</option><option value="annual">تقرير ختامي</option></select></label><label>الفترة الهجرية للتقرير<input id="reportsOfficialPeriod" type="text" maxlength="35" placeholder="مثال: ١٤٤٨/٠٥ أو الفصل الأول ١٤٤٨"></label></div><div class="row"><button id="reportsGenerate" class="primary" type="button">إنشاء مسودة من البيانات</button><button id="reportsOpenOriginals" class="btn" type="button">فتح المستندات الأصلية</button></div><label class="docs-report-draft-label">نص التقرير قابل للتحرير<textarea id="reportsDraft" rows="16" maxlength="18000" placeholder="اختر الفترة ونوع التقرير، ثم اضغط إنشاء مسودة."></textarea></label><p id="reportsDraftStatus" class="muted" role="status"></p></section>'+
@@ -4947,6 +4947,26 @@ function reportsMakeMetric(host,label,value,note,onClick){
  title.textContent=label;number.textContent=value;sub.textContent=note||'';
  card.append(title,number,sub);if(onClick)card.onclick=onClick;host.append(card);
 }
+function reportsRenderProvenance(rows){
+ const host=$('reportsProvenanceBody');if(!host)return;
+ const sourceRows=[
+  ['الأعمال الأصلية','سجلات الأعمال والفهارس المرتبطة بالحساب',reportsSourcesReady&&guidanceLoadedUser===activeUser,rows.length],
+  ['دليل الطلاب','معرّفات الطلاب المرتبطة بالحساب',reportsStudentReady,reportsStudents.length],
+  ['مؤشرات المتابعة','سجلات مواظبة وسلوك مرتبطة بمعرّفات مؤكدة',reportsInsightsReady,Object.keys(reportsInsights||{}).length],
+  ['الرعاية الخاصة','فهرس مؤشرات الرعاية المرتبط بالطلاب',reportsCareReady,reportsCare.length]
+ ];
+ const list=document.createElement('ul');list.className='docs-report-provenance-list';
+ for(const [label,description,ready,count] of sourceRows){
+  const item=document.createElement('li'),strong=document.createElement('strong'),text=document.createElement('span');
+  strong.textContent=label+': '+(ready?'متاح':'غير متاح');
+  text.textContent=' — '+description+'؛ حجم العينة/الفهرس: '+(ready?String(count):'غير معروف');
+  item.append(strong,text);list.append(item);
+ }
+ const period=document.createElement('p');period.className='muted';
+ period.textContent='الفترة الحالية: '+$('reportsYear').selectedOptions[0].text+' · حالة الأعمال: '+$('reportsStatus').selectedOptions[0].text+' · عدد الأعمال بعد الفلاتر: '+(reportsSourcesReady?rows.length:'غير معروف');
+ const note=document.createElement('p');note.className='muted';note.textContent='البيانات غير المتاحة لا تُحتسب صفرًا، والفهرس الجزئي لا يكفي للحكم على اكتمال السجل أو تنفيذ البرنامج.';
+ host.replaceChildren(list,period,note);
+}
 function reportsSourceLink(table){
  workspaceGoto('documents');openDocsView('works');draw();
  const rows=nativeA4Rows().filter(r=>r.source_table===table),kind=rows[0]?.kind||(guidanceKinds[table]||'');
@@ -4995,6 +5015,7 @@ refreshReportSummary=function(){
 
  const total={rows,byType,done,programs,unverified,list};
  reportsLastOverview=total;
+ reportsRenderProvenance(rows);
  const agg=$('reportsStudentMetrics');agg.replaceChildren();
  const ins=reportsInsightsReady?Object.values(reportsInsights):[];
  const sums={absence:0,late:0,behavior:0,positive:0,cases:0,interviews:0,referrals:0};
@@ -5074,6 +5095,9 @@ function reportsDraftContent(){
   'الموجّه الطلابي: '+(a4Profile.counselor||'لم يُحدد'),
   'الفترة: '+reportsReportPeriod(),
   'نطاق الأرقام: '+(type==='monthly'?'الشهر الهجري المحدد فقط (السجلات ذات التاريخ المعروف)':'الفترة المحددة بمرشّحات المؤشرات؛ لا تُستنتج حدود الفصل الدراسي تلقائيًا'),
+  'حالة مصدر الأعمال: '+(reportsSourcesReady?'متاح من الحساب أو النسخة المحلية':'غير متاح'),
+  'حجم العينة بعد الفلاتر: '+current.rows.length,
+  'تغطية المصادر الأخرى: الطلاب '+(reportsStudentReady?'متاح ('+reportsStudents.length+')':'غير متاح')+'، مؤشرات المتابعة '+(reportsInsightsReady?'متاح ('+Object.keys(reportsInsights||{}).length+')':'غير متاح')+'، الرعاية '+(reportsCareReady?'متاح ('+reportsCare.length+')':'غير متاح'),
   'تاريخ الإعداد (هجري): '+hijriToday(),
   '',
   'أولاً: ملخص الأعمال الموثقة في المصدر',
@@ -5109,8 +5133,13 @@ function reportsCsvCell(value){return '"'+String(value??'').replace(/"/g,'""')+'
 $('reportsExportExcel').onclick=()=>{
  if(!reportsSourcesReady){$('reportsExportStatus').textContent='حدّث بيانات التقارير أولًا.';return}
  refreshReportSummary();
- const rows=[['التصنيف','عدد الأعمال الأصلية'],...(reportsLastOverview?.list||[]).map(x=>[x.label,x.count])];
- rows.push(['الإجمالي',reportsLastOverview?.rows.length||0]);
+ const rows=[['نوع البيانات','القيمة','حالة المصدر','الفترة','ملاحظة'],
+  ...((reportsLastOverview?.list||[]).map(x=>[x.label,x.count,reportsSourcesReady?'متاح':'غير متاح',$('reportsYear').selectedOptions[0].text,'لا يثبت التنفيذ دون مراجعة الشواهد'])),
+  ['الإجمالي',reportsLastOverview?.rows.length||0,reportsSourcesReady?'متاح':'غير متاح',$('reportsYear').selectedOptions[0].text,'بعد الفلاتر الحالية'],
+  ['الطلاب',reportsStudentReady?reportsStudents.length:'غير متاح',reportsStudentReady?'متاح':'غير متاح','كل الفترات المتاحة','معرّفات مرتبطة فقط'],
+  ['مؤشرات المتابعة',reportsInsightsReady?Object.keys(reportsInsights||{}).length:'غير متاح',reportsInsightsReady?'متاح':'غير متاح','كل الفترات المتاحة','لا تُفسر كتشخيص'],
+  ['الرعاية',reportsCareReady?reportsCare.length:'غير متاح',reportsCareReady?'متاح':'غير متاح','كل الفترات المتاحة','عدد الفهارس وليس التشخيصات']
+ ];
  reportsDownload('مؤشرات-مستندات-الذات.csv','\uFEFF'+rows.map(r=>r.map(reportsCsvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');
  $('reportsExportStatus').textContent='تم إعداد جدول إحصائي بلا أسماء طلاب. افتحه بواسطة Excel.';
 };
