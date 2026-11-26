@@ -8,6 +8,10 @@ const start=page.indexOf('function gradeMeasurementQuality(');
 const end=page.indexOf('function gradePlanBelongs(',start);
 assert.ok(start>=0&&end>start);
 const gradeMeasurementQuality=vm.runInNewContext(page.slice(start,end)+';gradeMeasurementQuality');
+test('plan editor exposes live measurement quality status',()=>{
+ assert.match(page,/id="gradePlanQuality"/);
+ assert.match(page,/gradeRenderPlanQuality\(\{\.\.\.gradeEditingPlan,post:/);
+});
 
 test('complete verified measurements are comparable',()=>{
  const result=gradeMeasurementQuality({baseline:60,post:75,sourceFile:'اختبار 1.csv',period:'الفصل الأول',identityVerified:true});
