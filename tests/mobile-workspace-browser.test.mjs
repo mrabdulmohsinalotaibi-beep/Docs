@@ -29,7 +29,12 @@ test('mobile workspace preserves routes, recent originals, account isolation and
   assert.equal(await page.locator('#docsOrangeHomeGrid .docs-tile-arrow').count(),4);
   assert.equal(await page.locator('#workspaceNav').evaluate(el=>getComputedStyle(el).position),'fixed');
   assert.equal(await page.locator('#docsOrangeCreate #newBtn').isVisible(),true);
-  assert.equal(await page.locator('#workspace-home .hero h1').evaluate(el=>getComputedStyle(el).color),'rgb(24, 24, 24)');
+  assert.equal(await page.locator('#workspace-home .hero h1').evaluate(el=>getComputedStyle(el).color),'rgb(72, 68, 67)');
+  assert.equal(await page.locator('#docsOrangeCreate #newBtn').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(72, 68, 67)');
+  assert.equal(await page.locator('#docsOrangeCreate #newBtn').evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)');
+  assert.match(await page.locator('header.top .logo img').getAttribute('src'),/brand\.svg\?v=17/);
+  assert.ok(await page.locator('header.top .logo').evaluate(el=>el.getBoundingClientRect().width)>=120);
+  assert.ok(await page.locator('header.top .logo img').evaluate(el=>el.complete&&el.naturalWidth>0));
   await page.setViewportSize({width:390,height:844});
 
   await page.evaluate(async()=>{
