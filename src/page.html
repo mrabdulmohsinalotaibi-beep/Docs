@@ -3998,7 +3998,7 @@ async function openStudent360(key){
  workText.textContent=own?Object.entries(docsWorkLabels).map(([status,label])=>label+': '+own[status]).join(' · '):'لا توجد أعمال مرتبطة في الفهرس المتاح';
  if(review.coverage!=='indexed')workText.textContent+=' — عرض جزئي';
  workSummary.style.gridColumn='1/-1';workSummary.append(workTitle,workText);basics.append(workSummary);
- const casePanel=document.createElement('div');casePanel.style.gridColumn='1/-1';basics.append(casePanel);
+ const casePanel=document.createElement('div');casePanel.id='docsStudentFieldworkCases';casePanel.style.gridColumn='1/-1';basics.append(casePanel);
  const caseHeading=document.createElement('b');caseHeading.textContent='الحالات والإحالات الميدانية';casePanel.append(caseHeading);
  const caseBody=document.createElement('div');caseBody.textContent='جاري قراءة الحالات المحلية…';casePanel.append(caseBody);
  (async()=>{
@@ -4562,7 +4562,7 @@ for(const [title,description,page,id,filter] of [
 
  const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
  docsRenderWorkCenter([]);
- document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.';docsDailyBriefToken++;dailyBrief.querySelector('[data-daily-agenda]').replaceChildren();dailyBrief.querySelector('[data-daily-metrics]').replaceChildren();dailyBrief.querySelector('[data-daily-note]').textContent='سجّل الدخول لعرض أعمال اليوم.'});
+ document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();$('docsStudentFieldworkCases')?.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.';docsDailyBriefToken++;dailyBrief.querySelector('[data-daily-agenda]').replaceChildren();dailyBrief.querySelector('[data-daily-metrics]').replaceChildren();dailyBrief.querySelector('[data-daily-note]').textContent='سجّل الدخول لعرض أعمال اليوم.'});
  if(activeUser){refreshModernHome().catch(()=>{});docsRenderDailyBrief().catch(()=>{})}
 // Recalculate cross-section totals after successfully committed restoration or device import.
 let docsRefreshRecoveredBusy=false,docsRefreshRecoveredAgain=false;
@@ -5697,6 +5697,7 @@ dsFullRestore.onchange=async()=>{
    for(const item of items){
     ensureRestoreOwner();
     if(storeName==='cloudSnapshots'&&item?.kind==='local-measure-aggregate'&&(item.entry?.owner!==restoreOwner||item.id!=='measure-aggregate:'+item.entry?.id)){skipped++;continue;}
+    if(storeName==='cloudSnapshots'&&item?.kind==='local-fieldwork-case'&&(item.owner!==restoreOwner||typeof item.record?.id!=='string'||!/^[-a-zA-Z0-9_]{1,128}$/.test(item.record.id)||item.id!=='fieldwork-case:'+item.record.id||!Array.isArray(item.record.history)||!Number.isSafeInteger(item.revision)||item.revision<1||item.record.revision!==item.revision)){skipped++;continue;}
     if(!item||typeof item.id!=='string'||item.id.length>250)continue;
     await new Promise((ok,no)=>{
      const tx=restoreDb.transaction(storeName,'readwrite'),store=tx.objectStore(storeName),req=store.get(item.id);
