@@ -32,9 +32,19 @@ test('mobile workspace preserves routes, recent originals, account isolation and
   assert.equal(await page.locator('#workspace-home .hero h1').evaluate(el=>getComputedStyle(el).color),'rgb(72, 68, 67)');
   assert.equal(await page.locator('#docsOrangeCreate #newBtn').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(72, 68, 67)');
   assert.equal(await page.locator('#docsOrangeCreate #newBtn').evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)');
-  assert.match(await page.locator('header.top .logo img').getAttribute('src'),/brand\.svg\?v=17/);
-  assert.ok(await page.locator('header.top .logo').evaluate(el=>el.getBoundingClientRect().width)>=120);
-  assert.ok(await page.locator('header.top .logo img').evaluate(el=>el.complete&&el.naturalWidth>0));
+  assert.match(await page.locator('header.top .logo img').getAttribute('src'),/brand\.svg\?v=18/);
+  for(const width of [320,390,768,960,1280]){
+   await page.setViewportSize({width,height:1000});
+   const brand=await page.locator('header.top .logo').evaluate(el=>{
+    const image=el.querySelector('img'),box=el.getBoundingClientRect(),img=image.getBoundingClientRect(),css=getComputedStyle(image);
+    return {width:box.width,height:box.height,imgWidth:img.width,imgHeight:img.height,inside:img.left>=box.left-1&&img.right<=box.right+1&&img.top>=box.top-1&&img.bottom<=box.bottom+1,fit:css.objectFit,loaded:image.complete&&image.naturalWidth>0,square:image.naturalWidth===image.naturalHeight,overflow:document.documentElement.scrollWidth>innerWidth+1};
+   });
+   assert.ok(brand.width>=100,'logo is legible at '+width);
+   assert.ok(Math.abs(brand.width-brand.height)<=1,'logo container remains square at '+width);
+   assert.ok(Math.abs(brand.imgWidth-brand.imgHeight)<=1,'image remains square at '+width);
+   assert.ok(brand.inside&&brand.loaded&&brand.square&&!brand.overflow,'full logo must fit viewport at '+width);
+   assert.equal(brand.fit,'contain');
+  }
   await page.setViewportSize({width:390,height:844});
 
   await page.evaluate(async()=>{
