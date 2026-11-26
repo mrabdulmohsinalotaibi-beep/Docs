@@ -47,18 +47,23 @@ test('opening another template cannot replace an unsaved draft or a save still i
  await page.locator('#templates button').nth(1).click();
  assert.equal(await page.locator('#docTitle').inputValue(),'مسودة يجب أن تبقى','switch must preserve dirty inputs');
  assert.equal(await page.locator('#editor').isVisible(),true);
- await page.evaluate(()=>{
+ await page.locator('#editor .a4-steps button').nth(4).click();
+ await page.locator('#saveDoc').scrollIntoViewIfNeeded();
+ await page.evaluate(id=>{
+  window.documentWrites=0;
   const native=IDBDatabase.prototype.transaction;
   IDBDatabase.prototype.transaction=function(names,mode,...rest){
    const tx=native.call(this,names,mode,...rest);
    if(mode==='readwrite'&&names==='documents'){
-    IDBDatabase.prototype.transaction=native;
-    Object.defineProperty(tx,'oncomplete',{set(handler){tx.addEventListener('complete',()=>{window.finishSave=handler},{once:true})}});
+    window.documentWrites++;
+    if(window.documentWrites===1)Object.defineProperty(tx,'oncomplete',{set(handler){tx.addEventListener('complete',()=>{window.finishSave=handler},{once:true})}});
    }
    return tx;
   };
- });
- await page.locator('#editor .a4-steps button').nth(4).click();await page.locator('#saveDoc').click();
+  localStorage.setItem('athat-docs-local-write-consent-v1-'+id,'yes');
+  document.getElementById('docTitle').dispatchEvent(new Event('input',{bubbles:true}));
+ },first);
+ await page.locator('#saveDoc').click();
  await page.waitForFunction(()=>typeof window.finishSave==='function');
  await page.locator('#docsViewSelector [data-view="templates"]').click();await page.locator('#templates button').nth(1).click();
  assert.equal(await page.locator('#docTitle').inputValue(),'مسودة يجب أن تبقى');
@@ -66,7 +71,8 @@ test('opening another template cannot replace an unsaved draft or a save still i
  assert.equal(logouts(),0,'logout must wait for the save acknowledgement');
  await page.evaluate(()=>window.finishSave());
  await page.waitForFunction(()=>document.getElementById('docsEditorSaveStatus').dataset.state==='saved');
- assert.deepEqual(await page.evaluate(()=>({timer:docsAutoSaveTimer,pending:docsAutoSavePending})),{timer:null,pending:false},'manual save consumes the queued autosave');
+ await page.waitForTimeout(1200);
+ assert.equal(await page.evaluate(()=>window.documentWrites),1,'manual save consumes the queued autosave without a redundant write');
  assert.equal((await documents(page,first)).filter(row=>row.title==='مسودة يجب أن تبقى').length,1);
  await page.locator('#docsViewSelector [data-view="templates"]').click();await page.locator('#templates button').nth(1).click();
  assert.notEqual(await page.locator('#docTitle').inputValue(),'مسودة يجب أن تبقى','switch is allowed after saving');
