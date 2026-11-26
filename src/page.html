@@ -6745,10 +6745,27 @@ mobileMove(premiumMetrics,mobileWork);mobileMove(workCenter,mobileWork);
 mobileMove(commandCenter,mobileTools);mobileMove(latestHeading,mobileTools);mobileMove(cards,mobileTools);
 mobileMove($('docsStorageSummary'),mobileBackup);
 for(const key of ['portfolio','programs','support','review'])mobileMove(selector.querySelector('[data-view="'+key+'"]'),mobileMore);
+
+// Mobile dashboard: reuse existing routes and handlers; no synthetic totals.
+const orangeHomeGrid=document.createElement('section');orangeHomeGrid.id='docsOrangeHomeGrid';orangeHomeGrid.className='docs-mobile-only';orangeHomeGrid.setAttribute('aria-label','أقسام مستندات الذات');
+for(const [label,description,target,view,pathData] of [
+ ['ملف الطالب','ملفات الطلاب والمتابعة الفردية','students','','M3 10 12 4l9 6-9 6z M6 12v6q6 4 12 0v-6'],
+ ['السجلات الرسمية','السجلات والنماذج الرسمية','documents','templates','M7 4h10v3h3v14H4V7h3z M8 12h8 M8 16h8'],
+ ['التقارير والتحليلات','التقارير ومؤشرات الأداء','reports','','M4 20h17 M7 17v-5 M12 17V8 M17 17V4'],
+ ['الأدوات والقوالب','البرامج والأدوات والنسخ الاحتياطي','tools','','M4 7l8-4 8 4-8 4z M4 12l8 4 8-4 M4 17l8 4 8-4']
+]){
+ const b=document.createElement('button');b.type='button';b.className='docs-orange-tile';
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('stroke-linecap','round');svg.setAttribute('aria-hidden','true');
+ const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',pathData);svg.append(path);
+ const title=document.createElement('strong'),caption=document.createElement('small');title.textContent=label;caption.textContent=description;b.append(svg,title,caption);
+ b.onclick=()=>{if(target==='tools'){mobileTools.open=true;mobileTools.scrollIntoView({block:'start'});return}const nav=workspaceNav.querySelector('[data-workspace="'+target+'"]');if(nav)nav.click();else workspaceGoto(target);if(view)openDocsView(view)};
+ orangeHomeGrid.append(b);
+}
+mobileHome.append(orangeHomeGrid);
 const heroTitle=originalHero.querySelector('h1'),heroTitleText=heroTitle.textContent;
 function applyMobileWorkspace(){
  for(const {node,destination,anchor} of moves){if(mobileMedia.matches)destination.append(node);else anchor.after(node)}
- if(mobileMedia.matches){mobileHome.prepend(originalHero);originalHero.after(followupCenter,mobileRecent,mobileWork,mobileTools,mobileBackup);heroTitle.textContent='مساحة أعمالك'}else heroTitle.textContent=heroTitleText;
+ if(mobileMedia.matches){mobileHome.prepend(originalHero);originalHero.after(orangeHomeGrid,followupCenter,mobileRecent,mobileWork,mobileTools,mobileBackup);heroTitle.textContent='مرحبًا بك في مستندات الذات'}else heroTitle.textContent=heroTitleText;
  docsRenderMobileRecent();
 }
 mobileMedia.addEventListener('change',applyMobileWorkspace);applyMobileWorkspace();
@@ -6955,4 +6972,24 @@ function docsIndicatorState(state,message){
  #worksPanel .tabs{gap:4px;margin-bottom:9px}#worksPanel .tabs button{font-size:12px;padding:8px 12px;min-height:40px}
 }
 @media print{.docs-mobile-only,.docs-mobile-disclosure{display:none!important}}
+</style><style id="docs-orange-mobile-v2">
+@media screen{
+body[data-docs-theme="terracotta"] #appMain :is(.docs-command-tile,.docs-quick-grid>button,.docs-view-selector button,.docs-premium-home-stats article,.docs-mobile-disclosure){background:#fff!important;color:#181818!important;border-color:#d8c8b8!important;box-shadow:none!important}
+body[data-docs-theme="terracotta"] #appMain :is(.docs-premium-title,.docs-command-tile strong,.docs-quick-grid strong){color:#181818!important}
+body[data-docs-theme="terracotta"] #workspaceNav button[aria-current=page]{background:#ffe5c9!important;color:#943e00!important;border-color:#e87900!important}
+#workspaceNav button::before{content:none!important;display:none!important}
+#docsOrangeHomeGrid{display:none}
+@media(max-width:650px){
+#docsOrangeHomeGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.docs-orange-tile{min-width:0;min-height:126px;border:1px solid #222;border-radius:17px;background:#fff;color:#181818;padding:14px 12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;text-align:start;font:inherit}
+.docs-orange-tile svg{width:35px;height:35px;color:#b85d00;background:#fff0de;padding:5px;border-radius:10px}
+.docs-orange-tile strong{font-size:15px;line-height:1.4}.docs-orange-tile small{font-size:12px;color:#555;line-height:1.55}
+body[data-docs-theme="mono"] .docs-orange-tile svg{color:#181818;background:#eee}
+body[data-docs-theme="terracotta"] #workspace-home #newBtn{background:#ad5000!important;color:#fff!important;border:1px solid #ad5000!important;border-radius:13px!important}
+#workspaceNav{grid-template-columns:repeat(6,minmax(0,1fr))!important;z-index:150!important;gap:3px!important}
+#appMain{padding-bottom:calc(100px + env(safe-area-inset-bottom))!important}
+#workspace-home .hero h1{font-size:22px!important}
+}
+}
+@media print{#docsOrangeHomeGrid{display:none!important}}
 </style></body></html>
