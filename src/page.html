@@ -2102,11 +2102,28 @@ async function docsRenderDailyBrief(){
   const rows=await docsFollowupRows(owner,ownerDb);if(!current())return;
   const today=hijriToday(),pending=docsFollowupReviewQueue(rows,today).map(item=>item.plan);
   const groups={overdue:pending.filter(p=>docsFollowupDate(p.due)&&docsFollowupDate(p.due)<today),today:pending.filter(p=>docsFollowupDate(p.due)===today),review:pending,month:pending.filter(p=>docsFollowupDate(p.due).slice(0,7)===today.slice(0,7)),upcoming:pending.filter(p=>docsFollowupDate(p.due)>today)};
+  const caseRows=await new Promise((resolve,reject)=>{const req=ownerDb.transaction('cloudSnapshots','readonly').objectStore('cloudSnapshots').getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error)});
+  if(!current())return;
+  const referrals=caseRows.filter(row=>row.kind==='local-fieldwork-case'&&row.owner===owner&&row.record?.status==='referred'&&row.id==='fieldwork-case:'+row.record.id&&row.record.referral&&!row.record.referral.resolved).map(row=>row.record);
+  const referralPanel=document.createElement('section');referralPanel.setAttribute('aria-label','الإحالات الميدانية');
+  function showReferrals(){
+   referralPanel.replaceChildren();
+   const heading=document.createElement('h3');heading.textContent='الإحالات الميدانية';referralPanel.append(heading);
+   for(const [label,items] of [['متأخرة',referrals.filter(c=>docsFollowupDate(c.referral.due)&&docsFollowupDate(c.referral.due)<today)],['مستحقة اليوم',referrals.filter(c=>docsFollowupDate(c.referral.due)===today)]]){
+    const title=document.createElement('p');title.textContent=label+': '+items.length;referralPanel.append(title);
+    for(const c of items){
+     const student=studentIndex.find(s=>s.key===c.studentId);
+     const button=document.createElement('button');button.type='button';button.className='docs-guidance-row';button.textContent=(student?.name||'طالب غير متاح في الفهرس')+' · '+docsFollowupDate(c.referral.due)+' هـ';button.disabled=!student;
+     button.onclick=()=>{if(current()&&student)openStudent360(student.key).catch(()=>say('تعذر فتح ملف الطالب'))};referralPanel.append(button);
+    }
+   }
+  }
+
   const labels={overdue:'متأخرة',today:'مستحقة اليوم',review:'تحتاج مراجعة',month:'مواعيد الشهر الهجري',upcoming:'المواعيد القادمة'};
   function show(kind){
    if(!current())return;
    for(const b of metrics.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.dailyFilter===kind));
-   agenda.replaceChildren();
+   agenda.replaceChildren();showReferrals();agenda.append(referralPanel);
    const h=document.createElement('h3');h.textContent=labels[kind]+' ('+groups[kind].length+')';agenda.append(h);
    if(!groups[kind].length){const p=document.createElement('p');p.className='muted';p.textContent='لا توجد متابعات مطابقة في البيانات المحلية المتاحة.';agenda.append(p)}
    for(const plan of groups[kind]){
