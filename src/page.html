@@ -2119,7 +2119,7 @@ async function docsRenderDailyBrief(){
    const card=document.createElement('button');card.type='button';card.className='docs-work-status-card';card.dataset.dailyFilter=kind;
    const strong=document.createElement('strong'),small=document.createElement('small');strong.textContent=String(groups[kind].length);small.textContent=labels[kind];card.append(strong,small);card.onclick=()=>show(kind);metrics.append(card);
   }
-  note.textContent='اليوم الهجري: '+today+' · المؤشرات من المتابعات المحلية غير المعتمدة لهذا الحساب فقط.';
+  note.textContent='اليوم الهجري: '+today+' · المؤشرات مبنية على المتابعات المحلية المحفوظة لهذا الحساب فقط، وتستثني المعتمدة.';
   show(groups.overdue.length?'overdue':'today');
  }catch(error){if(current()){metrics.replaceChildren();agenda.replaceChildren();note.textContent='تعذر تحديث لوحة اليوم: '+error.message}}
 }
