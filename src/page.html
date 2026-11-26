@@ -3985,7 +3985,7 @@ async function docsAssistRender(key){
 
 // Keep decrypted case data and the non-extractable key in memory only.
 let docsFieldworkSession=null,docsFieldworkEpoch=0;
-function docsFieldworkLock(){docsFieldworkEpoch++;docsFieldworkSession=null;$('docsStudentFieldworkCases')?.replaceChildren();$('docsFieldworkDialog')?.close();if(activeUser&&db)docsRenderDailyBrief().catch(()=>{})}
+function docsFieldworkLock(){docsFieldworkEpoch++;docsFieldworkSession=null;docsFieldworkReportRefresh().catch(()=>{});$('docsStudentFieldworkCases')?.replaceChildren();$('docsFieldworkDialog')?.close();if(activeUser&&db)docsRenderDailyBrief().catch(()=>{})}
 document.addEventListener('athat-docs-logout',docsFieldworkLock);
 function docsFieldworkRepo(){
  const session=docsFieldworkSession;
@@ -4009,7 +4009,7 @@ async function docsFieldworkUnlock(password){
   await new Promise((ok,no)=>{const tx=database.transaction('cloudSnapshots','readwrite');const store=tx.objectStore('cloudSnapshots');const req=store.get(id);req.onsuccess=()=>{if(!current()||req.result){tx.abort();return}store.add({id,kind:'local-fieldwork-config',owner,salt:cipher.salt,check})};tx.oncomplete=ok;tx.onabort=()=>no(Error('تغيرت إعدادات التشفير'));tx.onerror=()=>no(tx.error)});
  }
  if(!current())throw Error('تغير الحساب');
- docsFieldworkSession={accountId:owner,database,caseCipher:cipher,canApprove:false};
+ docsFieldworkSession={accountId:owner,database,caseCipher:cipher,canApprove:false};docsFieldworkReportRefresh().catch(()=>{});
 }
 async function docsFieldworkRenderStudent(panel,key,isCurrent){
  const valid=()=>isCurrent()&&panel.isConnected;
@@ -4028,7 +4028,7 @@ async function docsFieldworkRenderStudent(panel,key,isCurrent){
  const records=await docsFieldworkRepo().list();if(!valid()||docsFieldworkSession!==session)return;
  const view=window.docsFieldwork.projectFieldworkCases(records,{studentId:key,today:hijriToday()});
  const canEdit=()=>valid()&&docsFieldworkSession===session&&studentIndex.some(s=>s.key===key);
- const refreshCases=async()=>{if(canEdit())await docsFieldworkRenderStudent(panel,key,isCurrent);docsRenderDailyBrief().catch(()=>{})};
+ const refreshCases=async()=>{if(canEdit())await docsFieldworkRenderStudent(panel,key,isCurrent);docsFieldworkReportRefresh().catch(()=>{});docsRenderDailyBrief().catch(()=>{})};
  function formFor(record){
   const dialog=document.createElement('dialog');dialog.id='docsFieldworkDialog';dialog.style.cssText='width:min(94vw,580px);max-height:85dvh;overflow:auto;direction:rtl';
   if(!canEdit()||document.getElementById(dialog.id))return;
@@ -4654,7 +4654,7 @@ reportIntro.innerHTML='<div class="row"><div><h2>التقارير والتحلي
 '<nav id="reportsSubnav" class="docs-reports-subnav" aria-label="أقسام التقارير"><button data-report-tab="dashboard" type="button">المؤشرات</button><button data-report-tab="analytics" type="button">التحليلات</button><button data-report-tab="official" type="button">التقارير الرسمية</button><button data-report-tab="export" type="button">التصدير والطباعة</button></nav>'+
 '<p id="reportsDataStatus" class="muted" role="status">جارٍ تجهيز مصادر التقارير…</p><section id="reportsProvenance" class="unified-note docs-reports-provenance" aria-labelledby="reportsProvenanceTitle"><h3 id="reportsProvenanceTitle">سياق البيانات وحدود المؤشرات</h3><div id="reportsProvenanceBody">يظهر هنا مصدر كل مجموعة بيانات وحجم العينة بعد تحميل التقارير.</div></section>'+ 
 '<section id="reportsDashboard" data-report-pane="dashboard"><div class="docs-report-filters"><label>الفترة الهجرية<select id="reportsYear"><option value="all">جميع السنوات المتاحة</option><option value="1448">١٤٤٨ هـ</option><option value="1447">١٤٤٧ هـ</option></select></label><label>حالة العمل<select id="reportsStatus"><option value="all">كل الحالات</option><option value="done">موسوم مكتمل في المصدر</option><option value="pending">غير مكتمل أو غير موثّق</option></select></label></div><div id="reportsTopMetrics" class="docs-report-metrics docs-exec-kpis"></div><div class="docs-exec-layout"><section class="docs-exec-chart"><h3>توزيع الأعمال الأصلية</h3><div id="docsExecChart" class="docs-exec-plot"></div><div id="docsReportItems" class="docs-report-bars" hidden></div></section><aside class="docs-exec-summary"><h3>ملخص الحالة</h3><div id="docsExecSummary"></div><p id="docsExecNotice" class="muted"></p></aside></div><section class="docs-exec-shortcuts"><h3>أقسام التقارير</h3><div><button type="button" data-exec-target="official">التقارير الرسمية<small>المسودات والطباعة</small></button><button type="button" data-exec-target="analytics">تحليل الطلاب<small>المواظبة والسلوك والرعاية</small></button><button type="button" data-exec-target="export">التصدير والطباعة<small>PDF وExcel</small></button><button type="button" data-exec-target="dashboard">المؤشرات<small>ملخص الأعمال</small></button></div></section><p class="muted">البرامج المسجلة لا تعني المنفذة. حالة «مكتمل» لا تثبت الإنجاز دون شواهد.</p></section>'+
-'<section id="reportsAnalytics" data-report-pane="analytics" hidden><h3>تحليلات المواظبة والسلوك والرعاية</h3><p class="muted">مؤشرات مجمعة من السجلات المرتبطة بمعرّفات الطلاب المؤكدة. لا تُعرض أسماء أو تفاصيل الحالات الطبية هنا. تحليلات الطلاب تشمل كل الفترات المتاحة في المصدر.</p><div id="reportsStudentMetrics" class="docs-report-metrics"></div><div id="reportsStudentBars" class="docs-report-bars"></div><p id="reportsAnalyticsNote" class="muted"></p></section>'+
+'<section id="reportsAnalytics" data-report-pane="analytics" hidden><h3>تحليلات المواظبة والسلوك والرعاية</h3><p class="muted">مؤشرات مجمعة من السجلات المرتبطة بمعرّفات الطلاب المؤكدة. لا تُعرض أسماء أو تفاصيل الحالات الطبية هنا. تحليلات الطلاب تشمل كل الفترات المتاحة في المصدر.</p><div id="reportsStudentMetrics" class="docs-report-metrics"></div><div id="reportsStudentBars" class="docs-report-bars"></div><p id="reportsAnalyticsNote" class="muted"></p><section id="docsFieldworkReport" aria-live="polite"></section></section>'+
 '<section id="reportsOfficial" data-report-pane="official" hidden><h3>مسودات التقارير الرسمية</h3><p class="muted">تُنشأ المسودة من أرقام السجلات المتاحة. يمكنك تحرير النص قبل الطباعة، ولا تُحفظ نسخة مكررة في الأعمال تلقائيًا.</p><div class="docs-report-filters"><label>نوع التقرير<select id="reportsOfficialType"><option value="monthly">تقرير شهري</option><option value="term">تقرير فصلي</option><option value="annual">تقرير ختامي</option></select></label><label>الفترة الهجرية للتقرير<input id="reportsOfficialPeriod" type="text" maxlength="35" placeholder="مثال: ١٤٤٨/٠٥ أو الفصل الأول ١٤٤٨"></label></div><div class="row"><button id="reportsGenerate" class="primary" type="button">إنشاء مسودة من البيانات</button><button id="reportsOpenOriginals" class="btn" type="button">فتح المستندات الأصلية</button></div><label class="docs-report-draft-label">نص التقرير قابل للتحرير<textarea id="reportsDraft" rows="16" maxlength="18000" placeholder="اختر الفترة ونوع التقرير، ثم اضغط إنشاء مسودة."></textarea></label><p id="reportsDraftStatus" class="muted" role="status"></p></section>'+
 '<section id="reportsExport" data-report-pane="export" hidden><h3>مركز التصدير والطباعة</h3><p class="muted">تصدير ملخص إحصائي دون أسماء الطلاب أو تفاصيل الرعاية. للطباعة الرسمية استخدم مسودة التقرير في القسم السابق.</p><div class="row"><button id="reportsExportExcel" type="button" class="btn">تصدير جدول Excel (CSV)</button><button id="reportsPrintSummary" type="button" class="primary">طباعة A4 / حفظ PDF</button><button id="reportsPrintOfficial" type="button" class="btn">طباعة المسودة الرسمية</button></div><p id="reportsExportStatus" class="muted" role="status"></p></section>';
 docsMain.append(workspacePages.reports);workspacePages.reports.append(reportIntro,originalMetrics,$('docsReliableSummary'));
@@ -5142,7 +5142,7 @@ refreshReportSummary=function(){
  const total={rows,byType,done,programs,unverified,list};
  reportsLastOverview=total;
  reportsRenderProvenance(rows);
- const agg=$('reportsStudentMetrics');agg.replaceChildren();
+ const agg=$('reportsStudentMetrics');agg.replaceChildren();docsFieldworkReportRefresh().catch(()=>{});
  const ins=reportsInsightsReady?Object.values(reportsInsights):[];
  const sums={absence:0,late:0,behavior:0,positive:0,cases:0,interviews:0,referrals:0};
  for(const r of ins)for(const k of Object.keys(sums))sums[k]+=Math.max(0,Number(r[k])||0);
@@ -5163,6 +5163,24 @@ refreshReportSummary=function(){
  reportsBars($('reportsStudentBars'),reportsInsightsReady?studentBars:[],x=>reportsStudentLink(x.key));
  $('reportsAnalyticsNote').textContent=reportsInsightsReady?'الأرقام تشمل السجلات التي أمكن ربطها بمعرّفات الطلاب، ولا تعني تشخيصًا جديدًا.':'لم تُحمّل مؤشرات سجلات الطلاب بعد؛ لا تُفسَّر القيم الفارغة باعتبارها صفرًا.';
 };
+let docsFieldworkReportToken=0;
+async function docsFieldworkReportRefresh(){
+ const root=$('docsFieldworkReport');if(!root)return;
+ const token=++docsFieldworkReportToken,session=docsFieldworkSession,owner=activeUser;
+ root.replaceChildren();const h=document.createElement('h3');h.textContent='مؤشرات الحالات الميدانية المشفرة';root.append(h);
+ const p=document.createElement('p');p.textContent='افتح تشفير الحالات من ملف الطالب لعرض المؤشرات.';root.append(p);
+ if(!session||session.accountId!==owner||session.database!==db)return;
+ const current=()=>token===docsFieldworkReportToken&&owner===activeUser&&session===docsFieldworkSession;
+ try{
+  const rows=await docsFieldworkRepo().list();if(!current())return;
+  const today=hijriToday(),unique=[...new Map(rows.map(r=>[r.id,r])).values()];
+  const stats=[['إجمالي الحالات',unique.length],['المفتوحة',unique.filter(r=>r.status!=='closed').length],['المغلقة',unique.filter(r=>r.status==='closed').length],['الإحالات القائمة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved).length],['الإحالات المتأخرة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved&&docsFollowupDate(r.referral?.due)&&docsFollowupDate(r.referral.due)<today).length]];
+  p.textContent='جميع الفترات المحلية المتاحة؛ مؤشرات مستقلة عن السجلات الرسمية لتجنب جمع مصادر متداخلة. لا أسماء أو تفاصيل فردية.';
+  const grid=document.createElement('div');grid.className='docs-report-metrics';
+  for(const [label,count] of stats){const card=document.createElement('div'),n=document.createElement('strong'),caption=document.createElement('p');n.textContent=String(count);caption.textContent=label;card.append(n,caption);grid.append(card)}root.append(grid);
+ }catch{if(current())p.textContent='تعذر قراءة الحالات المشفرة؛ الأعداد غير متاحة.'}
+}
+document.addEventListener('athat-docs-logout',()=>{docsFieldworkReportToken++;$('docsFieldworkReport')?.replaceChildren()});
 async function loadReportSources(){
  if(reportsBusy||!activeUser)return;const owner=activeUser;reportsBusy=true;
  $('reportsDataStatus').textContent='جارٍ تحميل الأصول والمؤشرات من حسابك…';
