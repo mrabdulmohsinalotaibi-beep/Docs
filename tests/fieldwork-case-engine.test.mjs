@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createCase,advanceCase,caseQueue} from '../src/fieldwork-case-engine.mjs';
+const base={id:'c1',studentId:'s1',reason:'متابعة',actor:'u1',date:'1448/06/01',priority:'high'};
+const make=()=>createCase(base,new Set(['s1']));
+const active=()=>advanceCase(make(),{status:'active',actor:'u1',date:'1448/06/02'});
+const referred=()=>advanceCase(active(),{status:'referred',actor:'u1',date:'1448/06/03',recipient:'جهة مختصة',due:'1448/06/05',reason:'متابعة'});
+test('requires verified student identity and explicit priority',()=>{assert.throws(()=>createCase(base,new Set()));assert.throws(()=>createCase({...base,priority:'unknown'},new Set(['s1'])));assert.equal(make().status,'new')});
+test('referral requires recipient and deadline',()=>{assert.throws(()=>advanceCase(active(),{status:'referred',actor:'u1',date:'1448/06/03'}));assert.equal(referred().referral.due,'1448/06/05')});
+test('cannot close without response or justification and documented approval',()=>{const r=referred();assert.throws(()=>advanceCase(r,{status:'closed',actor:'u1',date:'1448/06/06',result:'تم',approval:'u1'}));assert.throws(()=>advanceCase(r,{status:'closed',actor:'u1',date:'1448/06/06',response:'تم'}));const c=advanceCase(r,{status:'closed',actor:'u1',date:'1448/06/06',response:'تم الرد',result:'تم',approval:'u1'});assert.equal(c.status,'closed');assert.equal(c.history.length,4);assert.equal(r.status,'referred')});
+test('overdue queue excludes closed cases and uses actual deadline',()=>{assert.equal(caseQueue([referred()],'1448/06/05')[0].overdue,false);assert.equal(caseQueue([referred()],'1448/06/06')[0].overdue,true);assert.throws(()=>caseQueue([],'invalid'))});
+test('no silent reopen or backdated transition',()=>{assert.throws(()=>advanceCase(active(),{status:'closed',actor:'u1',date:'1448/06/01',result:'تم',approval:'u1'}));assert.throws(()=>advanceCase(make(),{status:'closed',actor:'u1',date:'1448/06/02',result:'تم',approval:'u1'}))});
