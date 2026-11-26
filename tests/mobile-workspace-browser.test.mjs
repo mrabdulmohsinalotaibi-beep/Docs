@@ -32,7 +32,7 @@ test('mobile workspace preserves routes, recent originals, account isolation and
   assert.equal(await page.locator('#workspace-home .hero h1').evaluate(el=>getComputedStyle(el).color),'rgb(72, 68, 67)');
   assert.equal(await page.locator('#docsOrangeCreate #newBtn').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(72, 68, 67)');
   assert.equal(await page.locator('#docsOrangeCreate #newBtn').evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)');
-  assert.match(await page.locator('header.top .logo img').getAttribute('src'),/brand\.svg\?v=18/);
+  assert.match(await page.locator('header.top .logo img').getAttribute('src'),/brand\.svg\?v=19/);
   for(const width of [320,390,768,960,1280]){
    await page.setViewportSize({width,height:1000});
    const brand=await page.locator('header.top .logo').evaluate(el=>{
