@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {webcrypto} from 'node:crypto';
+import {unlockCaseCipher} from '../src/fieldwork-case-crypto.mjs';
+import {encryptedCaseRepository} from '../src/fieldwork-case-encrypted-repository.mjs';
+if(!globalThis.crypto)globalThis.crypto=webcrypto;
+test('encrypted repository persists only ciphertext and enforces session and revision',async()=>{
+ const rows=new Map();
+ const database={transaction(name,mode){assert.equal(name,'cloudSnapshots');let aborted=false,pending;
+ const tx={objectStore(){return {get(id){const req={};queueMicrotask(()=>{req.result=structuredClone(rows.get(id));req.onsuccess?.();if(!aborted){if(pending)rows.set(pending.id,structuredClone(pending));tx.oncomplete?.()}});return req},getAll(){const req={};queueMicrotask(()=>{req.result=structuredClone([...rows.values()]);req.onsuccess?.()});return req},put(row){assert.equal(mode,'readwrite');pending=row}}},abort(){aborted=true;queueMicrotask(()=>tx.onabort?.())}};return tx}};
+ const cipher=await unlockCaseCipher('test-password-1234');
+ let current={accountId:'a',database,caseCipher:cipher,canApprove:false};
+ const repo=encryptedCaseRepository({database,session:current,currentSession:()=>current,studentIds:()=>new Set(['s1']),cipher});
+ const input={id:'c1',studentId:'s1',reason:'sensitive',priority:'high',date:'1448/06/01'};
+ await repo.create(input);const row=rows.get('fieldwork-encrypted:c1');
+ assert.equal(row.record,undefined);assert.ok(!JSON.stringify(row).includes('sensitive'));
+ await assert.rejects(repo.create(input));
+ const next={status:'active',date:'1448/06/02'};
+ const results=await Promise.allSettled([repo.advance('c1',1,next),repo.advance('c1',1,next)]);
+ assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+ assert.equal((await repo.list())[0].revision,2);
+ await assert.rejects(repo.advance('c1',2,{status:'closed',date:'1448/06/03',result:'done',approval:'forged'}));
+ current={...current,canApprove:true};
+ const closed=await repo.advance('c1',2,{status:'closed',date:'1448/06/03',result:'done'});
+ assert.equal(closed.history.at(-1).approval,'a');
+ current=null;await assert.rejects(repo.list());await assert.rejects(repo.create({...input,id:'c2'}));assert.equal(rows.size,1);
+});
