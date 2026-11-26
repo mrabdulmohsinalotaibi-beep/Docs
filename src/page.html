@@ -2910,21 +2910,7 @@ function renderOriginalA4Live(){
 function printOriginalA4Docs(rows,prebuiltModels,preparedWindow){
  if(!rows.length&&!prebuiltModels?.length){say('لا توجد مستندات للطباعة');return}
  const win=preparedWindow||window.open('','_blank');if(!win){say('اسمح بفتح نافذة طباعة المستند');return}
- win.document.open();win.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>النماذج الأصلية A4 - الذات</title></head><body><style id="docs-charcoal-identity-final-v17">
-@media screen {
-body[data-docs-theme="terracotta"]{background:#FFFFFF!important;color:#484443!important;--docs-ink:#484443;--docs-soft:#ECE9E0;--docs-border:#D5D1C8;--docs-accent:#484443}
-body[data-docs-theme="terracotta"] header.top{background:#FFFFFF!important;color:#484443!important;border-bottom:1px solid #D5D1C8!important}
-body[data-docs-theme="terracotta"] #appMain :is(.hero,.ds-welcome,.docs-premium-hero,.s360-hero){background:#ECE9E0!important;color:#484443!important}
-body[data-docs-theme="terracotta"] #appMain :is(.hero,.ds-welcome,.docs-premium-hero,.s360-hero) :is(h1,h2,h3,p,small){color:#484443!important}
-body[data-docs-theme="terracotta"] #appMain :is(.primary,#newBtn),body[data-docs-theme="terracotta"] #docsOrangeCreate #newBtn{background:#484443!important;color:#FFFFFF!important;border-color:#484443!important;box-shadow:none!important}
-body[data-docs-theme="terracotta"] #workspaceNav button[data-workspace][aria-current=page]{background:#484443!important;color:#FFFFFF!important}
-body[data-docs-theme="terracotta"] .docs-orange-tile>svg:first-child{background:#ECE9E0!important;color:#484443!important;border-color:#D5D1C8!important}
-body[data-docs-theme] header.top .brand .logo,body[data-docs-theme]:has(#appMain:not([hidden])) header.top .brand .logo,body[data-docs-theme]:has(#authGate:not([hidden])) header.top .brand .logo{width:clamp(120px,29vw,190px)!important;height:clamp(68px,15vw,105px)!important;padding:2px!important;border-radius:8px!important;overflow:hidden!important;flex-shrink:0;background:#FFFFFF!important}
-body[data-docs-theme] header.top .logo img{width:100%!important;height:100%!important;object-fit:contain!important;filter:none!important}
-body[data-docs-theme] header.top .brand>div:last-child{display:none!important}
-@media(max-width:400px){body[data-docs-theme]:has(#appMain:not([hidden])) header.top .brand .logo{width:120px!important;height:68px!important}}
-}
-</style></body></html>');win.document.close();
+ win.document.open();win.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>النماذج الأصلية A4 - الذات</title></head><body></body></html>');win.document.close();
  const css=win.document.createElement('style');css.textContent=$('athatOriginalA4CSS').textContent+'\n'+$('athatOriginalA4UI').textContent+'\n@media screen{body{margin:0;background:#e9e9e9}.doc-a4{margin:14px auto}}@media print{.original-print-toolbar{display:none!important}.doc-a4{break-after:page;page-break-after:always}.doc-a4:last-child{break-after:auto;page-break-after:auto}}';win.document.head.append(css);
  const tools=win.document.createElement('div');tools.className='original-print-toolbar';tools.style.cssText='position:sticky;top:0;z-index:2;background:#514735;color:#fff;padding:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center';
  const button=win.document.createElement('button');button.textContent='تجهيز الطباعة…';button.disabled=true;
@@ -7209,5 +7195,19 @@ body[data-docs-theme="terracotta"] #workspace-home .hero{border:1.5px solid #252
 @media screen and (min-width:1120px){
 #workspaceSettingsLink,#workspaceAdminLink{position:static!important;inset:auto!important;width:auto!important;max-width:100%!important;margin:0 0 12px 8px!important}
 #workspaceNav button[data-workspace]{justify-content:flex-start;min-height:48px}
+}
+</style><style id="docs-charcoal-identity-final-v17">
+@media screen {
+body[data-docs-theme="terracotta"]{background:#FFFFFF!important;color:#484443!important;--docs-ink:#484443;--docs-soft:#ECE9E0;--docs-border:#D5D1C8;--docs-accent:#484443}
+body[data-docs-theme="terracotta"] header.top{background:#FFFFFF!important;color:#484443!important;border-bottom:1px solid #D5D1C8!important}
+body[data-docs-theme="terracotta"] #appMain :is(.hero,.ds-welcome,.docs-premium-hero,.s360-hero){background:#ECE9E0!important;color:#484443!important}
+body[data-docs-theme="terracotta"] #appMain :is(.hero,.ds-welcome,.docs-premium-hero,.s360-hero) :is(h1,h2,h3,p,small){color:#484443!important}
+body[data-docs-theme="terracotta"] #appMain :is(.primary,#newBtn),body[data-docs-theme="terracotta"] #docsOrangeCreate #newBtn{background:#484443!important;color:#FFFFFF!important;border-color:#484443!important;box-shadow:none!important}
+body[data-docs-theme="terracotta"] #workspaceNav button[data-workspace][aria-current=page]{background:#484443!important;color:#FFFFFF!important}
+body[data-docs-theme="terracotta"] .docs-orange-tile>svg:first-child{background:#ECE9E0!important;color:#484443!important;border-color:#D5D1C8!important}
+body[data-docs-theme] header.top .brand .logo,body[data-docs-theme]:has(#appMain:not([hidden])) header.top .brand .logo,body[data-docs-theme]:has(#authGate:not([hidden])) header.top .brand .logo{width:clamp(120px,29vw,190px)!important;height:clamp(68px,15vw,105px)!important;padding:2px!important;border-radius:8px!important;overflow:hidden!important;flex-shrink:0;background:#FFFFFF!important}
+body[data-docs-theme] header.top .logo img{width:100%!important;height:100%!important;object-fit:contain!important;filter:none!important}
+body[data-docs-theme] header.top .brand>div:last-child{display:none!important}
+@media(max-width:400px){body[data-docs-theme]:has(#appMain:not([hidden])) header.top .brand .logo{width:120px!important;height:68px!important}}
 }
 </style></body></html>
