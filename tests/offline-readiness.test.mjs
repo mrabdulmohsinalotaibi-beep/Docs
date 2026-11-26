@@ -8,8 +8,8 @@ assert.ok(match,'Embedded Service Worker source exists');
 const sw=JSON.parse(match[1]);
 const page=JSON.parse(worker.match(/^const PAGE=("(?:\\.|[^"\\])*");/)[1]);
 test('offline shell installs only when all executable assets are cached',()=>{
- assert.match(sw,/const CACHE_NAME='athat-docs-shell-v29';/);
- assert.doesNotMatch(sw,/const CACHE_NAME='athat-docs-shell-v28';/);
+ assert.match(sw,/const CACHE_NAME='athat-docs-shell-v30';/);
+ assert.doesNotMatch(sw,/const CACHE_NAME='athat-docs-shell-v29';/);
  for(const asset of ['/brand.svg?v=14','/app-icon.svg?v=14','/pwa-icon-192.png?v=14','/pwa-icon-512.png?v=14','/icon.png?v=14']) assert.ok(sw.includes(asset), 'Offline brand asset missing: '+asset);
  assert.match(sw,/OFFLINE_CORE_MISSING/);
  assert.match(sw,/Promise\.all\(\['\/', '\/peer-sync\.js', '\/auto-sync\.js'\]/);
@@ -30,3 +30,5 @@ test('home counts persisted original and local derived record only once',()=>{
  assert.match(page,/unique\.add\('a4:'\+id\)/);
  assert.doesNotMatch(page,/docs\.length\+keys\.size/);
 });
+
+test('explicit update link checks service worker without clearing local data or forcing reload',()=>{assert.match(page,/searchParams\.get\('update'\)==='1'/);assert.match(page,/await registration\.update\(\)/);assert.match(page,/addEventListener\('online',\(\)=>check\(true\)\)/);assert.match(page,/pending\.state==='activated'/);});
