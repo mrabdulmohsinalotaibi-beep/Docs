@@ -1,0 +1,77 @@
+{
+  "$schema": "./source-registry.schema.json",
+  "version": 1,
+  "lastReviewed": "2026-11-26",
+  "entries": [
+    {
+      "id": "a4-guidance-1448",
+      "title": "نماذج الإرشاد الطلابي A4",
+      "kind": "internal-reference",
+      "status": "needs-review",
+      "scope": "national",
+      "publisher": "مستندات الذات",
+      "edition": "1448هـ",
+      "repositoryPath": "data/a4-guidance-1448.json",
+      "sourceUrl": null,
+      "pageOrSection": null,
+      "claims": ["قائمة مرجعية لتصنيف نماذج العمل"],
+      "limitations": ["لا تثبت اعتمادًا وزاريًا مستقلًا دون وثيقة أصلية قابلة للتحقق"]
+    },
+    {
+      "id": "a4-style-reference",
+      "title": "مرجع تنسيق نماذج A4",
+      "kind": "implementation-reference",
+      "status": "internal",
+      "scope": "product",
+      "publisher": "مستندات الذات",
+      "edition": null,
+      "repositoryPath": "data/athat-a4-style-reference.json",
+      "sourceUrl": null,
+      "pageOrSection": null,
+      "claims": ["تعريفات تنسيق الطباعة والعناصر الرسمية داخل المنتج"],
+      "limitations": ["مرجع تنسيقي وليس أداة قياس أو دليلًا تشخيصيًا"]
+    },
+    {
+      "id": "department-programs-1448",
+      "title": "برامج إدارات التعليم للفصل الأول 1448هـ",
+      "kind": "planning-catalog",
+      "status": "mixed",
+      "scope": "regional",
+      "publisher": "متعدد حسب السجل",
+      "edition": "1448هـ",
+      "repositoryPath": "data/department-programs-1448.json",
+      "sourceUrl": null,
+      "pageOrSection": null,
+      "claims": ["مساعدة في البحث والتخطيط للبرامج"],
+      "limitations": ["لا تسجل تنفيذًا، ولا تنسب خطة أسبوعية لإدارة دون مصدر موثق، وقد تحتوي سجلات مرجعية تحتاج مراجعة"]
+    },
+    {
+      "id": "educational-assistant-1445",
+      "title": "دليل التدخلات التربوية 1445هـ",
+      "kind": "guidance-reference",
+      "status": "needs-verification",
+      "scope": "national",
+      "publisher": "وزارة التعليم — كما هو موثق في المصدر البرمجي",
+      "edition": "1445هـ",
+      "repositoryPath": "src/educational-assistant.mjs",
+      "sourceUrl": null,
+      "pageOrSection": "الصفحات 35، 41–44 كما وردت في البيانات",
+      "claims": ["اقتراح خطوات تدخل أولية للمراجعة المهنية"],
+      "limitations": ["لا يقدم تشخيصًا، ولا يعتمد قرارًا تلقائيًا، ويجب التحقق من النسخة الأصلية قبل اعتباره مصدرًا رسميًا"]
+    },
+    {
+      "id": "descriptive-measures",
+      "title": "المقاييس الاستطلاعية الوصفية",
+      "kind": "descriptive-tool",
+      "status": "internal-unvalidated",
+      "scope": "product",
+      "publisher": "مستندات الذات",
+      "edition": null,
+      "repositoryPath": "src/guidance/measure-model.mjs",
+      "sourceUrl": null,
+      "pageOrSection": null,
+      "claims": ["تلخيص استجابات وصفية للمساعدة في التخطيط للدعم"],
+      "limitations": ["غير مقننة، ليست تشخيصًا نفسيًا، ولا تحدد حاجة الفرد إلى علاج أو إحالة بمفردها"]
+    }
+  ]
+}

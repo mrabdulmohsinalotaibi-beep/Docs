@@ -1,0 +1,21 @@
+{
+  "name": "athat-docs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ATHAT Docs source, worker build and quality checks",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build-worker.mjs",
+    "build:check": "node scripts/build-worker.mjs --check && node --check worker.js",
+    "validate:sources": "node scripts/validate-source-registry.mjs",
+    "test:unit": "node --test $(node scripts/list-unit-tests.mjs)",
+    "test:browser": "CHROME_PATH=${CHROME_PATH:-$(which google-chrome || which google-chrome-stable)} node --test tests/*browser.test.mjs tests/offline-readiness.test.mjs",
+    "test": "npm run build:check && npm run validate:sources && npm run test:unit"
+  },
+  "devDependencies": {
+    "playwright-core": "1.58.2"
+  }
+}
