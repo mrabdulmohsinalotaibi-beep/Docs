@@ -6214,6 +6214,12 @@ function gradeImpact(baseline,post){
  if(before===null||after===null||!Number.isFinite(before)||!Number.isFinite(after)||before<0||before>100||after<0||after>100)return null;
  return Math.round((after-before)*100)/100;
 }
+function gradeMeasurementQuality(plan){
+ const valid=value=>value!==null&&value!==''&&Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=100;
+ const checks={baseline:valid(plan?.baseline),post:valid(plan?.post),source:Boolean(String(plan?.sourceFile||'').trim()),period:Boolean(String(plan?.period||'').trim()),identity:Boolean(plan?.identityVerified||plan?.studentKey)};
+ const missing=Object.entries(checks).filter(([,ok])=>!ok).map(([key])=>({baseline:'القياس القبلي',post:'القياس البعدي',source:'مصدر القياس',period:'فترة القياس',identity:'ربط الطالب بمعرّف مؤكد'}[key]));
+ return {checks,missing,comparable:missing.length===0,status:missing.length?'يحتاج مراجعة':'قابل للمقارنة'};
+}
 function gradePlanBelongs(plan,studentKey,match){
  if(plan.studentKey)return plan.studentKey===studentKey;
  return match({id:plan.studentNo||'',name:plan.name,grade:plan.grade,cls:plan.cls})?.key===studentKey;
@@ -6240,6 +6246,7 @@ async function gradeRenderPlansForStudent(studentKey){
    const card=document.createElement('article');card.className='s360-real-record';
    const h=document.createElement('h5');h.textContent=plan.subject+' · '+(plan.period||'نتائج الطلاب')+' · '+(states[plan.status]||'مسودة');card.append(h);
    for(const [label,value] of [['مصدر القياس',plan.sourceFile||'ملف نتائج محلي'],['فترة القياس',plan.period||'غير محددة'],['حجم مصدر القياس',plan.sourceCount?String(plan.sourceCount)+' سجلًا':'غير معروف'],['الدرجة القبلية',plan.baseline+'%'],['الدرجة البعدية',gradeImpact(plan.baseline,plan.post)===null?'لم تسجل بعد':plan.post+'%'],['التغير بالنقاط المئوية',gradeImpact(plan.baseline,plan.post)===null?'غير مقاس':String(gradeImpact(plan.baseline,plan.post))],['الهدف',plan.goal],['الإجراء',plan.action],['نتيجة المتابعة',plan.result||'لم تسجل بعد']]){const row=document.createElement('p');row.style.whiteSpace='pre-wrap';const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));card.append(row)}
+   const quality=gradeMeasurementQuality(plan),qualityRow=document.createElement('p');qualityRow.className=quality.comparable?'docs-measure-quality-ok':'docs-measure-quality-review';qualityRow.style.fontWeight='700';qualityRow.style.color=quality.comparable?'#326a43':'#8a5a16';qualityRow.textContent='جودة القياس: '+quality.status+(quality.missing.length?' — يحتاج: '+quality.missing.join('، '):'');card.append(qualityRow);
    const note=document.createElement('p');note.className='muted';note.textContent='التغير مقارنة وصفية بين قياسين من المصدر المحدد، ولا يثبت أن الإجراء سبب النتيجة. راجع طريقة القياس واكتمال السجلات قبل اعتمادها.';card.append(note)
    holder.append(card);
   }
@@ -6251,7 +6258,7 @@ async function gradeOpenPlan(record){
  const key=norm(record.id)||[norm(record.name),norm(record.grade),norm(record.cls)].join('|');
  const id=state.current+'|'+key+'|'+norm(record.subject);
  const source=state.imports.find(x=>x.id===state.current);
- gradeEditingPlan={id,studentKey:student?.key||'',studentNo:record.id||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:source?.period||'',sourceFile:source?.filename||'ملف نتائج محلي',sourceCount:Array.isArray(source?.records)?source.records.length:null,measurementUnit:'النسبة المئوية'};
+ gradeEditingPlan={id,studentKey:student?.key||'',identityVerified:Boolean(student?.key),studentNo:record.id||'',name:record.name,grade:record.grade,cls:record.cls,subject:record.subject,baseline:record.pct,period:source?.period||'',sourceFile:source?.filename||'ملف نتائج محلي',sourceCount:Array.isArray(source?.records)?source.records.length:null,measurementUnit:'النسبة المئوية'};
  const editor=el('gradePlanEditor');editor.hidden=false;
  el('gradePlanStudent').textContent=[record.name,record.grade,record.cls,record.subject,'الدرجة القبلية '+record.pct+'%','المصدر: '+(source?.filename||'ملف نتائج محلي'),'الفترة: '+(source?.period||'غير محددة')].filter(Boolean).join(' — ');
  el('gradePlanNotice').textContent=student?'الطالب مرتبط بملف 360.':'لم يُعثر على تطابق وحيد في ملف الطالب؛ تُحفظ الخطة مع بيانات سجل النتائج حتى تتطابق.';
