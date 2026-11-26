@@ -2089,18 +2089,39 @@ async function docsRenderFollowupCenter(){
   }
  }catch(e){if(token===docsFollowupCenterToken&&owner===activeUser){root.textContent='تعذر قراءة المتابعات المحلية: '+e.message;delete root.dataset.renderKey}}
 }
+let docsDailyBriefToken=0;
 async function docsRenderDailyBrief(){
  const root=$('docsDailyBrief');if(!root)return;
- const owner=activeUser,ownerDb=db;if(!owner||!ownerDb){root.replaceChildren();return}
+ const token=++docsDailyBriefToken,owner=activeUser,ownerDb=db;
+ const metrics=root.querySelector('[data-daily-metrics]'),agenda=root.querySelector('[data-daily-agenda]'),note=root.querySelector('[data-daily-note]');
+ if(!metrics||!agenda||!note)return;
+ metrics.replaceChildren();agenda.replaceChildren();
+ if(!owner||!ownerDb){note.textContent='سجّل الدخول لعرض أعمال اليوم.';return}
+ const current=()=>token===docsDailyBriefToken&&owner===activeUser&&ownerDb===db;
  try{
-  const rows=await docsFollowupRows(owner,ownerDb);if(owner!==activeUser||ownerDb!==db)return;
-  const today=hijriToday(),overdue=rows.filter(row=>docsFollowupStatus(row.plan,today)==='متأخرة'),dueToday=rows.filter(row=>row.plan.due===today&&row.plan.status!=='approved'),review=docsFollowupReviewQueue(rows,today).length;
-  root.querySelector('[data-daily-metrics]').replaceChildren();
-  for(const [label,value,kind] of [['متأخرة',overdue.length,'overdue'],['مستحقة اليوم',dueToday.length,'today'],['تحتاج مراجعة',review,'review']]){
-   const card=document.createElement('button');card.type='button';card.className='docs-work-status-card';card.dataset.dailyFilter=kind;const strong=document.createElement('strong'),small=document.createElement('small');strong.textContent=String(value);small.textContent=label;card.append(strong,small);card.onclick=()=>{workspaceGoto('home');const target=$('docsFollowupCenter');target?.scrollIntoView({behavior:'smooth',block:'start'});const details=target?.querySelector('details');if(details&&kind!=='today')details.open=true};root.querySelector('[data-daily-metrics]').append(card);
+  const rows=await docsFollowupRows(owner,ownerDb);if(!current())return;
+  const today=hijriToday(),pending=docsFollowupReviewQueue(rows,today).map(item=>item.plan);
+  const groups={overdue:pending.filter(p=>docsFollowupDate(p.due)&&docsFollowupDate(p.due)<today),today:pending.filter(p=>docsFollowupDate(p.due)===today),review:pending,month:pending.filter(p=>docsFollowupDate(p.due).slice(0,7)===today.slice(0,7)),upcoming:pending.filter(p=>docsFollowupDate(p.due)>today)};
+  const labels={overdue:'متأخرة',today:'مستحقة اليوم',review:'تحتاج مراجعة',month:'مواعيد الشهر الهجري',upcoming:'المواعيد القادمة'};
+  function show(kind){
+   if(!current())return;
+   for(const b of metrics.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.dailyFilter===kind));
+   agenda.replaceChildren();
+   const h=document.createElement('h3');h.textContent=labels[kind]+' ('+groups[kind].length+')';agenda.append(h);
+   if(!groups[kind].length){const p=document.createElement('p');p.className='muted';p.textContent='لا توجد متابعات مطابقة في البيانات المحلية المتاحة.';agenda.append(p)}
+   for(const plan of groups[kind]){
+    const b=document.createElement('button');b.type='button';b.className='docs-guidance-row';
+    b.textContent=plan.title+' · '+(docsFollowupDate(plan.due)?docsFollowupDate(plan.due)+' هـ':'موعد غير موثق')+' · '+docsFollowupStatus(plan,today);
+    b.onclick=()=>{if(current())docsOpenFollowup(plan).catch(e=>say('تعذر فتح المتابعة: '+e.message))};agenda.append(b);
+   }
   }
-  root.querySelector('[data-daily-note]').textContent='اليوم الهجري: '+today+' · المؤشرات مبنية على المتابعات المحلية المحفوظة لهذا الحساب فقط.';
- }catch(error){root.querySelector('[data-daily-note]').textContent='تعذر تحديث لوحة اليوم: '+error.message}
+  for(const kind of Object.keys(labels)){
+   const card=document.createElement('button');card.type='button';card.className='docs-work-status-card';card.dataset.dailyFilter=kind;
+   const strong=document.createElement('strong'),small=document.createElement('small');strong.textContent=String(groups[kind].length);small.textContent=labels[kind];card.append(strong,small);card.onclick=()=>show(kind);metrics.append(card);
+  }
+  note.textContent='اليوم الهجري: '+today+' · المؤشرات مبنية على المتابعات المحلية المحفوظة لهذا الحساب فقط، وتستثني المعتمدة.';
+  show(groups.overdue.length?'overdue':'today');
+ }catch(error){if(current()){metrics.replaceChildren();agenda.replaceChildren();note.textContent='تعذر تحديث لوحة اليوم: '+error.message}}
 }
 async function docsOpenFollowup(source){
  if(!activeUser||!db||!source?.id||source.id!==docsFollowupKey(source.type,source.sourceId))return;
@@ -3960,6 +3981,23 @@ async function openStudent360(key){
  workText.textContent=own?Object.entries(docsWorkLabels).map(([status,label])=>label+': '+own[status]).join(' · '):'لا توجد أعمال مرتبطة في الفهرس المتاح';
  if(review.coverage!=='indexed')workText.textContent+=' — عرض جزئي';
  workSummary.style.gridColumn='1/-1';workSummary.append(workTitle,workText);basics.append(workSummary);
+ const casePanel=document.createElement('div');casePanel.style.gridColumn='1/-1';basics.append(casePanel);
+ const caseHeading=document.createElement('b');caseHeading.textContent='الحالات والإحالات الميدانية';casePanel.append(caseHeading);
+ const caseBody=document.createElement('div');caseBody.textContent='جاري قراءة الحالات المحلية…';casePanel.append(caseBody);
+ (async()=>{
+  try{
+   const rows=await new Promise((resolve,reject)=>{const req=ownerDb.transaction('cloudSnapshots','readonly').objectStore('cloudSnapshots').getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error)});
+   if(!isCurrent()||!casePanel.isConnected)return;
+   const cases=rows.filter(row=>row.kind==='local-fieldwork-case'&&row.owner===owner&&row.record?.studentId===key&&row.id==='fieldwork-case:'+row.record.id&&Array.isArray(row.record.history)).map(row=>row.record);
+   const labels={new:'جديدة',active:'تحت المتابعة',referred:'محالة',closed:'مغلقة'};
+   caseBody.replaceChildren();
+   const summary=document.createElement('p');summary.textContent='المفتوحة: '+cases.filter(c=>c.status!=='closed').length+' · المغلقة: '+cases.filter(c=>c.status==='closed').length;caseBody.append(summary);
+   const events=cases.flatMap(c=>c.history.map((event,index)=>({event,index,id:c.id}))).sort((a,b)=>String(b.event.date).localeCompare(String(a.event.date))||a.id.localeCompare(b.id)||b.index-a.index);
+   for(const {event} of events){const line=document.createElement('p');line.textContent=(event.date||'تاريخ غير موثق')+' · '+(labels[event.status]||'حالة غير معروفة');caseBody.append(line)}
+   if(!cases.length){const note=document.createElement('p');note.textContent='لا توجد حالات ميدانية محفوظة في هذا المصدر لهذا الطالب.';caseBody.append(note)}
+  }catch(error){if(isCurrent()&&casePanel.isConnected)caseBody.textContent='تعذر قراءة الحالات المحلية.'}
+ })();
+
 
  const linkedCare=studentCareIndex[key]||{};
  const healthLabel=student.health_status||(linkedCare.health?'حالة صحية موثقة ضمن سجل مرتبط':'');
@@ -4475,7 +4513,7 @@ for(const [label,description,target,view] of [
  btn.dataset.mobileView=view||target;btn.onclick=()=>{workspaceGoto(target);if(view)openDocsView(view);if(view==='portfolio')activateDocsTab('portfolio');if(target==='students')refreshStudentDirectory().catch(()=>{})};
  cards.append(btn)
 }
- const dailyBrief=document.createElement('section');dailyBrief.id='docsDailyBrief';dailyBrief.className='panel';dailyBrief.innerHTML='<h2>لوحة اليوم</h2><div data-daily-metrics class="docs-premium-home-stats"></div><p data-daily-note class="muted" role="status">سجّل الدخول لعرض أعمال اليوم.</p>';
+ const dailyBrief=document.createElement('section');dailyBrief.id='docsDailyBrief';dailyBrief.className='panel';dailyBrief.innerHTML='<h2>لوحة اليوم</h2><div data-daily-metrics class="docs-premium-home-stats"></div><p data-daily-note class="muted" role="status">سجّل الدخول لعرض أعمال اليوم.</p><div data-daily-agenda aria-live="polite"></div>';
  const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
 workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><section id="docsWorkDetails" data-work-details class="docs-work-details" hidden aria-label="الأعمال حسب الحالة"></section><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
 workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
@@ -4507,7 +4545,7 @@ for(const [title,description,page,id,filter] of [
 
  const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
  docsRenderWorkCenter([]);
- document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.';dailyBrief.querySelector('[data-daily-metrics]').replaceChildren();dailyBrief.querySelector('[data-daily-note]').textContent='سجّل الدخول لعرض أعمال اليوم.'});
+ document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.';docsDailyBriefToken++;dailyBrief.querySelector('[data-daily-agenda]').replaceChildren();dailyBrief.querySelector('[data-daily-metrics]').replaceChildren();dailyBrief.querySelector('[data-daily-note]').textContent='سجّل الدخول لعرض أعمال اليوم.'});
  if(activeUser){refreshModernHome().catch(()=>{});docsRenderDailyBrief().catch(()=>{})}
 // Recalculate cross-section totals after successfully committed restoration or device import.
 let docsRefreshRecoveredBusy=false,docsRefreshRecoveredAgain=false;
