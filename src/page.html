@@ -1189,7 +1189,7 @@ body[data-docs-theme=mono] .docs-admin-header-tools button{background:#fff;color
  @media(max-width:360px){#authGate .auth-card{padding:18px 16px}#authGate .auth-intro h1{font-size:21px}}
 }
 </style></head><body><script>(function(){var key='athat-docs-ui-theme-v3',allowed=['terracotta','mono'],v;try{v=localStorage.getItem(key)}catch(e){}v=allowed.includes(v)?v:'terracotta';document.addEventListener('DOMContentLoaded',function(){var themeMeta=document.querySelector('meta[name="theme-color"]'),button=document.getElementById('docsThemeButton'),menu=document.getElementById('docsThemeMenu');function apply(value){v=value;document.body.dataset.docsTheme=value;if(themeMeta)themeMeta.setAttribute('content',value==='mono'?'#111111':'#514735');if(menu)menu.querySelectorAll('[data-theme-choice]').forEach(function(item){item.setAttribute('aria-pressed',String(item.dataset.themeChoice===value))})}apply(v);if(!button||!menu)return;function close(focus){menu.hidden=true;button.setAttribute('aria-expanded','false');if(focus)button.focus()}button.addEventListener('click',function(){if(!menu.hidden){close(false);return}menu.hidden=false;button.setAttribute('aria-expanded','true');menu.querySelector('[aria-pressed="true"]')?.focus()});menu.addEventListener('click',function(e){var item=e.target.closest('[data-theme-choice]');if(!item||!allowed.includes(item.dataset.themeChoice))return;apply(item.dataset.themeChoice);try{localStorage.setItem(key,v)}catch(e){}close(true)});document.addEventListener('click',function(e){if(!menu.hidden&&!menu.contains(e.target)&&!button.contains(e.target))close(false)});document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!menu.hidden){e.preventDefault();close(true)}});document.addEventListener('focusin',function(e){if(!menu.hidden&&!menu.contains(e.target)&&e.target!==button)close(false)})})})();</script>
-<header class="top"><div class="brand"><div class="logo"><img src="/brand.svg?v=10" alt="شعار مستندات الذات الأصلي DOCS ATHAT" width="88" height="88"></div><div><b>مستندات الذات</b><small>ATHAT Docs · أعمالك وشواهدك</small></div></div><div class="docs-theme-picker"><button type="button" id="docsThemeButton" aria-label="تغيير المظهر" title="تغيير المظهر" aria-expanded="false" aria-controls="docsThemeMenu"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.4a1.7 1.7 0 0 0 1.1-3c-.9-.8-.3-2.2.9-2.2H18a3 3 0 0 0 3-3C21 7.3 17 3 12 3Z"/><circle cx="7.5" cy="11" r=".8"/><circle cx="10" cy="7.5" r=".8"/><circle cx="14.5" cy="7.5" r=".8"/><circle cx="17.5" cy="11" r=".8"/></svg></button><div id="docsThemeMenu" hidden aria-label="خيارات المظهر"><button type="button" data-theme-choice="terracotta" aria-pressed="false">الذهبي الملكي</button><button type="button" data-theme-choice="mono" aria-pressed="false">الأسود والأبيض</button></div></div><div id="sessionPanel" hidden><small id="accountName"></small><button id="logoutDocs" type="button">تسجيل خروج</button></div></header><div id="docsLiveIndicators" class="docs-live-indicators" hidden aria-label="حالة الحفظ والمزامنة"><span id="docsLocalIndicator" class="docs-live-indicator" data-state="yellow" role="status"><i></i><span>الحفظ بالجهاز: جارٍ التحقق</span></span><span id="docsPeerIndicator" class="docs-live-indicator" data-state="red" role="status"><i></i><span>مزامنة الأجهزة: غير متصل</span></span></div>
+<header class="top"><div class="brand"><div class="logo"><img src="/brand.svg?v=10" alt="شعار مستندات الذات الأصلي DOCS ATHAT" width="88" height="88"></div><div><b>مستندات الذات</b><small>ATHAT Docs · أعمالك وشواهدك</small></div></div><div class="docs-theme-picker"><button type="button" id="docsThemeButton" aria-label="تغيير المظهر" title="تغيير المظهر" aria-expanded="false" aria-controls="docsThemeMenu"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.4a1.7 1.7 0 0 0 1.1-3c-.9-.8-.3-2.2.9-2.2H18a3 3 0 0 0 3-3C21 7.3 17 3 12 3Z"/><circle cx="7.5" cy="11" r=".8"/><circle cx="10" cy="7.5" r=".8"/><circle cx="14.5" cy="7.5" r=".8"/><circle cx="17.5" cy="11" r=".8"/></svg></button><div id="docsThemeMenu" hidden aria-label="خيارات المظهر"><button type="button" data-theme-choice="terracotta" aria-pressed="false">الذهبي الملكي</button><button type="button" data-theme-choice="mono" aria-pressed="false">الأسود والأبيض</button></div></div><div id="sessionPanel" hidden><small id="accountName"></small><button id="logoutDocs" type="button">تسجيل خروج</button></div></header><div id="docsLiveIndicators" class="docs-live-indicators" hidden aria-label="حالة الحفظ والمزامنة"><span id="docsLocalIndicator" class="docs-live-indicator" data-state="yellow" role="status"><i></i><span>الحفظ بالجهاز: جارٍ التحقق</span></span><span id="docsPeerIndicator" class="docs-live-indicator" data-state="neutral" role="status"><i></i><span>مزامنة الأجهزة: غير متصل</span></span></div>
 <section id="authGate" aria-label="تسجيل الدخول">
 <div class="auth-card"><div class="auth-intro"><span class="auth-eyebrow">مساحة أعمال التوجيه الطلابي</span><h1>أعمالك مرتّبة، وجاهزة للطباعة.</h1><p>أنشئ مستنداتك، نظّم شواهدك، واطبع نماذجك الرسمية.</p></div>
 <div class="auth-tabs"><button id="tabLogin" type="button" class="selected">تسجيل الدخول</button><button id="tabRegister" type="button">إنشاء حساب</button></div>
@@ -2059,7 +2059,7 @@ async function docsRenderFollowupCenter(){
   root.replaceChildren();root.dataset.renderKey=renderKey;
   const title=document.createElement('h3');title.textContent='المتابعة التربوية';root.append(title);
   const note=document.createElement('p');note.className='muted';note.textContent='خطط متابعة محلية مستقلة عن حالة السجل الأصلي، ويُحدد التأخر من موعد المتابعة الهجري.';root.append(note);
-  const stats=document.createElement('p');stats.textContent=['مسودة','قيد التنفيذ','متأخرة','معتمدة'].map(k=>k+': '+(counts.get(k)||0)).join(' · ');root.append(stats);
+  const stats=document.createElement('p');stats.textContent=rows.length?['مسودة','قيد التنفيذ','متأخرة','معتمدة'].map(k=>k+': '+(counts.get(k)||0)).join(' · '):'لا توجد متابعات محفوظة لهذا الحساب على الجهاز.';root.append(stats);
   const queue=docsFollowupReviewQueue(rows,today);
   const review=document.createElement('details');review.className='panel';
   const heading=document.createElement('summary');heading.textContent='مراجعة الأعمال المطلوبة ('+queue.length+')';review.append(heading);
@@ -2190,6 +2190,18 @@ function docsWorkOpen(row){
  }
  say('مصدر هذا السجل غير متاح الآن. افتح المستندات والسجلات لتحديث الفهرس قبل المحاولة.');
 }
+function docsRenderMobileRecent(){
+ const root=$('docsMobileRecentList');if(!root)return;root.replaceChildren();
+ if(!activeUser)return;
+ const date=row=>{const value=row.updated_at||row.updated||row.created_at||row.created;const n=Number(value);return Number.isFinite(n)&&n>0?n:(Date.parse(value)||0)};
+ const originals=docsAccountOriginals(),localKeys=new Set(originals.filter(row=>row.accountSourceTable==='local').map(row=>String(row.source_record_id)));
+ for(const doc of docs){const key=docsCanonicalKey(doc);if(!doc.sourceA4&&!localKeys.has(key)){originals.push({...doc,source_record_id:key,accountSourceTable:'local'});localKeys.add(key)}}
+ const rows=originals.filter(row=>classifyDocsWorkStatus(row.status)!=='archived').sort((a,b)=>date(b)-date(a)).slice(0,5);
+ if(!rows.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='تظهر هنا أحدث الأعمال المتاحة لحسابك. ابدأ بإنشاء مستند أو افتح مستنداتك.';root.append(empty);return}
+ const owner=activeUser;
+ for(const row of rows){const button=document.createElement('button');button.type='button';button.className='docs-mobile-recent-row';const title=document.createElement('strong'),note=document.createElement('small');title.textContent=docsWorkTitle(row);note.textContent=row.status||'حالة غير مصنفة';button.append(title,note);button.onclick=()=>{if(owner!==activeUser)return;workspaceGoto('documents');openDocsView('works');docsWorkOpen(row)};root.append(button)}
+}
+function docsRevealMobileTarget(node){for(let parent=node?.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true}
 function docsWorkRenderDetails(){
  const host=$('docsWorkCenter'),details=host?.querySelector('[data-work-details]');if(!details)return;
  details.replaceChildren();
@@ -2598,6 +2610,7 @@ function draw(){
  // This renderer runs outside the reports workspace scope: never call reportsRows() here.
  const allOriginals=docsAccountOriginals();
  docsRenderWorkCenter(allOriginals);
+ docsRenderMobileRecent();
  docsRenderFollowupCenter();
  $('countAll').textContent=guidanceLoadedUser===activeUser?String(allOriginals.length):'—';
  $('countDone').textContent=guidanceLoadedUser===activeUser?String(allOriginals.filter(d=>/^مكتمل(?:ة)?$/.test(String(d.status||'').trim())).length):'—';
@@ -2700,7 +2713,7 @@ function draw(){
 }
 
 function activateDocsTab(nextTab){
- tab=nextTab;localDocsShown=50;nativeDocsShown=35;guidanceDocsShown=35;
+ tab=nextTab;const mobileFilter=$('docsMobileArchiveFilter');if(mobileFilter)mobileFilter.value=nextTab;localDocsShown=50;nativeDocsShown=35;guidanceDocsShown=35;
  if(tab==='portfolio'){
   // Portfolio is the whole account, never the prior search/record filter.
   $('search').value='';$('nativeDocsType').value='';$('nativeDocsLink').value='all';
@@ -4432,7 +4445,7 @@ for(const [label,description,target,view] of [
 ]){
  const btn=document.createElement('button');btn.type='button';const title=document.createElement('strong');title.textContent=label;
  const detail=document.createElement('small');detail.textContent=description;btn.append(title,detail);
- btn.onclick=()=>{workspaceGoto(target);if(view)openDocsView(view);if(view==='portfolio')activateDocsTab('portfolio');if(target==='students')refreshStudentDirectory().catch(()=>{})};
+ btn.dataset.mobileView=view||target;btn.onclick=()=>{workspaceGoto(target);if(view)openDocsView(view);if(view==='portfolio')activateDocsTab('portfolio');if(target==='students')refreshStudentDirectory().catch(()=>{})};
  cards.append(btn)
 }
 const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
@@ -4447,7 +4460,7 @@ function docsCommandJump(page,id,filter){
  if(!activeUser){say('سجّل الدخول لعرض أعمالك.');return}
  workspaceGoto(page);
  if(filter){docsWorkSelected=filter;docsWorkPageLimit=50;docsWorkRenderWorkSelection();docsWorkRenderDetails()}
- if(id){const target=$(id);if(target){if(id==='docsFollowupCenter'){const review=target.querySelector('details');if(review)review.open=true}target.scrollIntoView({block:'start',behavior:'smooth'})}}
+ if(id){const target=$(id);if(target){docsRevealMobileTarget(target);if(id==='docsFollowupCenter'){const review=target.querySelector('details');if(review)review.open=true}target.scrollIntoView({block:'start',behavior:'smooth'})}}
 }
 for(const [title,description,page,id,filter] of [
  ['الأعمال المطلوبة','المسودات والأعمال المسجلة','home','docsWorkCenter','required'],
@@ -4459,7 +4472,7 @@ for(const [title,description,page,id,filter] of [
  ['الاستبانات الإلكترونية','المشاركة والنتائج المجمعة','grades','docsSurveyAdmin',''],
  ['التقارير','عرض التقارير والطباعة','reports','','']
 ]){
- const b=document.createElement('button');b.type='button';b.className='btn';b.classList.add('docs-command-tile');
+ const b=document.createElement('button');b.type='button';b.className='btn';b.classList.add('docs-command-tile');b.dataset.mobileDestination=id||page;
  const label=document.createElement('strong'),caption=document.createElement('small');label.textContent=title;caption.textContent=description;b.append(label,caption);b.onclick=()=>docsCommandJump(page,id,filter);commandCenter.querySelector('[data-command-links]').append(b);
 }
 /* DOCS_COMMAND_CENTER_END */
@@ -5707,10 +5720,14 @@ function dsOpenTab(key){
 settingsHub.querySelectorAll('.ds-nav-btn').forEach(btn=>btn.addEventListener('click',()=>dsOpenTab(btn.dataset.dsTab)));
 settingsHub.querySelectorAll('[data-ds-open]').forEach(btn=>btn.addEventListener('click',()=>dsOpenTab(btn.dataset.dsOpen)));
 // The old shortcuts were removed above; the connected modern tabs already own navigation.
+function docsIndicatorState(state,message){
+ const inactive=['الحفظ التلقائي متوقف على هذا الجهاز','الحفظ التلقائي معطل على هذا الجهاز','غير متصل','بانتظار جهاز آخر متصل','الجهاز الآخر غير متصل','الاتصال متوقف'];
+ return state==='red'&&inactive.includes(String(message||''))?'neutral':(['green','yellow','red','neutral'].includes(state)?state:'yellow');
+}
 function dsSetHealth(name,detail){
  const card=settingsHub.querySelector('#dsState'+name),value=settingsHub.querySelector('#dsState'+name+'Text');
  if(!card||!value)return;
- card.dataset.state=['green','yellow','red'].includes(detail?.state)?detail.state:'yellow';
+ card.dataset.state=docsIndicatorState(detail?.state,detail?.message);
  value.textContent=String(detail?.message||'لا توجد معلومات حديثة').slice(0,125);
 }
 window.addEventListener('docs:local-status',event=>dsSetHealth('Local',event.detail));
@@ -6689,6 +6706,43 @@ for(const [id,label,accessible,pathData] of docsTabItems){
 }
 /* DOCS_SIX_TAB_NAV_END */
 
+/* DOCS_MOBILE_WORKSPACE_START: move existing controls; never clone or mutate user records. */
+const mobileMedia=matchMedia('(max-width:650px)');
+const mobileHome=workspacePages.home;
+function mobileDisclosure(id,label){const detail=document.createElement('details');detail.id=id;detail.className='docs-mobile-disclosure';const summary=document.createElement('summary');summary.textContent=label;detail.append(summary);return detail}
+const mobileHealth=mobileDisclosure('docsMobileHealth','الحفظ والمزامنة');
+const healthWarning=document.createElement('span');healthWarning.id='docsMobileHealthWarning';healthWarning.hidden=true;healthWarning.textContent=' · تحتاج مراجعة';mobileHealth.querySelector('summary').append(healthWarning);
+const indicators=$('docsLiveIndicators'),healthAnchor=document.createComment('mobile-health');indicators.before(healthAnchor);healthAnchor.after(mobileHealth);
+const mobileWork=mobileDisclosure('docsMobileWork','حالات الأعمال وملخص الحساب');
+const mobileTools=mobileDisclosure('docsMobileTools','كل أدواتك');
+const mobileBackup=mobileDisclosure('docsMobileBackup','حفظ أعمالك ونسخها');
+const mobileRecent=document.createElement('section');mobileRecent.id='docsMobileRecent';mobileRecent.className='panel docs-mobile-only';mobileRecent.innerHTML='<div class="row"><h2>آخر الأعمال</h2><button type="button" class="btn">عرض الكل</button></div><div id="docsMobileRecentList"></div>';
+mobileRecent.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
+mobileHome.append(mobileRecent,mobileWork,mobileTools,mobileBackup);
+const mobileMore=mobileDisclosure('docsMobileViews','المزيد');selector.append(mobileMore);
+const mobileFilterLabel=document.createElement('label');mobileFilterLabel.className='docs-mobile-only docs-mobile-archive-filter';mobileFilterLabel.textContent='عرض المستندات';
+const mobileArchiveFilter=document.createElement('select');mobileArchiveFilter.id='docsMobileArchiveFilter';mobileArchiveFilter.setAttribute('aria-label','عرض المستندات');
+for(const button of originalWorks.querySelectorAll('[data-tab]'))mobileArchiveFilter.add(new Option(button.textContent,button.dataset.tab));
+mobileArchiveFilter.value=tab;mobileArchiveFilter.onchange=()=>activateDocsTab(mobileArchiveFilter.value);mobileFilterLabel.append(mobileArchiveFilter);originalWorks.querySelector('.tabs').append(mobileFilterLabel);
+const moves=[];
+function mobileMove(node,destination){if(!node)return;const anchor=document.createComment('mobile-layout');node.before(anchor);moves.push({node,destination,anchor})}
+mobileMove(indicators,mobileHealth);
+mobileMove(followupCenter,mobileHome);
+mobileMove(premiumMetrics,mobileWork);mobileMove(workCenter,mobileWork);
+mobileMove(commandCenter,mobileTools);mobileMove(latestHeading,mobileTools);mobileMove(cards,mobileTools);
+mobileMove($('docsStorageSummary'),mobileBackup);
+for(const key of ['portfolio','programs','support','review'])mobileMove(selector.querySelector('[data-view="'+key+'"]'),mobileMore);
+const heroTitle=originalHero.querySelector('h1'),heroTitleText=heroTitle.textContent;
+function applyMobileWorkspace(){
+ for(const {node,destination,anchor} of moves){if(mobileMedia.matches)destination.append(node);else anchor.after(node)}
+ if(mobileMedia.matches){mobileHome.prepend(originalHero);originalHero.after(followupCenter,mobileRecent,mobileWork,mobileTools,mobileBackup);heroTitle.textContent='مساحة أعمالك'}else heroTitle.textContent=heroTitleText;
+ docsRenderMobileRecent();
+}
+mobileMedia.addEventListener('change',applyMobileWorkspace);applyMobileWorkspace();
+document.addEventListener('athat-docs-logout',()=>{mobileRecent.querySelector('#docsMobileRecentList').replaceChildren();for(const detail of [mobileHealth,mobileWork,mobileTools,mobileBackup,mobileMore])detail.open=false;healthWarning.hidden=true});
+/* DOCS_MOBILE_WORKSPACE_END */
+
+
 
 }catch(workspaceError){
  if(workspaceEditorRecovery&&!workspaceEditorRecovery.isConnected){
@@ -6700,11 +6754,15 @@ for(const [id,label,accessible,pathData] of docsTabItems){
 </script><script>
 (()=>{'use strict';
  const root=document.getElementById('docsLiveIndicators'), local=document.getElementById('docsLocalIndicator'),peer=document.getElementById('docsPeerIndicator');
- function set(el,state,label){if(!el)return;el.dataset.state=state;el.querySelector('span').textContent=label;el.title=label}
+function docsIndicatorState(state,message){
+ const inactive=['الحفظ التلقائي متوقف على هذا الجهاز','الحفظ التلقائي معطل على هذا الجهاز','غير متصل','بانتظار جهاز آخر متصل','الجهاز الآخر غير متصل','الاتصال متوقف'];
+ return state==='red'&&inactive.includes(String(message||''))?'neutral':(['green','yellow','red','neutral'].includes(state)?state:'yellow');
+}
+ function set(el,state,label,message){if(!el)return;el.dataset.state=docsIndicatorState(state,message);el.querySelector('span').textContent=label;el.title=label;const health=document.getElementById('docsMobileHealth'),warning=document.getElementById('docsMobileHealthWarning');const failed=[local,peer].some(node=>node?.dataset.state==='red');if(warning)warning.hidden=!failed;if(health&&failed)health.open=true}
  function show(){root.hidden=!document.getElementById('sessionPanel')||document.getElementById('sessionPanel').hidden}
  const observer=new MutationObserver(show);const panel=document.getElementById('sessionPanel');if(panel)observer.observe(panel,{attributes:true,attributeFilter:['hidden']});show();
- window.addEventListener('docs:local-status',e=>{const d=e.detail||{};set(local,d.state||'red','الحفظ بالجهاز: '+(d.message||'متوقف'))});
- window.addEventListener('docs:peer-status',e=>{const d=e.detail||{};set(peer,d.state||'red','مزامنة الأجهزة: '+(d.message||'غير متصل'))});
+ window.addEventListener('docs:local-status',e=>{const d=e.detail||{};set(local,d.state||'red','الحفظ بالجهاز: '+(d.message||'متوقف'),d.message)});
+ window.addEventListener('docs:peer-status',e=>{const d=e.detail||{};set(peer,d.state||'red','مزامنة الأجهزة: '+(d.message||'غير متصل'),d.message)});
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')show()});
 })();
 </script><script src="/peer-sync.js" defer></script><script src="/auto-sync.js" defer></script><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(r=>{if(navigator.onLine)r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)r.update().catch(()=>{})})}).catch(()=>{}))}</script><style id="docs-grade-styles">
@@ -6818,4 +6876,71 @@ for(const [id,label,accessible,pathData] of docsTabItems){
  body.grade-preview-active #gradePrintOverlay tr{break-inside:avoid}
 }
 @media(max-width:620px){#gradePrintOverlay .grade-print-toolbar{padding:8px;gap:5px}#gradePrintOverlay .grade-print-toolbar button{font-size:12px;padding:8px}#gradePrintOverlay .grade-a4-document{padding:12px;min-height:0}}
+</style><style id="docs-mobile-workspace-style">
+.docs-mobile-only,.docs-mobile-disclosure{display:none}
+.docs-live-indicator[data-state=neutral] i,#docsSettingsHub .ds-health[data-state=neutral] .ds-dot{background:#817867;box-shadow:none}
+#docsMobileHealthWarning{color:#a52b25;font-weight:700}
+@media screen and (max-width:650px){
+ body:has(#appMain:not([hidden])) header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;padding:10px 12px!important;align-items:center}
+ body:has(#appMain:not([hidden])) header.top .logo{width:40px!important;height:40px!important;padding:2px!important}
+ body:has(#appMain:not([hidden])) header.top .brand{gap:7px}
+ body:has(#appMain:not([hidden])) header.top .brand b{font-size:15px;line-height:1.4}
+ body:has(#appMain:not([hidden])) header.top .brand small{display:none}
+ #sessionPanel{gap:0}#sessionPanel #accountName{display:none}#sessionPanel #logoutDocs{font-size:12px;padding:9px 7px;min-height:40px}
+ #appMain{padding-top:10px!important}
+ #workspaceSettingsLink{display:block!important;width:fit-content;margin:0 0 8px auto!important;padding:7px 10px!important;min-height:40px;font-size:12px;box-shadow:none!important}
+ .docs-mobile-only,.docs-mobile-disclosure{display:block}
+ #docsMobileHealth{margin:0;padding:0 12px;border-bottom:1px solid var(--athat-line,#D9CCB2);background:var(--athat-parchment,#F7F4ED);font-size:12px}
+ #docsMobileHealth:has(#docsLiveIndicators[hidden]){display:none}
+ .docs-mobile-disclosure>summary{cursor:pointer;min-height:44px;padding:12px 0;font-weight:650;color:var(--athat-brown,#514735)}
+ #docsLiveIndicators{padding:0 0 9px;background:transparent!important;border:0!important;justify-content:flex-start}
+ #docsLiveIndicators .docs-live-indicator{font-size:11px;line-height:1.5;white-space:normal;text-align:start}
+ body[data-docs-theme] #workspace-home .hero{padding:14px 16px!important;border-radius:14px!important;background:var(--athat-paper,#fff)!important;color:var(--athat-brown,#514735)!important;border:1px solid var(--athat-line,#D9CCB2)!important;box-shadow:none!important;gap:10px}
+ .workspace-home .hero h1{font-size:20px;line-height:1.4;color:inherit!important}
+ .workspace-home .hero>p{display:none}
+ .workspace-home .hero .actions{margin:0;display:block}
+ .workspace-home .hero #newBtn{width:100%;justify-content:center;min-height:46px;margin:0}
+ body[data-docs-theme] #appMain :is(.panel,.template,.btn,.tabs button,.docs-quick-grid>button,.docs-premium-home-stats article,.docs-view-selector button),#workspaceNav button{box-shadow:none!important;transform:none!important}
+ #appMain .panel{border-radius:14px!important}
+ #appMain .panel h2{font-size:18px}
+ #workspaceNav button[data-workspace]{font-size:11px!important}
+ #workspaceNav .docs-nav-icon{width:21px;height:21px}
+ #workspaceNav button[aria-current=page]{box-shadow:none!important}
+ #docsFollowupCenter{padding:14px;background:var(--athat-paper,#fff);border:1px solid var(--athat-line,#D9CCB2);border-radius:14px;margin:14px 0}
+ #docsFollowupCenter h3{margin:0 0 8px;font-size:18px}
+ #docsFollowupCenter>p.muted{display:none}
+ #docsFollowupCenter>p{font-size:13px;line-height:1.7;margin:8px 0}
+ #docsFollowupCenter details.panel{padding:0!important;margin:6px 0 0!important;border:0;box-shadow:none!important}
+ #docsFollowupCenter summary{min-height:44px;padding:10px 0;font-size:13px}
+ #docsFollowupCenter>.row{display:none}
+ #docsFollowupCenter:has(details[open])>.row{display:flex}
+ #docsFollowupCenter>button.docs-guidance-row{display:none}
+ #docsMobileRecent{margin-bottom:14px}
+ #docsMobileRecent .row{align-items:center;flex-wrap:nowrap}
+ #docsMobileRecent h2{margin:0}#docsMobileRecent .btn{font-size:12px;min-height:40px;padding:6px 10px}
+ .docs-mobile-recent-row{display:grid;width:100%;text-align:start;gap:5px;min-height:56px;padding:12px 0;border:0;border-bottom:1px solid var(--athat-line,#D9CCB2);background:transparent;color:inherit;font:inherit}
+ .docs-mobile-recent-row strong{font-size:14px;overflow-wrap:anywhere}.docs-mobile-recent-row small{font-size:12px;color:var(--athat-brown,#514735)}
+ #docsMobileRecentList>p{font-size:13px;line-height:1.8;margin-bottom:0}
+ #docsMobileWork,#docsMobileTools,#docsMobileBackup{margin-bottom:10px;padding:0 14px;border:1px solid var(--athat-line,#D9CCB2);border-radius:12px;background:var(--athat-paper,#fff)}
+ #docsMobileWork .panel,#docsMobileTools .panel,#docsMobileBackup .panel{border:0!important;padding:10px 0!important}
+ #docsMobileTools #docsCommandCenter>h2,#docsMobileTools #docsCommandCenter>p,#docsMobileTools>.docs-premium-title{display:none}
+ #docsMobileTools [data-mobile-destination]:not([data-mobile-destination=docsMeasureCenter]):not([data-mobile-destination=docsSurveyAdmin]){display:none!important}
+ #docsMobileTools [data-mobile-view=works],#docsMobileTools [data-mobile-view=templates],#docsMobileTools [data-mobile-view=grades]{display:none!important}
+ #docsMobileTools .docs-quick-grid>button{min-height:64px;padding:12px!important;border-radius:10px!important}
+ #docsMobileTools .docs-quick-grid>button:before,#docsMobileWork .docs-premium-home-stats article:before{display:none!important}
+ #docsMobileTools .docs-quick-grid>button small{display:none}
+ #docsViewSelector{display:grid!important;grid-template-columns:1fr 1fr auto;gap:6px;margin:8px 0 12px;align-items:start}
+ #docsViewSelector>button{padding:8px!important;min-height:44px;font-size:12px!important;border-radius:9px!important}
+ #docsMobileViews{position:relative;margin:0;font-size:12px}
+ #docsMobileViews>summary{padding:12px 8px;min-height:44px}
+ #docsMobileViews[open]{grid-column:1/-1;border:1px solid var(--athat-line,#D9CCB2);border-radius:10px;padding:0 8px}
+ #docsMobileViews button{padding:9px!important;min-height:44px;margin:0 0 8px 6px;font-size:12px}
+ #docsMobileViews:has([aria-current=page])>summary{font-weight:800;text-decoration:underline}
+ #workspace-documents>section:first-of-type{padding:10px 14px!important}
+ #workspace-documents>section:first-of-type p{display:none}
+ #worksPanel .tabs>[data-tab]{display:none!important}
+ .docs-mobile-archive-filter{width:100%;font-size:12px;font-weight:600}#docsMobileArchiveFilter{display:block;width:100%;min-height:44px;border:1px solid var(--athat-line,#D9CCB2);border-radius:9px;padding:8px;margin-top:5px;background:var(--athat-paper,#fff);color:inherit;font:inherit}
+ #worksPanel .tabs{gap:4px;margin-bottom:9px}#worksPanel .tabs button{font-size:12px;padding:8px 12px;min-height:40px}
+}
+@media print{.docs-mobile-only,.docs-mobile-disclosure{display:none!important}}
 </style></body></html>
