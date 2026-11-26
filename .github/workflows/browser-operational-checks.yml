@@ -207,6 +207,8 @@ jobs:
                         console.log('PASS print popup '+label+' '+owner);
                       }finally{await printPage.close()}
                       await page.locator('#docsUnifiedClose').click();
+                      // Closing deliberately refuses while a save is awaiting acknowledgement.
+                      await expect(page.locator('#docsEditorSaveStatus')).toHaveAttribute('data-state','saved');
                       await page.locator('#closeEditor').click();
                       await page.locator('#editor.visible').waitFor({state:'hidden'});
                       assert.ok((await readDocuments()).some(row=>row.title===title),'document persists after closing editor');

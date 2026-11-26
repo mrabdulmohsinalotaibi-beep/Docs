@@ -66,6 +66,7 @@ test('opening another template cannot replace an unsaved draft or a save still i
  assert.equal(logouts(),0,'logout must wait for the save acknowledgement');
  await page.evaluate(()=>window.finishSave());
  await page.waitForFunction(()=>document.getElementById('docsEditorSaveStatus').dataset.state==='saved');
+ assert.deepEqual(await page.evaluate(()=>({timer:docsAutoSaveTimer,pending:docsAutoSavePending})),{timer:null,pending:false},'manual save consumes the queued autosave');
  assert.equal((await documents(page,first)).filter(row=>row.title==='مسودة يجب أن تبقى').length,1);
  await page.locator('#docsViewSelector [data-view="templates"]').click();await page.locator('#templates button').nth(1).click();
  assert.notEqual(await page.locator('#docTitle').inputValue(),'مسودة يجب أن تبقى','switch is allowed after saving');
