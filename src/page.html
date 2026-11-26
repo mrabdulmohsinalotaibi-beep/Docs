@@ -4027,6 +4027,31 @@ async function docsFieldworkRenderStudent(panel,key,isCurrent){
  const lock=document.createElement('button');lock.type='button';lock.textContent='قفل الحالات';lock.onclick=()=>{docsFieldworkLock();if(valid())docsFieldworkRenderStudent(panel,key,isCurrent).catch(()=>{})};panel.append(lock);
  const records=await docsFieldworkRepo().list();if(!valid()||docsFieldworkSession!==session)return;
  const view=window.docsFieldwork.projectFieldworkCases(records,{studentId:key,today:hijriToday()});
+ const canEdit=()=>valid()&&docsFieldworkSession===session&&studentIndex.some(s=>s.key===key);
+ const refreshCases=async()=>{if(canEdit())await docsFieldworkRenderStudent(panel,key,isCurrent);docsRenderDailyBrief().catch(()=>{})};
+ function formFor(record){
+  const dialog=document.createElement('dialog');dialog.id='docsFieldworkDialog';dialog.style.cssText='width:min(94vw,580px);max-height:85dvh;overflow:auto;direction:rtl';
+  if(!canEdit()||document.getElementById(dialog.id))return;
+  const form=document.createElement('form'),title=document.createElement('h3'),notice=document.createElement('p'),fields=document.createElement('div');
+  title.textContent=record?'تحديث الحالة الميدانية':'إنشاء حالة ميدانية';notice.setAttribute('role','status');form.append(title,fields,notice);
+  const inputs={};function field(name,label,options){const wrap=document.createElement('label');wrap.style.cssText='display:grid;gap:5px;margin:10px 0';wrap.textContent=label;const el=document.createElement(options?'select':'textarea');el.name=name;el.required=true;el.style.width='100%';if(options){for(const [value,text] of options){const option=document.createElement('option');option.value=value;option.textContent=text;el.append(option)}}else{el.maxLength=3500;el.rows=2}wrap.append(el);fields.append(wrap);inputs[name]=el;return el}
+  if(!record){field('reason','سبب فتح الحالة');field('priority','الأولوية',[['routine','عادية'],['high','مرتفعة'],['urgent','عاجلة']])}
+  else{
+   const available={new:[['active','بدء المتابعة']],active:[['referred','إحالة']],referred:[['active','العودة للمتابعة']]}[record.status]||[];
+   if(session.canApprove&&['active','referred'].includes(record.status))available.push(['closed','إغلاق معتمد']);
+   if(!available.length)return;
+   const status=field('status','الإجراء',available);
+   const dynamic=document.createElement('div');fields.append(dynamic);
+   const update=()=>{dynamic.replaceChildren();for(const name of ['recipient','due','reason','response','result'])delete inputs[name];const add=(n,l)=>{const el=field(n,l);dynamic.append(el.parentElement);return el};if(status.value==='referred'){add('recipient','الجهة المحال إليها');const due=add('due','موعد الرد الهجري (سنة/شهر/يوم)');due.value=hijriToday()}if(status.value==='referred')add('reason','سبب الإحالة');if(record.status==='referred')add('response','الرد أو توثيق مبرر العودة');if(status.value==='closed')add('result','نتيجة الحالة')};status.onchange=update;update();
+  }
+  const save=document.createElement('button'),cancel=document.createElement('button');save.type='submit';save.textContent='حفظ مشفر';cancel.type='button';cancel.textContent='إلغاء';cancel.onclick=()=>dialog.close();form.append(save,cancel);dialog.append(form);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
+  form.onsubmit=async event=>{event.preventDefault();if(!canEdit()||!dialog.open)return;save.disabled=true;const data=Object.fromEntries(Object.entries(inputs).map(([n,el])=>[n,el.value.trim()]));if(data.due){data.due=docsFollowupDate(data.due);if(!data.due){notice.textContent='تحقق من الموعد الهجري.';save.disabled=false;return}}try{const repo=docsFieldworkRepo();if(record)await repo.advance(record.id,record.revision,{...data,date:hijriToday()});else await repo.create({...data,id:crypto.randomUUID(),studentId:key,date:hijriToday()});if(canEdit()&&dialog.open){dialog.close();await refreshCases()}}catch{if(canEdit()&&dialog.open)notice.textContent='تعذر الحفظ؛ تحقق من البيانات والصلاحية أو أعد فتح الحالة.'}finally{save.disabled=false}};
+ }
+ const create=document.createElement('button');create.type='button';create.textContent='إنشاء حالة مشفرة';create.onclick=()=>formFor(null);panel.append(create);
+ for(const record of records.filter(r=>r.studentId===key)){
+  const row=document.createElement('div'),desc=document.createElement('p'),edit=document.createElement('button');desc.textContent=record.reason+' · '+({new:'جديدة',active:'تحت المتابعة',referred:'محالة',closed:'مغلقة'}[record.status]||'غير معروفة');row.append(desc);if(record.status!=='closed'){edit.type='button';edit.textContent='تحديث الحالة';edit.onclick=()=>formFor(record);row.append(edit)}panel.append(row);
+ }
+
  const summary=document.createElement('p');summary.textContent='المفتوحة: '+view.student.open+' · المغلقة: '+view.student.closed;panel.append(summary);
  const labels={new:'جديدة',active:'تحت المتابعة',referred:'محالة',closed:'مغلقة'};
  for(const item of view.student.timeline){const p=document.createElement('p');p.textContent=item.date+' هـ · '+(labels[item.status]||'غير معروفة');panel.append(p)}
