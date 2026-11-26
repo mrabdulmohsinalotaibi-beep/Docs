@@ -21,3 +21,9 @@ test('workspace initialization keeps moved elements connected and avoids removed
  assert.ok(removed>0);
  assert.doesNotMatch(page.slice(removed),/dsGet\('ds(?:Account|Danger)'\)\.onclick/);
 });
+test('daily brief exposes actionable local follow-up metrics',()=>{
+ assert.match(page,/id='docsDailyBrief'/);
+ assert.match(page,/data-daily-metrics/);
+ assert.match(page,/docsRenderDailyBrief\(\)/);
+ assert.match(page,/المتابعات المحلية المحفوظة لهذا الحساب فقط/);
+});

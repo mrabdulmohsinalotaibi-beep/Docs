@@ -2089,6 +2089,19 @@ async function docsRenderFollowupCenter(){
   }
  }catch(e){if(token===docsFollowupCenterToken&&owner===activeUser){root.textContent='تعذر قراءة المتابعات المحلية: '+e.message;delete root.dataset.renderKey}}
 }
+async function docsRenderDailyBrief(){
+ const root=$('docsDailyBrief');if(!root)return;
+ const owner=activeUser,ownerDb=db;if(!owner||!ownerDb){root.replaceChildren();return}
+ try{
+  const rows=await docsFollowupRows(owner,ownerDb);if(owner!==activeUser||ownerDb!==db)return;
+  const today=hijriToday(),overdue=rows.filter(row=>docsFollowupStatus(row.plan,today)==='متأخرة'),dueToday=rows.filter(row=>row.plan.due===today&&row.plan.status!=='approved'),review=docsFollowupReviewQueue(rows,today).length;
+  root.querySelector('[data-daily-metrics]').replaceChildren();
+  for(const [label,value,kind] of [['متأخرة',overdue.length,'overdue'],['مستحقة اليوم',dueToday.length,'today'],['تحتاج مراجعة',review,'review']]){
+   const card=document.createElement('button');card.type='button';card.className='docs-work-status-card';card.dataset.dailyFilter=kind;const strong=document.createElement('strong'),small=document.createElement('small');strong.textContent=String(value);small.textContent=label;card.append(strong,small);card.onclick=()=>{workspaceGoto('home');const target=$('docsFollowupCenter');target?.scrollIntoView({behavior:'smooth',block:'start'});const details=target?.querySelector('details');if(details&&kind!=='today')details.open=true};root.querySelector('[data-daily-metrics]').append(card);
+  }
+  root.querySelector('[data-daily-note]').textContent='اليوم الهجري: '+today+' · المؤشرات مبنية على المتابعات المحلية المحفوظة لهذا الحساب فقط.';
+ }catch(error){root.querySelector('[data-daily-note]').textContent='تعذر تحديث لوحة اليوم: '+error.message}
+}
 async function docsOpenFollowup(source){
  if(!activeUser||!db||!source?.id||source.id!==docsFollowupKey(source.type,source.sourceId))return;
  const owner=activeUser,ownerDb=db;
@@ -2130,7 +2143,7 @@ async function docsOpenFollowup(source){
     const plan={id:source.id,type:source.type,sourceId:source.sourceId,title:source.title,studentKey:source.studentKey||'',studentName:source.studentName||'',...values,approvedHijri:final?hijriToday():'',updated:new Date().toISOString()};
     await docsCommitFollowup(ownerDb,{id:source.id,kind:'local-followup',plan,downloadedAt:plan.updated},stored?.updated||null);
     if(!current())return;
-    stored=plan;update();docsRenderFollowupCenter();if(studentActive)docsRenderStudentFollowups(studentActive);
+    stored=plan;update();docsRenderFollowupCenter();docsRenderDailyBrief();if(studentActive)docsRenderStudentFollowups(studentActive);
    }catch(e){if(current()){notice.textContent=e.message;save.disabled=false;approve.disabled=false}}
    finally{saving=false;if(current())close.disabled=false}
   };
@@ -2625,6 +2638,7 @@ function draw(){
  docsRenderWorkCenter(allOriginals);
  docsRenderMobileRecent();
  docsRenderFollowupCenter();
+ docsRenderDailyBrief();
  $('countAll').textContent=guidanceLoadedUser===activeUser?String(allOriginals.length):'—';
  $('countDone').textContent=guidanceLoadedUser===activeUser?String(allOriginals.filter(d=>/^مكتمل(?:ة)?$/.test(String(d.status||'').trim())).length):'—';
  $('countArchive').textContent=String(new Set(docs.filter(d=>d.status==='مؤرشف').map(d=>docsCanonicalKey(d))).size);
@@ -4461,10 +4475,11 @@ for(const [label,description,target,view] of [
  btn.dataset.mobileView=view||target;btn.onclick=()=>{workspaceGoto(target);if(view)openDocsView(view);if(view==='portfolio')activateDocsTab('portfolio');if(target==='students')refreshStudentDirectory().catch(()=>{})};
  cards.append(btn)
 }
-const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
+ const dailyBrief=document.createElement('section');dailyBrief.id='docsDailyBrief';dailyBrief.className='panel';dailyBrief.innerHTML='<h2>لوحة اليوم</h2><div data-daily-metrics class="docs-premium-home-stats"></div><p data-daily-note class="muted" role="status">سجّل الدخول لعرض أعمال اليوم.</p>';
+ const workCenter=document.createElement('section');workCenter.id='docsWorkCenter';workCenter.className='panel';
 workCenter.innerHTML='<h2>مركز الأعمال الموحد</h2><div data-work-metrics class="docs-premium-home-stats"></div><section id="docsWorkDetails" data-work-details class="docs-work-details" hidden aria-label="الأعمال حسب الحالة"></section><p data-work-note class="muted" role="status"></p><button type="button" class="btn">فتح المستندات والسجلات</button>';
 workCenter.querySelector('button').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
-workspacePages.home.append(originalHero,premiumMetrics,workCenter,latestHeading,cards);
+ workspacePages.home.append(originalHero,premiumMetrics,dailyBrief,workCenter,latestHeading,cards);
 /* DOCS_COMMAND_CENTER_START */
 const commandCenter=document.createElement('section');commandCenter.id='docsCommandCenter';commandCenter.className='panel';
 commandCenter.innerHTML='<h2>مركز القيادة التربوية</h2><p class="muted">انتقل إلى أعمالك الفعلية من مكان واحد. الأعداد التفصيلية تظهر في مراكزها الأصلية.</p><div data-command-links class="docs-command-grid"></div>';
@@ -4490,10 +4505,10 @@ for(const [title,description,page,id,filter] of [
 }
 /* DOCS_COMMAND_CENTER_END */
 
-const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
-docsRenderWorkCenter([]);
-document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.'});
-if(activeUser)refreshModernHome().catch(()=>{});
+ const followupCenter=document.createElement('section');followupCenter.id='docsFollowupCenter';workCenter.append(followupCenter);
+ docsRenderWorkCenter([]);
+ document.addEventListener('athat-docs-logout',()=>{docsWorkSelected='';docsWorkSourceRows=[];docsWorkRenderDetails();docsFollowupCenterToken++;followupCenter.replaceChildren();delete followupCenter.dataset.renderKey;$('docsStudentFollowups')?.replaceChildren();$('docsFollowupDialog')?.close();workCenter.querySelector('[data-work-metrics]').replaceChildren();workCenter.querySelector('[data-work-note]').textContent='سجّل الدخول لعرض أعمالك.';dailyBrief.querySelector('[data-daily-metrics]').replaceChildren();dailyBrief.querySelector('[data-daily-note]').textContent='سجّل الدخول لعرض أعمال اليوم.'});
+ if(activeUser){refreshModernHome().catch(()=>{});docsRenderDailyBrief().catch(()=>{})}
 // Recalculate cross-section totals after successfully committed restoration or device import.
 let docsRefreshRecoveredBusy=false,docsRefreshRecoveredAgain=false;
 async function docsRefreshAfterRecovery(){
@@ -4520,7 +4535,7 @@ document.addEventListener('athat-docs-data-restored',event=>{
  if(event.detail?.userId!==activeUser)return;
  docsRefreshAfterRecovery();
 });
-document.addEventListener('athat-docs-login',()=>{guidanceRecords=[];guidanceLoadedUser='';guidanceLoadError='';guidanceDocsShown=35;refreshModernHome().catch(()=>{});loadGuidanceRecords().catch(e=>console.warn('guidance_list_unavailable',e.message))});
+document.addEventListener('athat-docs-login',()=>{guidanceRecords=[];guidanceLoadedUser='';guidanceLoadError='';guidanceDocsShown=35;refreshModernHome().catch(()=>{});docsRenderDailyBrief().catch(()=>{});loadGuidanceRecords().catch(e=>console.warn('guidance_list_unavailable',e.message))});
 document.addEventListener('athat-docs-logout',()=>{guidanceRecords=[];guidanceLoadedUser='';guidanceLoadError='';guidanceDocsShown=35});
 
 const reportIntro=document.createElement('section');reportIntro.className='panel docs-report-center';
@@ -6785,7 +6800,7 @@ const moves=[];
 function mobileMove(node,destination){if(!node)return;const anchor=document.createComment('mobile-layout');node.before(anchor);moves.push({node,destination,anchor})}
 mobileMove(indicators,mobileHealth);
 mobileMove(followupCenter,mobileHome);
-mobileMove(premiumMetrics,mobileWork);mobileMove(workCenter,mobileWork);
+ mobileMove(premiumMetrics,mobileWork);mobileMove(dailyBrief,mobileWork);mobileMove(workCenter,mobileWork);
 mobileMove(commandCenter,mobileTools);mobileMove(latestHeading,mobileTools);mobileMove(cards,mobileTools);
 mobileMove($('docsStorageSummary'),mobileBackup);
 for(const key of ['portfolio','programs','support','review'])mobileMove(selector.querySelector('[data-view="'+key+'"]'),mobileMore);
