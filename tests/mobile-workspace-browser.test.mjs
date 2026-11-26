@@ -23,6 +23,11 @@ test('mobile workspace preserves routes, recent originals, account isolation and
   await page.locator('#docsOrangeHomeGrid').waitFor({state:'visible'});
   assert.equal(await page.locator('#docsOrangeHomeGrid button').count(),4);
   assert.equal(await page.locator('#docsOrangeSearch').isVisible(),true);
+  for(const route of ['home','documents','students','reports','messages']){assert.equal(await page.locator('#workspaceNav button[data-workspace="'+route+'"] svg:visible').count(),1)}
+  await page.locator('#workspaceNav [data-workspace="reports"]').click();
+  await page.locator('#workspaceNav [data-workspace="home"]').click();
+  assert.equal(await page.locator('#docsOrangeHomeGrid .docs-tile-arrow').count(),4);
+  assert.equal(await page.locator('#workspaceNav').evaluate(el=>getComputedStyle(el).position),'fixed');
   assert.equal(await page.locator('#docsOrangeCreate #newBtn').isVisible(),true);
   assert.equal(await page.locator('#workspace-home .hero h1').evaluate(el=>getComputedStyle(el).color),'rgb(24, 24, 24)');
   await page.setViewportSize({width:390,height:844});
@@ -40,6 +45,7 @@ test('mobile workspace preserves routes, recent originals, account isolation and
   await page.locator('#workspaceNav [data-workspace="documents"]').click();await page.locator('#docsMobileViews>summary').click();await page.locator('#docsViewSelector [data-view="programs"]').click();assert.equal(await page.locator('#docsProgramBundle').isVisible(),true);
   await page.locator('#docsViewSelector [data-view="works"]').click();await page.locator('#docsMobileArchiveFilter').selectOption('archive');assert.equal(await page.locator('[data-tab="archive"]').getAttribute('class'),'active');
   await page.setViewportSize({width:1280,height:900});await page.locator('#docsViewSelector > [data-view="programs"]').waitFor({state:'visible',timeout:5000});await page.locator('[data-tab="archive"]').waitFor({state:'visible',timeout:5000});assert.equal(await page.locator('#docsViewSelector [data-view="programs"]').isVisible(),true);assert.equal(await page.locator('[data-tab="archive"]').isVisible(),true);
+  await page.locator('#workspaceSettingsLink').click();await page.locator('#workspace-settings').waitFor({state:'visible'});await page.locator('#workspaceNav [data-workspace="reports"]').click();await page.locator('#workspace-reports').waitFor({state:'visible'});
   await page.setViewportSize({width:320,height:760});await page.locator('#workspaceNav [data-workspace="home"]').click();assert.equal(await page.locator('#docsMobileRecentList button').count(),1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'red',message:'الحفظ التلقائي متوقف على هذا الجهاز'}})));assert.equal(await page.locator('#docsLocalIndicator').getAttribute('data-state'),'neutral');
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'red',message:'تعذر حفظ المستند'}})));assert.equal(await page.locator('#docsLocalIndicator').getAttribute('data-state'),'red');assert.equal(await page.locator('#docsMobileHealthWarning').isVisible(),true);assert.equal(await page.locator('#docsMobileHealthWarning').getAttribute('role'),'status');assert.equal(await page.locator('#docsMobileHealth').getAttribute('open'),null,'background error must not shift the controls during a tap');await page.locator('#docsMobileHealth>summary').click();assert.equal(await page.locator('#docsLocalIndicator').isVisible(),true);
