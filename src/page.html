@@ -666,7 +666,7 @@ body.docs-pdf-modal-open{overflow:hidden}
  #appMain{padding-right:225px!important;position:relative}
  #workspaceNav{position:fixed!important;right:max(12px,calc((100vw - 1600px)/2 + 10px));top:95px;width:195px;max-height:calc(100dvh - 115px);overflow-y:auto;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:7px!important;margin:0!important;padding:14px 10px!important;border:1px solid #EAE3D5;border-radius:17px;background:#FFFFFF;box-shadow:0 5px 18px #003d5812;z-index:40}
  #workspaceNav button{text-align:right;padding:13px 11px!important}
- #workspaceSettingsLink{position:fixed;right:max(20px,calc((100vw - 1600px)/2 + 18px));top:360px;z-index:42;width:178px}
+ #workspaceSettingsLink{position:static!important;width:auto!important;inset:auto!important}
 }
 @media screen and (max-width:1119px){
  #workspaceNav{position:fixed!important;bottom:0;left:0;right:0;top:auto!important;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px!important;margin:0!important;padding:8px 8px max(9px,env(safe-area-inset-bottom))!important;background:#ffffff!important;border-top:1px solid #EAE3D5;box-shadow:0 -4px 16px #00566c1a;z-index:150}
@@ -7105,5 +7105,9 @@ body[data-docs-theme="terracotta"] #workspace-home .hero{border:1.5px solid #252
 }
 @media(hover:hover) and (pointer:fine){.docs-orange-tile:hover{border-color:#a64b00;background:#fff9f1}}
 @media(prefers-reduced-motion:reduce){.docs-orange-tile,#docsOrangeCreate #newBtn{transition:none!important;transform:none!important}}
+}
+@media screen and (min-width:1120px){
+#workspaceSettingsLink,#workspaceAdminLink{position:static!important;inset:auto!important;width:auto!important;max-width:100%!important;margin:0 0 12px 8px!important}
+#workspaceNav button[data-workspace]{justify-content:flex-start;min-height:48px}
 }
 </style></body></html>
