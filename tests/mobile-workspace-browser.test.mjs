@@ -23,7 +23,9 @@ test('mobile workspace preserves routes, recent originals, account isolation and
   await page.locator('#docsOrangeHomeGrid').waitFor({state:'visible'});
   assert.equal(await page.locator('#docsOrangeHomeGrid button').count(),4);
   assert.equal(await page.locator('#docsOrangeSearch').isVisible(),true);
-  assert.equal(await page.locator('#workspaceNav button[data-workspace] svg').count(),5);
+  for(const route of ['home','documents','students','reports','messages']){assert.equal(await page.locator('#workspaceNav button[data-workspace="'+route+'"] svg:visible').count(),1)}
+  await page.locator('#workspaceNav [data-workspace="reports"]').click();
+  await page.locator('#workspaceNav [data-workspace="home"]').click();
   assert.equal(await page.locator('#docsOrangeHomeGrid .docs-tile-arrow').count(),4);
   assert.equal(await page.locator('#workspaceNav').evaluate(el=>getComputedStyle(el).position),'fixed');
   assert.equal(await page.locator('#docsOrangeCreate #newBtn').isVisible(),true);

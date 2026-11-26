@@ -6770,7 +6770,7 @@ const orangeCreateAnchor=document.createComment('orange-create-original');$('new
 const orangeHeroArt=document.createElement('div');orangeHeroArt.id='docsOrangeHeroArt';orangeHeroArt.setAttribute('aria-hidden','true');orangeHeroArt.innerHTML='<svg viewBox="0 0 140 112" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="70" cy="56" r="50" fill="#FFE2BE"/><rect x="30" y="21" width="64" height="78" rx="9" fill="#fff" stroke="#181818" stroke-width="2" transform="rotate(-8 30 21)"/><rect x="52" y="14" width="57" height="78" rx="8" fill="#fff" stroke="#181818" stroke-width="2"/><path d="M64 32h30M64 43h30M64 54h21" stroke="#181818" stroke-width="2.5" stroke-linecap="round"/><circle cx="105" cy="79" r="20" fill="#F28A16" stroke="#181818" stroke-width="2"/><path d="m96 79 6 6 11-13" stroke="#181818" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';originalHero.append(orangeHeroArt);
 mobileHome.append(orangeSearch,orangeCreate);
 const orangeIcon=(pathData)=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',pathData);svg.append(path);return svg};
-const orangeNavIcons={home:'M3 10l9-7 9 7v10h-6v-6H9v6H3z',documents:'M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6',students:'M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8v6 M16 11h6',reports:'M4 3v17h17 M8 16v-5 M13 16V6 M18 16v-7',messages:'M3 4h18v13H9l-6 4z M7 9h10 M7 13h6'};
+const orangeNavIcons={home:'M3 10l9-7 9 7v10h-6v-6H9v6H3z',documents:'M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6',students:'M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8v6 M16 11h6',reports:'M4 3v17h17 M8 16v-5 M13 16V6 M18 16v-7',messages:'M3 4h18v13H9l-6 4z M7 9h10 M7 13h6',settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M19 5l-2 2 M7 17l-2 2'};
 for(const button of workspaceNav.querySelectorAll('button[data-workspace]')){const d=orangeNavIcons[button.dataset.workspace];if(!d)continue;const label=document.createElement('span');label.textContent=button.textContent;button.replaceChildren(orangeIcon(d),label)}
 for(const button of orangeHomeGrid.querySelectorAll('button')){const arrow=orangeIcon('m14 6-6 6 6 6');arrow.classList.add('docs-tile-arrow');button.append(arrow)}
 
@@ -7074,9 +7074,11 @@ body[data-docs-theme="terracotta"]{--docs-ink:#181818;--docs-soft:#fff7ed;--docs
 body[data-docs-theme="terracotta"] #appMain :is(.panel,.doc,.template){border-color:var(--docs-border)!important}
 body[data-docs-theme="terracotta"] #appMain :is(h2,h3){letter-spacing:0;line-height:1.55}
 #workspaceNav button[data-workspace] svg{width:23px;height:23px;flex:none}
-#workspaceNav button[data-workspace]{display:flex!important;align-items:center;justify-content:center;gap:7px}
+#workspaceNav button[data-workspace]:not([hidden]){display:flex!important;align-items:center;justify-content:center;gap:7px}
 #appMain :is(button,input,select,textarea,summary):focus-visible,#workspaceNav button:focus-visible{outline:2px solid #a64b00!important;outline-offset:3px}
 @media(max-width:1119px){
+#workspaceSettingsLink,#workspaceAdminLink{position:static!important;inset:auto!important;width:auto!important;max-width:100%!important;margin:0 0 10px 6px!important}
+#workspaceNav [hidden],#workspaceAdminLink[hidden]{display:none!important}
 body[data-docs-theme="terracotta"] #workspace-home .hero{border:1.5px solid #25211e!important;border-radius:22px!important;background:linear-gradient(135deg,#fff7ed,#ffe5c8)!important;padding:clamp(16px,3vw,25px)!important}
 #docsOrangeSearch{border-color:#d9c6b2;background:#fff;border-radius:16px;min-height:52px;box-shadow:0 2px 7px #542a0610}
 #docsOrangeSearch input::placeholder{color:#6c6258;opacity:1}
@@ -7089,7 +7091,7 @@ body[data-docs-theme="terracotta"] #workspace-home .hero{border:1.5px solid #252
 .docs-orange-tile small{font-size:12px;line-height:1.65;color:#59534c}
 #docsOrangeCreate #newBtn{background:#f28a16!important;color:#181818!important;min-height:54px;border-radius:16px!important;box-shadow:0 3px 0 #c66a0c!important}
 #docsOrangeCreate #newBtn:active{transform:translateY(1px);box-shadow:none!important}
-#workspaceNav{position:fixed!important;top:auto!important;bottom:0!important;left:0!important;right:0!important;width:100%!important;box-sizing:border-box;grid-template-columns:repeat(5,minmax(0,1fr))!important;padding:7px 6px calc(7px + env(safe-area-inset-bottom))!important;gap:4px!important;border-top:1px solid #e0cfc0!important;box-shadow:0 -5px 20px #4220000c!important}
+#workspaceNav{position:fixed!important;top:auto!important;bottom:0!important;left:0!important;right:0!important;width:100%!important;box-sizing:border-box;grid-template-columns:repeat(6,minmax(0,1fr))!important;padding:7px 6px calc(7px + env(safe-area-inset-bottom))!important;gap:4px!important;border-top:1px solid #e0cfc0!important;box-shadow:0 -5px 20px #4220000c!important}
 #workspaceNav button[data-workspace]{flex-direction:column;gap:4px;min-height:58px!important;min-width:0;font-size:11px!important;padding:6px 2px!important;border-radius:12px!important}
 #workspaceNav button[data-workspace] span{line-height:1.4;white-space:nowrap}
 #workspaceNav button[data-workspace][aria-current=page]{background:#ffe4c5!important;color:#943e00!important;font-weight:800}
