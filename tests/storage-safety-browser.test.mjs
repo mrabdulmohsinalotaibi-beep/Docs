@@ -37,6 +37,7 @@ test('failed close preserves edits; successful save persists; backup history is 
   await page.locator('#appMain').waitFor({state:'visible'});
   assert.deepEqual(errors,[]);
   assert.equal(await page.locator('#docsStartupNotice').isVisible(),false,await page.locator('#docsStartupNotice').textContent());
+  await page.locator('#docsMobileBackup > summary').click();
   await page.locator('#docsStorageSummary').waitFor({state:'visible'});
   assert.match(await page.locator('#docsBackupExportStatus').innerText(),/لا يوجد ملف نسخة/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'summary must fit a mobile viewport');
@@ -86,6 +87,7 @@ test('failed close preserves edits; successful save persists; backup history is 
   await page.screenshot({path:'/tmp/docs-storage-home-mobile.png',fullPage:true});
   accountId=secondId;
   await page.reload({waitUntil:'load'});
+  await page.locator('#docsMobileBackup > summary').click();
   await page.locator('#docsStorageSummary').waitFor({state:'visible'});
   await page.waitForFunction(()=>document.getElementById('docsBackupExportStatus').textContent.includes('لا يوجد ملف نسخة'));
   assert.deepEqual(errors,[]);
