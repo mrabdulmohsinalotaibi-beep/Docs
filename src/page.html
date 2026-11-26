@@ -6775,12 +6775,14 @@ for(const [key,title,description,pathData] of [
 }
 
 const heroTitle=originalHero.querySelector('h1'),heroTitleText=heroTitle.textContent;
+let lastMobileWorkspaceMode=null;
 function applyMobileWorkspace(){
+ const mode=mobileMedia.matches;if(lastMobileWorkspaceMode===mode)return;lastMobileWorkspaceMode=mode;
  for(const {node,destination,anchor} of moves){if(mobileMedia.matches)destination.append(node);else anchor.after(node)}
  if(mobileMedia.matches){mobileHome.prepend(originalHero);originalHero.after(orangeHomeGrid,followupCenter,mobileRecent,mobileWork,mobileTools,mobileBackup);heroTitle.textContent='مرحبًا بك في مستندات الذات'}else heroTitle.textContent=heroTitleText;
  docsRenderMobileRecent();
 }
-mobileMedia.addEventListener('change',applyMobileWorkspace);applyMobileWorkspace();
+mobileMedia.addEventListener('change',applyMobileWorkspace);window.addEventListener('resize',applyMobileWorkspace);applyMobileWorkspace();
 document.addEventListener('athat-docs-logout',()=>{mobileRecent.querySelector('#docsMobileRecentList').replaceChildren();for(const detail of [mobileHealth,mobileWork,mobileTools,mobileBackup,mobileMore])detail.open=false;healthWarning.hidden=true});
 /* DOCS_MOBILE_WORKSPACE_END */
 
