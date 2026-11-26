@@ -19,6 +19,14 @@ test('mobile workspace preserves routes, recent originals, account isolation and
  try{
   const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'load'});await page.locator('#appMain').waitFor({state:'visible'});
+  await page.setViewportSize({width:960,height:1200});
+  await page.locator('#docsOrangeHomeGrid').waitFor({state:'visible'});
+  assert.equal(await page.locator('#docsOrangeHomeGrid button').count(),4);
+  assert.equal(await page.locator('#docsOrangeSearch').isVisible(),true);
+  assert.equal(await page.locator('#docsOrangeCreate #newBtn').isVisible(),true);
+  assert.equal(await page.locator('#workspace-home .hero h1').evaluate(el=>getComputedStyle(el).color),'rgb(24, 24, 24)');
+  await page.setViewportSize({width:390,height:844});
+
   await page.evaluate(async()=>{
    const db=await new Promise((r,j)=>{const q=indexedDB.open('athat-docs-unified-v2-usr_mobile_fixture_a');q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
    await new Promise((r,j)=>{const tx=db.transaction('documents','readwrite');tx.objectStore('documents').put({id:'mobile-recent-original',title:'مسودة حديثة للحساب الأول',kind:'محضر اجتماع',body:'محتوى تجريبي',fields:{},photos:[],signers:[],status:'مسودة',created:'2026-11-25T09:00:00Z',updated:'2026-11-26T09:00:00Z'});tx.oncomplete=r;tx.onerror=()=>j(tx.error)});db.close();

@@ -8,7 +8,7 @@ assert.ok(match,'Embedded Service Worker source exists');
 const sw=JSON.parse(match[1]);
 const page=JSON.parse(worker.match(/^const PAGE=("(?:\\.|[^"\\])*");/)[1]);
 test('offline shell installs only when all executable assets are cached',()=>{
- assert.match(sw,/const CACHE_NAME='athat-docs-shell-v26';/);
+ assert.match(sw,/const CACHE_NAME='athat-docs-shell-v27';/);
  assert.doesNotMatch(sw,/const CACHE_NAME='athat-docs-shell-v24';/);
  assert.match(sw,/OFFLINE_CORE_MISSING/);
  assert.match(sw,/Promise\.all\(\['\/', '\/peer-sync\.js', '\/auto-sync\.js'\]/);

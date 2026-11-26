@@ -6720,7 +6720,7 @@ for(const [id,label,accessible,pathData] of docsTabItems){
 /* DOCS_SIX_TAB_NAV_END */
 
 /* DOCS_MOBILE_WORKSPACE_START: move existing controls; never clone or mutate user records. */
-const mobileMedia=matchMedia('(max-width:650px)');
+const mobileMedia=matchMedia('(max-width:1119px)');
 const mobileHome=workspacePages.home;
 function mobileDisclosure(id,label){const detail=document.createElement('details');detail.id=id;detail.className='docs-mobile-disclosure';const summary=document.createElement('summary');summary.textContent=label;detail.append(summary);return detail}
 const mobileHealth=mobileDisclosure('docsMobileHealth','الحفظ والمزامنة');
@@ -6762,6 +6762,14 @@ for(const [label,description,target,view,pathData] of [
  orangeHomeGrid.append(b);
 }
 mobileHome.append(orangeHomeGrid);
+const orangeSearch=document.createElement('form');orangeSearch.id='docsOrangeSearch';orangeSearch.className='docs-mobile-only';orangeSearch.setAttribute('role','search');
+orangeSearch.innerHTML='<input type="search" aria-label="البحث في مستنداتك" placeholder="ابحث في مستنداتك وسجلاتك"><button type="submit" aria-label="بحث"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg></button>';
+orangeSearch.onsubmit=e=>{e.preventDefault();workspaceGoto('documents');openDocsView('works');const field=$('search');field.value=orangeSearch.querySelector('input').value;field.dispatchEvent(new Event('input',{bubbles:true}));field.focus()};
+const orangeCreate=document.createElement('div');orangeCreate.id='docsOrangeCreate';orangeCreate.className='docs-mobile-only';
+const orangeCreateAnchor=document.createComment('orange-create-original');$('newBtn').before(orangeCreateAnchor);
+const orangeHeroArt=document.createElement('div');orangeHeroArt.id='docsOrangeHeroArt';orangeHeroArt.setAttribute('aria-hidden','true');orangeHeroArt.innerHTML='<svg viewBox="0 0 140 112" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="70" cy="56" r="50" fill="#FFE2BE"/><rect x="30" y="21" width="64" height="78" rx="9" fill="#fff" stroke="#181818" stroke-width="2" transform="rotate(-8 30 21)"/><rect x="52" y="14" width="57" height="78" rx="8" fill="#fff" stroke="#181818" stroke-width="2"/><path d="M64 32h30M64 43h30M64 54h21" stroke="#181818" stroke-width="2.5" stroke-linecap="round"/><circle cx="105" cy="79" r="20" fill="#F28A16" stroke="#181818" stroke-width="2"/><path d="m96 79 6 6 11-13" stroke="#181818" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';originalHero.append(orangeHeroArt);
+mobileHome.append(orangeSearch,orangeCreate);
+
 for(const [key,title,description,pathData] of [
  ['documents','ملفاتي','المستندات والسجلات والقوالب المحفوظة','M3 7h7l2 2h9v11H3z M3 7V4h7l2 3'],
  ['reports','التقارير والتحليلات','استعرض مؤشرات أعمالك والتقارير الفعلية','M4 20h17 M7 17v-5 M12 17V8 M17 17V4'],
@@ -6779,7 +6787,7 @@ let lastMobileWorkspaceMode=null;
 function applyMobileWorkspace(){
  const mode=mobileMedia.matches;if(lastMobileWorkspaceMode===mode)return;lastMobileWorkspaceMode=mode;
  for(const {node,destination,anchor} of moves){if(mobileMedia.matches)destination.append(node);else anchor.after(node)}
- if(mobileMedia.matches){mobileHome.prepend(originalHero);originalHero.after(orangeHomeGrid,followupCenter,mobileRecent,mobileWork,mobileTools,mobileBackup);heroTitle.textContent='مرحبًا بك في مستندات الذات'}else heroTitle.textContent=heroTitleText;
+ if(mobileMedia.matches){mobileHome.prepend(originalHero);originalHero.after(orangeSearch,orangeHomeGrid,orangeCreate,followupCenter,mobileRecent,mobileWork,mobileTools,mobileBackup);orangeCreate.append($('newBtn'));heroTitle.textContent='مرحبًا بك في مستندات الذات'}else {orangeCreateAnchor.after($('newBtn'));heroTitle.textContent=heroTitleText;}
  docsRenderMobileRecent();
 }
 mobileMedia.addEventListener('change',applyMobileWorkspace);window.addEventListener('resize',applyMobileWorkspace);applyMobileWorkspace();
@@ -6924,7 +6932,7 @@ function docsIndicatorState(state,message){
 .docs-mobile-only,.docs-mobile-disclosure{display:none}
 .docs-live-indicator[data-state=neutral] i,#docsSettingsHub .ds-health[data-state=neutral] .ds-dot{background:#817867;box-shadow:none}
 #docsMobileHealthWarning{color:#a52b25;font-weight:700}
-@media screen and (max-width:650px){
+@media screen and (max-width:1119px){
  body:has(#appMain:not([hidden])) header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;padding:10px 12px!important;align-items:center}
  body:has(#appMain:not([hidden])) header.top .logo{width:40px!important;height:40px!important;padding:2px!important}
  body:has(#appMain:not([hidden])) header.top .brand{gap:7px}
@@ -7022,4 +7030,37 @@ body[data-docs-theme="terracotta"] #appMain :is(.docs-orange-page-intro){backgro
 @media(max-width:650px){#workspace-documents #docsViewSelector{gap:8px}#workspace-documents .doc .info{min-width:0}.docs-orange-page-intro h2{font-size:20px}.docs-orange-page-intro p{font-size:12px}#workspace-reports .metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}#workspace-reports .metrics article{min-width:0}#workspace-reports .docs-reliable-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}.ds-overview-actions{grid-template-columns:1fr!important}}
 }
 @media print{.docs-orange-page-intro{display:none!important}}
+</style><style id="docs-orange-dashboard-v4">
+@media screen {
+body[data-docs-theme="terracotta"]{background:#fffaf4!important;color:#181818!important}
+body[data-docs-theme="terracotta"] #workspace-home .hero h1,body[data-docs-theme="terracotta"] #workspace-home .hero p{color:#181818!important}
+body[data-docs-theme="terracotta"] #workspace-home .hero p{opacity:1!important}
+#docsOrangeSearch,#docsOrangeCreate,#docsOrangeHeroArt{display:none}
+@media(max-width:1119px){
+body[data-docs-theme="terracotta"] header.top{padding:12px max(14px,env(safe-area-inset-right))!important}
+body[data-docs-theme="terracotta"] #appMain{max-width:900px;margin-inline:auto;padding-inline:16px!important}
+body[data-docs-theme="terracotta"] #workspace-home .hero{position:relative;display:grid!important;grid-template-columns:minmax(0,1fr) minmax(82px,27%);align-items:center;min-height:0!important;padding:18px!important;background:#fff0df!important;border:1.5px solid #181818!important;border-radius:20px!important;gap:7px 12px}
+body[data-docs-theme="terracotta"] #workspace-home .hero h1{grid-column:1;font-size:clamp(19px,3vw,27px)!important;line-height:1.5;margin:0!important}
+body[data-docs-theme="terracotta"] #workspace-home .hero p{display:block!important;grid-column:1;font-size:13px!important;line-height:1.7;margin:0}
+#docsOrangeHeroArt{display:block;grid-column:2;grid-row:1/4;align-self:center}#docsOrangeHeroArt svg{width:100%;height:auto;display:block}
+#workspace-home .hero .actions{display:none!important}
+#docsOrangeSearch{display:flex;align-items:center;border:1px solid #222;border-radius:14px;background:#fff;margin:14px 0;overflow:hidden;min-height:48px}
+#docsOrangeSearch input{flex:1;min-width:0;border:0;background:transparent;padding:12px;color:#181818;font:inherit}
+#docsOrangeSearch button{border:0;background:#fff;color:#181818;padding:10px;display:grid;place-items:center;min-height:46px;min-width:48px}
+#docsOrangeHomeGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.docs-orange-tile{min-width:0;min-height:128px;border:1.5px solid #181818;border-radius:18px;background:#fff;color:#181818;padding:15px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;text-align:start;font:inherit;box-shadow:none}
+.docs-orange-tile svg{width:42px;height:42px;color:#a64b00;background:#fff0de;padding:7px;border-radius:12px}
+.docs-orange-tile strong{font-size:16px;line-height:1.4}.docs-orange-tile small{font-size:12px;color:#555;line-height:1.55}
+#docsOrangeCreate{display:block;margin:12px 0 20px}#docsOrangeCreate #newBtn{width:100%;min-height:52px;justify-content:center;background:#e87900!important;color:#181818!important;border:1.5px solid #181818!important;border-radius:14px!important;box-shadow:none!important;font-size:16px;font-weight:800}
+body[data-docs-theme="mono"] #docsOrangeCreate #newBtn{background:#222!important;color:white!important}
+#workspaceSettingsLink,#workspaceAdminLink{display:inline-flex!important;align-items:center;min-height:38px!important;padding:8px 12px!important;margin:0 0 10px 6px!important;background:#fff!important;color:#181818!important;border:1px solid #222!important;border-radius:12px!important;box-shadow:none!important;font-size:12px!important}
+#workspaceAdminLink[hidden]{display:none!important}
+#workspaceNav{grid-template-columns:repeat(6,minmax(0,1fr))!important;background:#fff!important;z-index:150!important}
+#workspaceNav button[data-workspace]{background:#fff!important;border:0!important;color:#181818!important;box-shadow:none!important}
+#workspaceNav button[data-workspace][aria-current=page]{background:#ffe3c2!important;color:#943e00!important}
+#docsMobileWork,#docsMobileTools,#docsMobileBackup{border-color:#222!important;border-radius:15px}
+#docsFollowupCenter{border-color:#222!important}
+}
+}
+@media print{#docsOrangeHeroArt,#docsOrangeSearch,#docsOrangeCreate{display:none!important}}
 </style></body></html>
