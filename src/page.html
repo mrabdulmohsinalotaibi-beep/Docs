@@ -6711,7 +6711,7 @@ const mobileMedia=matchMedia('(max-width:650px)');
 const mobileHome=workspacePages.home;
 function mobileDisclosure(id,label){const detail=document.createElement('details');detail.id=id;detail.className='docs-mobile-disclosure';const summary=document.createElement('summary');summary.textContent=label;detail.append(summary);return detail}
 const mobileHealth=mobileDisclosure('docsMobileHealth','الحفظ والمزامنة');
-const healthWarning=document.createElement('span');healthWarning.id='docsMobileHealthWarning';healthWarning.hidden=true;healthWarning.textContent=' · تحتاج مراجعة';mobileHealth.querySelector('summary').append(healthWarning);
+const healthWarning=document.createElement('span');healthWarning.id='docsMobileHealthWarning';healthWarning.hidden=true;healthWarning.setAttribute('role','status');healthWarning.setAttribute('aria-live','polite');healthWarning.textContent=' · تحتاج مراجعة';mobileHealth.querySelector('summary').append(healthWarning);
 const indicators=$('docsLiveIndicators'),healthAnchor=document.createComment('mobile-health');indicators.before(healthAnchor);healthAnchor.after(mobileHealth);
 const mobileWork=mobileDisclosure('docsMobileWork','حالات الأعمال وملخص الحساب');
 const mobileTools=mobileDisclosure('docsMobileTools','كل أدواتك');
@@ -6758,7 +6758,7 @@ function docsIndicatorState(state,message){
  const inactive=['الحفظ التلقائي متوقف على هذا الجهاز','الحفظ التلقائي معطل على هذا الجهاز','غير متصل','بانتظار جهاز آخر متصل','الجهاز الآخر غير متصل','الاتصال متوقف'];
  return state==='red'&&inactive.includes(String(message||''))?'neutral':(['green','yellow','red','neutral'].includes(state)?state:'yellow');
 }
- function set(el,state,label,message){if(!el)return;el.dataset.state=docsIndicatorState(state,message);el.querySelector('span').textContent=label;el.title=label;const health=document.getElementById('docsMobileHealth'),warning=document.getElementById('docsMobileHealthWarning');const failed=[local,peer].some(node=>node?.dataset.state==='red');if(warning)warning.hidden=!failed;if(health&&failed)health.open=true}
+ function set(el,state,label,message){if(!el)return;el.dataset.state=docsIndicatorState(state,message);el.querySelector('span').textContent=label;el.title=label;const warning=document.getElementById('docsMobileHealthWarning');const failed=[local,peer].some(node=>node?.dataset.state==='red');if(warning)warning.hidden=!failed}
  function show(){root.hidden=!document.getElementById('sessionPanel')||document.getElementById('sessionPanel').hidden}
  const observer=new MutationObserver(show);const panel=document.getElementById('sessionPanel');if(panel)observer.observe(panel,{attributes:true,attributeFilter:['hidden']});show();
  window.addEventListener('docs:local-status',e=>{const d=e.detail||{};set(local,d.state||'red','الحفظ بالجهاز: '+(d.message||'متوقف'),d.message)});
