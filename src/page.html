@@ -6682,6 +6682,27 @@ gradesReportLink.className='panel grade-reports-link';
 gradesReportLink.setAttribute('aria-label','تقارير التحصيل الدراسي');
 gradesReportLink.innerHTML='<h3>تقارير التحصيل الدراسي</h3><p class="muted">النتائج المحفوظة محليًا في تحليل نتائج الطلاب؛ اختر الفترة ثم افتح المعاينة أو اطبع تقرير A4.</p><div class="grade-reports-actions"><select id="gradeReportsSaved" aria-label="اختر نتائج التحصيل"><option value="">تحميل النتائج المحفوظة</option></select><button id="gradeReportsRefresh" type="button">تحديث القائمة</button><button id="gradeReportsOpen" type="button">فتح تحليل النتائج</button><button id="gradeReportsPrint" type="button">معاينة وطباعة A4</button></div><p id="gradeReportsStatus" class="muted" role="status"></p>';
 reportIntro.append(gradesReportLink);
+const attendancePreview=document.createElement('section');attendancePreview.className='panel';attendancePreview.innerHTML='<h3>معاينة استيراد المواظبة</h3><p class="muted">ملف CSV أو XLSX بالأعمدة: رقم الطالب، التاريخ الهجري، النوع (غياب أو تأخر). المعاينة محلية فقط ولا تعتمد أي سجل.</p><label>اختيار الملف <input type="file" accept=".csv,.xlsx" id="docsAttendanceFile"></label><p role="status" id="docsAttendancePreviewStatus"></p>';
+reportIntro.append(attendancePreview);
+let attendancePreviewToken=0;
+document.addEventListener('athat-docs-logout',()=>{attendancePreviewToken++;attendancePreview.querySelector('input').value='';attendancePreview.querySelector('[role=status]').textContent=''});
+attendancePreview.querySelector('input').onchange=async event=>{
+ const owner=activeUser,ownerDb=db,token=++attendancePreviewToken,file=event.target.files?.[0],status=attendancePreview.querySelector('[role=status]');event.target.value='';
+ const current=()=>owner&&owner===activeUser&&ownerDb===db&&token===attendancePreviewToken;
+ if(!file||!current())return;
+ status.textContent='جارٍ فحص الملف محليًا…';
+ try{
+  if(file.size>5*1024*1024)throw Error('الحد الأقصى 5 ميجابايت');
+  const rows=/\.xlsx$/i.test(file.name)?await readStudentXlsx(file):parseStudentCsv(await file.text());
+  if(!current())return;
+  const headers=rows[0]?.map(v=>String(v).trim())||[],columns=['رقم الطالب','التاريخ الهجري','النوع'].map(h=>headers.indexOf(h));
+  if(columns.some(i=>i<0))throw Error('تحقق من عناوين الأعمدة الثلاثة');
+  if(!studentIndex.length)throw Error('حدّث دليل الطلاب أولًا');
+  const result=window.docsFieldwork.previewAttendance(rows.slice(1).filter(row=>row.some(v=>String(v??'').trim())).map(row=>({studentNumber:row[columns[0]],date:row[columns[1]],kind:row[columns[2]]})),studentIndex,[]);
+  if(current())status.textContent='صالحة مبدئيًا: '+result.counts.candidate+' · مكررة داخل الملف: '+result.counts.duplicate+' · غير صالحة: '+result.counts.invalid+' . لم تُطابق الوقائع مع السجلات الأصلية ولم تُحفظ أي بيانات.';
+ }catch(error){if(current())status.textContent=error.message}
+};
+
 async function gradeReportsRefresh(){
  const select=gradesReportLink.querySelector('#gradeReportsSaved'),status=gradesReportLink.querySelector('#gradeReportsStatus');
  try{
