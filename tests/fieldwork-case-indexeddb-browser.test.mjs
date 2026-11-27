@@ -8,8 +8,9 @@ test('native IndexedDB persists cases and isolates accounts and concurrent revis
  try {
   const page=await browser.newPage();
   const engine=await readFile(new URL('../src/fieldwork-case-engine.mjs',import.meta.url),'utf8');
+  const attendance=await readFile(new URL('../src/fieldwork-attendance-import.mjs',import.meta.url),'utf8');
   const repository=await readFile(new URL('../src/fieldwork-case-repository.mjs',import.meta.url),'utf8');
-  await page.route('https://fieldwork.test/**',route=>{const path=new URL(route.request().url()).pathname;return route.fulfill({contentType:path.endsWith('.mjs')?'text/javascript':'text/html',body:path==='/engine.mjs'?engine:path==='/repository.mjs'?repository.replace('./fieldwork-case-engine.mjs','./engine.mjs'):'<!doctype html><title>Native IndexedDB test</title>'})});
+  await page.route('https://fieldwork.test/**',route=>{const path=new URL(route.request().url()).pathname;return route.fulfill({contentType:path.endsWith('.mjs')?'text/javascript':'text/html',body:path==='/fieldwork-attendance-import.mjs'?attendance:path==='/engine.mjs'?engine:path==='/repository.mjs'?repository.replace('./fieldwork-case-engine.mjs','./engine.mjs'):'<!doctype html><title>Native IndexedDB test</title>'})});
   await page.goto('https://fieldwork.test/');
   const result=await page.evaluate(async()=>{
    const {caseRepository}=await import('/repository.mjs');
