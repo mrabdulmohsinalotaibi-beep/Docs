@@ -4010,7 +4010,11 @@ async function docsFieldworkUnlock(password){
   await new Promise((ok,no)=>{const tx=database.transaction('cloudSnapshots','readwrite');const store=tx.objectStore('cloudSnapshots');const req=store.get(id);req.onsuccess=()=>{if(!current()||req.result){tx.abort();return}store.add({id,kind:'local-fieldwork-config',owner,salt:cipher.salt,check})};tx.oncomplete=ok;tx.onabort=()=>no(Error('تغيرت إعدادات التشفير'));tx.onerror=()=>no(tx.error)});
  }
  if(!current())throw Error('تغير الحساب');
- docsFieldworkSession={accountId:owner,database,caseCipher:cipher,canApprove:false};docsFieldworkReportRefresh().catch(()=>{});
+ // Only a fresh authenticated server identity may authorize approval.
+ let canApprove=false;
+ if(navigator.onLine){try{const auth=await docsAuth('me',null,'GET');canApprove=auth?.user?.id===owner&&auth.user.role==='owner'&&auth.user.status==='active'}catch{}}
+ if(!current())throw Error('تغير الحساب');
+ docsFieldworkSession={accountId:owner,database,caseCipher:cipher,canApprove};docsFieldworkReportRefresh().catch(()=>{});
 }
 async function docsFieldworkRenderStudent(panel,key,isCurrent){
  const valid=()=>isCurrent()&&panel.isConnected;
@@ -6702,19 +6706,32 @@ attendancePreview.querySelector('input').onchange=async event=>{
   const headers=rows[0]?.map(v=>String(v).trim())||[],columns=['رقم الطالب','التاريخ الهجري','النوع'].map(h=>headers.indexOf(h));
   if(columns.some(i=>i<0))throw Error('تحقق من عناوين الأعمدة الثلاثة');
   if(!studentIndex.length)throw Error('حدّث دليل الطلاب أولًا');
-  const result=window.docsFieldwork.previewAttendance(rows.slice(1).filter(row=>row.some(v=>String(v??'').trim())).map(row=>({studentNumber:row[columns[0]],date:row[columns[1]],kind:row[columns[2]]})),studentIndex,[]);
-  if(current())status.textContent='صالحة مبدئيًا: '+result.counts.candidate+' · مكررة داخل الملف: '+result.counts.duplicate+' · غير صالحة: '+result.counts.invalid+' . لم تُطابق الوقائع مع السجلات الأصلية ولم تُحفظ أي بيانات.';
+  const source=await docsOfflineFetch('/api/guidance/records');
+  if(!current())return;
+  if(!Array.isArray(source.records)||source.records.length>=1000)throw Error('لا يمكن تأكيد اكتمال فهرس المواظبة؛ الحفظ متوقف لتجنب التكرار.');
+  const existing=[];
+  for(const item of source.records.filter(r=>r.source_table==='attendance')){
+   if(!current())return;
+   const detail=await docsOfflineFetch('/api/guidance/record?type=attendance&id='+encodeURIComponent(item.source_record_id));
+   const record=detail.record;
+   const kind=record?.fields?.['نوع الواقعة'];
+   if(!record?.student_key||!record.date_hijri||!kind)throw Error('توجد واقعة أصلية بلا بيانات مطابقة كافية؛ الحفظ متوقف.');
+   existing.push({studentId:record.student_key,date:record.date_hijri,kind});
+  }
+  if(!current())return;
+  const result=window.docsFieldwork.previewAttendance(rows.slice(1).filter(row=>row.some(v=>String(v??'').trim())).map(row=>({studentNumber:row[columns[0]],date:row[columns[1]],kind:row[columns[2]]})),studentIndex,existing);
+  if(current())status.textContent='صالحة مبدئيًا: '+result.counts.candidate+' · مكررة داخل الملف: '+result.counts.duplicate+' · غير صالحة: '+result.counts.invalid+' · موجودة في الفهرس المتاح: '+result.counts.existing+' . لم تُحفظ أي بيانات.';
   if(!current())return;
   attendanceSave.disabled=!result.counts.candidate;
   attendanceSave.onclick=async()=>{
    if(!current())return;
    const session=docsFieldworkSession;
    if(!session||session.accountId!==owner||session.database!==ownerDb){status.textContent='افتح تشفير الحالات من ملف الطالب ثم عد إلى هذه المعاينة.';return}
-   if(!window.confirm('حفظ الوقائع الجديدة محليًا؟ لم تتم مطابقة السجلات الأصلية بعد.'))return;
+   if(!window.confirm('حفظ الوقائع الجديدة محليًا بعد مطابقتها مع الفهرس المتاح؟'))return;
    attendanceSave.disabled=true;
    try{
     const outcome=await window.docsFieldwork.commitAttendanceBatch({database:ownerDb,session,currentSession:()=>current()&&docsFieldworkSession===session?session:null,studentIds:()=>new Set(studentIndex.map(s=>s.key)),preview:result,confirmed:true});
-    if(current()){status.textContent='تم حفظ '+outcome.added+' واقعة مشفرة محليًا؛ تم تجاوز '+outcome.skipped+' واقعة مكررة. لم تتم مطابقة السجلات الأصلية.';attendanceSave.onclick=null;}
+    if(current()){status.textContent='تم حفظ '+outcome.added+' واقعة مشفرة محليًا؛ تم تجاوز '+outcome.skipped+' واقعة مكررة. تمت المقارنة مع الفهرس المتاح قبل الحفظ.';attendanceSave.onclick=null;}
    }catch(error){if(current()){status.textContent=error.message;attendanceSave.disabled=false}}
   };
 
