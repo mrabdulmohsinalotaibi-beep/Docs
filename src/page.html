@@ -5206,15 +5206,24 @@ refreshReportSummary=function(){
  for(const row of rows){const key=row.source_table||'local';byType.set(key,(byType.get(key)||0)+1)}
  const done=rows.filter(r=>/^مكتمل(?:ة)?$/.test(String(r.status||'').trim())).length;
  const programs=byType.get('programs')||0;
+ const statusCounts={required:0,active:0,done:0,approved:0,overdue:0,archived:0,unknown:0};
+ for(const row of rows)statusCounts[classifyDocsWorkStatus(row.status)]++;
  const unverified=rows.length-done; // The source index cannot prove missing fields or evidence.
+ const selectedStatus=$('reportsStatus').value;
+ const statusText=selectedStatus==='pending'?'غير مكتمل أو غير موثق':selectedStatus==='done'?'موسوم مكتمل':'جميع الحالات';
+ const reviewBreakdown=[['مسودة/مطلوبة',statusCounts.required],['قيد التنفيذ',statusCounts.active],['متأخرة',statusCounts.overdue],['الحالة غير موثقة',statusCounts.unknown],['مؤرشفة',statusCounts.archived]].filter(([,count])=>count>0).map(([label,count])=>label+': '+count).join(' · ');
  host.replaceChildren();
  reportsMakeMetric(host,'الطلاب',reportsStudentReady?String(reportsStudents.length):'—',reportsStudentReady?'من دليل الطلاب':'الدليل غير محمّل',()=>reportsStudentLink('all'));
  reportsMakeMetric(host,'حالات رعاية خاصة',reportsCareReady?String(reportsCare.length):'—','عدد الطلاب وليس عدد التشخيصات',()=>reportsStudentLink('special'));
- reportsMakeMetric(host,'الأعمال الأصلية',reportsSourcesReady&&guidanceLoadedUser===activeUser?String(rows.length):'—','بعد استبعاد النسخ المشتقة',()=>reportsSourceLink('plan_tasks'));
+ reportsMakeMetric(host,'الأعمال الأصلية',reportsSourcesReady&&guidanceLoadedUser===activeUser?String(rows.length):'—',selectedStatus==='all'?'إجمالي بعد استبعاد النسخ المشتقة':'نتائج فلتر «'+statusText+'»؛ ليست حكمًا بالنقص',()=>{workspaceGoto('documents');openDocsView('works')});
  reportsMakeMetric(host,'موسومة مكتمل',reportsSourcesReady&&guidanceLoadedUser===activeUser?String(done):'—','يستلزم التحقق من الشواهد');
  const summary=$('docsExecSummary');summary.replaceChildren();
  for(const [label,val] of [['إجمالي الطلاب',reportsStudentReady?reportsStudents.length:'—'],['حالات الرعاية الخاصة',reportsCareReady?reportsCare.length:'—'],['الأعمال الأصلية',reportsSourcesReady&&guidanceLoadedUser===activeUser?rows.length:'—'],['لم توسم مكتملًا (لم يُفحص المحتوى)',reportsSourcesReady&&guidanceLoadedUser===activeUser?unverified:'—'],['البرامج المسجلة',reportsSourcesReady&&guidanceLoadedUser===activeUser?programs:'—']]){const x=document.createElement('div'),y=document.createElement('span'),z=document.createElement('strong');y.textContent=label;z.textContent=String(val);x.append(y,z);summary.append(x)}
- $('docsExecNotice').textContent=!reportsSourcesReady?'مصدر الأعمال غير متاح؛ لا تُحسب القيم المفقودة صفرًا.':!rows.length?'لا توجد أعمال أصلية ضمن الفلاتر الحالية.':'عدم وجود وسم مكتمل لا يعني نقص السجل. يلزم فتح محتوى العمل وشواهده قبل تقرير اكتماله أو نقصه.';
+ const notice=$('docsExecNotice');
+ if(!reportsSourcesReady)notice.textContent='مصدر الأعمال غير متاح؛ لا تُحسب القيم المفقودة صفرًا.';
+ else if(!rows.length)notice.textContent='لا توجد أعمال أصلية ضمن الفلاتر الحالية.';
+ else if(selectedStatus==='pending')notice.textContent='العدد '+rows.length+' هو عدد السجلات التي لا تحمل وسم «مكتمل» مؤكدًا أو حالتها غير موثقة ضمن الفلتر الحالي، وليس إثباتًا بأن كل سجل ناقص. '+(reviewBreakdown?'التوزيع: '+reviewBreakdown+'. ':'')+'الحل: مسؤول الحساب يفتح السجل، يراجع المحتوى والشواهد، ثم يحدّث الحالة أو ينشئ متابعة. النظام لا يحدد نقص العمل أو الشخص المسؤول تلقائيًا من الفهرس.';
+ else notice.textContent='عدم وجود وسم مكتمل لا يعني نقص السجل. يلزم فتح محتوى العمل والشواهد قبل تقرير اكتماله أو نقصه. '+(reviewBreakdown?'الحالات التي تحتاج مراجعة: '+reviewBreakdown+'.':'');
  const list=[...byType].map(([table,count])=>({table,label:reportLabels[table]||(table==='local'?'مستندات محلية':'أعمال أخرى'),count})).sort((a,b)=>b.count-a.count);
  reportsBars($('docsReportItems'),list,x=>x.table==='local'?(workspaceGoto('documents'),openDocsView('works')):reportsSourceLink(x.table));
  const plot=$('docsExecChart');plot.replaceChildren();
