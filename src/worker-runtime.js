@@ -678,8 +678,8 @@ export default {async fetch(request,env){
      const student=String(url.searchParams.get('student')||'');
      if(student.length>170)return json({ok:false,code:"BAD_STUDENT"},400);
      const sql=student?
-       "SELECT e.source_table,e.source_record_id,e.kind,e.title,e.student_name,e.student_key,e.date_hijri,e.status,e.link_status,e.updated_at FROM docs_guidance_entries e WHERE e.user_id=?1 AND EXISTS (SELECT 1 FROM docs_guidance_links l WHERE l.user_id=e.user_id AND l.source_table=e.source_table AND l.source_record_id=e.source_record_id AND l.student_key=?2) ORDER BY e.date_hijri DESC,e.source_table,e.source_record_id LIMIT 1000":
-       "SELECT e.source_table,e.source_record_id,e.kind,e.title,e.student_name,e.student_key,e.date_hijri,e.status,e.link_status,e.updated_at FROM docs_guidance_entries e WHERE e.user_id=?1 ORDER BY e.date_hijri DESC,e.source_table,e.source_record_id LIMIT 1000";
+       "SELECT e.source_table,e.source_record_id,e.kind,e.title,e.student_name,e.student_key,e.date_hijri,e.status,e.link_status,e.updated_at,CASE WHEN EXISTS (SELECT 1 FROM docs_guidance_review_audit a WHERE a.user_id=e.user_id AND a.source_table=e.source_table AND a.source_record_id=e.source_record_id AND a.new_status='مكتمل') THEN 1 ELSE 0 END reviewed_completion FROM docs_guidance_entries e WHERE e.user_id=?1 AND EXISTS (SELECT 1 FROM docs_guidance_links l WHERE l.user_id=e.user_id AND l.source_table=e.source_table AND l.source_record_id=e.source_record_id AND l.student_key=?2) ORDER BY e.date_hijri DESC,e.source_table,e.source_record_id LIMIT 1000":
+       "SELECT e.source_table,e.source_record_id,e.kind,e.title,e.student_name,e.student_key,e.date_hijri,e.status,e.link_status,e.updated_at,CASE WHEN EXISTS (SELECT 1 FROM docs_guidance_review_audit a WHERE a.user_id=e.user_id AND a.source_table=e.source_table AND a.source_record_id=e.source_record_id AND a.new_status='مكتمل') THEN 1 ELSE 0 END reviewed_completion FROM docs_guidance_entries e WHERE e.user_id=?1 ORDER BY e.date_hijri DESC,e.source_table,e.source_record_id LIMIT 1000";
      const query=env.DOCS_DB.prepare(sql),rows=await (student?query.bind(uid,student):query.bind(uid)).all();
      return json({ok:true,records:rows.results||[]});
    }
@@ -700,10 +700,17 @@ export default {async fetch(request,env){
    const entries=Object.entries(data.fields);
    if(entries.length>80||entries.some(([k,v])=>k.length>110||typeof v!=='string'||v.length>25000))return json({ok:false,code:"INVALID_FIELDS"},400);
    const status=String(data.status||'').slice(0,80);
-   const record=await env.DOCS_DB.prepare("SELECT source_record_id FROM docs_guidance_entries WHERE user_id=?1 AND source_table=?2 AND source_record_id=?3").bind(uid,type,id).first();
+   const record=await env.DOCS_DB.prepare("SELECT source_record_id,status FROM docs_guidance_entries WHERE user_id=?1 AND source_table=?2 AND source_record_id=?3").bind(uid,type,id).first();
    if(!record)return json({ok:false,code:"NOT_FOUND"},404);
    await env.DOCS_DB.prepare("UPDATE docs_guidance_entries SET fields_json=?1,status=?2,updated_at=CURRENT_TIMESTAMP WHERE user_id=?3 AND source_table=?4 AND source_record_id=?5").bind(JSON.stringify(data.fields),status,uid,type,id).run();
-   return json({ok:true,updated:true});
+   let audited=false;
+   try{
+    const auditId=crypto.randomUUID();
+    const action=String(data.audit_action||'manual-review').slice(0,60);
+    await env.DOCS_DB.prepare("INSERT INTO docs_guidance_review_audit (audit_id,user_id,reviewer_id,action,source_table,source_record_id,previous_status,new_status,method) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(auditId,uid,uid,action,type,id,String(record.status||''),status,String(data.audit_method||'manual-review').slice(0,60)).run();
+    audited=true;
+   }catch(error){console.warn('guidance_review_audit_unavailable',error?.message||error)}
+   return json({ok:true,updated:true,audited});
  }
  if(path==="/api/students/source-record"||path==="/api/students/care/categories"||path==="/api/students/care/save"||path==="/api/students/care/import"||path==="/api/students/care"||path==="/api/students"||path==="/api/students/import"||path==="/api/students/360"||path==="/api/students/insights"||path==="/api/students/a4"||path==="/api/students/a4-sync"||path==="/api/students/a4-record"){
   const token=cookieValue(request);if(!token)return json({ok:false,code:"UNAUTHORIZED"},401);

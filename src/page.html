@@ -4244,6 +4244,15 @@ $('logoutDocs').onclick=async()=>{
 let guidanceRecords=[],guidanceLoadInFlight=false,guidanceLoadedUser='',guidanceLoadError='';
 const guidanceKinds={attendance:'المواظبة',interviews:'المقابلات والجلسات',counseling_cases:'الحالات الفردية والمتابعة',referrals:'الإحالات',programs:'البرامج والأعمال',committees:'لجنة التوجيه',plan_tasks:'مهام الخطة'};
 function guidanceLabel(item){return guidanceKinds[item.source_table]||item.kind||item.source_table}
+const guidanceCompletionTypes=new Set(['counseling_cases','interviews','referrals']);
+function guidanceCompletionReadiness(record){
+ if(!guidanceCompletionTypes.has(String(record?.source_table||'')))return {ready:false,reason:'نوع السجل خارج نطاق الإكمال الجماعي'};
+ if(/^(مكتمل|مكتمله|معتمد|معتمده|approved|completed)$/i.test(String(record?.status||'').trim()))return {ready:false,reason:'مكتمل أو معتمد مسبقًا'};
+ const values=[record?.title,record?.student_name,record?.date_hijri,...Object.values(record?.fields||{})].map(value=>String(value??'').trim()).filter(value=>value.length>=2);
+ if(values.length<3)return {ready:false,reason:'بيانات السجل الفعلية غير كافية للمراجعة'};
+ return {ready:true,reason:'يحتوي على بيانات فعلية ويمكن اعتماده بعد مراجعة الموجّه'};
+}
+let guidanceBulkSelected=new Set();
 async function guidanceFetch(url,options){
  const r=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});
  const d=await r.json().catch(()=>({}));
@@ -4306,15 +4315,27 @@ function renderGuidanceRecords(){
  const visible=rows.slice(guidancePage*perPage,(guidancePage+1)*perPage);
  root.replaceChildren();
  if(!rows.length){root.textContent='لا توجد سجلات مطابقة لهذا البحث.';return}
+ const eligible=rows.filter(record=>guidanceCompletionTypes.has(String(record.source_table||''))&&!/^(مكتمل|مكتمله|معتمد|معتمده|approved|completed)$/i.test(String(record.status||'').trim())),bulk=document.createElement('div');bulk.className='row';
+ const bulkButton=document.createElement('button');bulkButton.type='button';bulkButton.className='primary';bulkButton.textContent='مراجعة وإكمال الحالات والجلسات والإحالات ('+eligible.length+')';bulkButton.disabled=!eligible.length;
+ const bulkNote=document.createElement('small');bulkNote.className='muted';bulkNote.textContent='لا يغيّر النظام إلا السجلات التي تحتوي بيانات فعلية وبعد تأكيدك؛ السجلات الناقصة تبقى للمراجعة.';bulk.append(bulkButton,bulkNote);root.append(bulk);
+ bulkButton.onclick=async()=>{
+  if(!eligible.length||!confirm('سيتم تغيير حالة '+eligible.length+' سجلًا من الحالات والجلسات والإحالات إلى «مكتمل» بعد مراجعة وجود بياناتها. لن تُنشأ وقائع أو شواهد جديدة. متابعة؟'))return;
+  bulkButton.disabled=true;let completed=0,failed=0,skipped=0;
+  const scope=guidanceBulkSelected.size?eligible.filter(record=>guidanceBulkSelected.has(guidanceRecordLink(record))):eligible;
+  for(const summary of scope){try{const detail=await guidanceFetch('/api/guidance/record?type='+encodeURIComponent(summary.source_table)+'&id='+encodeURIComponent(summary.source_record_id));const record=detail.record||summary;if(!guidanceCompletionReadiness(record).ready){skipped++;continue}const result=await guidanceFetch('/api/guidance/record',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:record.source_table,id:record.source_record_id,status:'مكتمل',fields:record.fields||{},audit_action:'bulk-complete-after-review',audit_method:'counselor-explicit-review'})});if(result?.ok!==false)completed++;else failed++}catch{failed++}}
+  guidanceBulkSelected.clear();await loadGuidanceRecords().catch(()=>{});stats.textContent='تم إكمال '+completed+' سجلًا بعد المراجعة'+(failed?'، وتعذر تحديث '+failed:'')+(skipped?'، وتُرك '+skipped+' سجلًا ناقصًا للمراجعة':'')+'.';
+ };
  const wrap=document.createElement('div');wrap.className='docs-records-table-wrap';
  const table=document.createElement('table');table.className='docs-records-table';table.setAttribute('aria-label','جدول السجلات');
  const head=document.createElement('thead');const header=document.createElement('tr');
- for(const text of ['السجل','التصنيف','الطالب','التاريخ الهجري','الحالة','فتح']){const th=document.createElement('th');th.textContent=text;header.append(th)}
+ for(const text of ['اختيار','السجل','التصنيف','الطالب','التاريخ الهجري','الحالة','فتح']){const th=document.createElement('th');th.textContent=text;header.append(th)}
  head.append(header);table.append(head);
  const tbody=document.createElement('tbody');
  for(const record of visible){
   const tr=document.createElement('tr');tr.tabIndex=0;tr.setAttribute('aria-selected',String(guidanceRecordLink(record)===guidanceSelected));
-  const cells=[record.title,guidanceLabel(record),record.student_name||'—',record.date_hijri||'—',record.status||'—'];
+  const pick=document.createElement('td');const check=document.createElement('input');check.type='checkbox';check.checked=guidanceBulkSelected.has(guidanceRecordLink(record));check.disabled=!guidanceCompletionTypes.has(String(record.source_table||''))||/^(مكتمل|مكتمله|معتمد|معتمده|approved|completed)$/i.test(String(record.status||'').trim());check.setAttribute('aria-label','اختيار '+record.title);check.onchange=()=>{if(check.checked)guidanceBulkSelected.add(guidanceRecordLink(record));else guidanceBulkSelected.delete(guidanceRecordLink(record))};pick.append(check);tr.append(pick);
+  const displayStatus=record.reviewed_completion&&/^مكتمل/.test(String(record.status||''))?'مكتمل بعد مراجعة الموجّه':(record.status||'—');
+  const cells=[record.title,guidanceLabel(record),record.student_name||'—',record.date_hijri||'—',displayStatus];
   cells.forEach((text,i)=>{const td=document.createElement('td');if(i===4){const span=document.createElement('span');span.className='docs-records-pill';span.textContent=text;td.append(span)}else td.textContent=text;tr.append(td)});
   const action=document.createElement('td');const btn=document.createElement('button');btn.type='button';btn.textContent='فتح';btn.setAttribute('aria-label','فتح '+record.title);btn.onclick=e=>{e.stopPropagation();openGuidanceRecord(record.source_table,record.source_record_id)};action.append(btn);tr.append(action);
   tr.onclick=()=>{showGuidanceInlinePreview(record).catch(()=>{});for(const row of tbody.children)row.setAttribute('aria-selected','false');tr.setAttribute('aria-selected','true')};
