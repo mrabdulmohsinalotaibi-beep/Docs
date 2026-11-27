@@ -1980,8 +1980,20 @@ function docsAccountOriginals(){
    // A local edit may contain the explicit status missing from the migrated index.
    // Do not overwrite an existing source status or infer completion from document content.
    if(!original)originals.set(key,{...doc,source_record_id:id,accountSourceTable:'local',workStatusOrigin:'local'});
-   else if(!String(original.status??'').trim()&&String(doc.status??'').trim()){
-    originals.set(key,{...original,status:doc.status,workStatusOrigin:'linked-local-status'});
+   else {
+    // The index contains metadata only in many cases. Keep the local editable copy's
+    // content beside that metadata so previews can show what is actually reviewable.
+    const merged={...original,localRecord:doc};
+    for(const field of ['body','fields','photos','attachments','file_blob','file_url','image_url']){
+     const value=doc[field];
+     const hasValue=Array.isArray(value)?value.length>0:typeof value==='object'&&value!==null?Object.keys(value).length>0:String(value??'').trim();
+     if(hasValue)merged[field]=value;
+    }
+    const filledStatus=!String(original.status??'').trim()&&String(doc.status??'').trim();
+    if(filledStatus)merged.status=doc.status;
+    // Preserve the established provenance marker: workStatusOrigin:'linked-local-status'
+    merged.workStatusOrigin=filledStatus?'linked-local-status':'linked-local-content';
+    originals.set(key,merged);
    }
    continue;
   }
@@ -4873,38 +4885,50 @@ function premiumShowCategory(category){
  premiumCategoryPreview.replaceChildren();
  const rows=docsAccountOriginals().filter(row=>premiumCategoryFor(row)===category);
  const heading=document.createElement('strong');
- heading.textContent=button.textContent+' — '+rows.length+' مستند';
+ heading.textContent=button.textContent+' — '+rows.length+' سجل مفهرس';
  premiumCategoryPreview.append(heading);
  const explanation=document.createElement('p');
  explanation.className='muted';
- explanation.textContent='جميع المستندات المصنفة في هذه الفئة معروضة أدناه، وليس أول 12 فقط. حالة النص تُفحص محليًا، ولا تُرسل أي بيانات. قد توجد مستندات غير مصنفة خارج هذه الفئة.';
+ explanation.textContent='هذه معاينة محلية للمواد الموجودة على جهازك. نعرض المقتطف الحقيقي عندما يتوفر، ولا نعتبر فهرسًا مختصرًا دليلًا على أن الأصل فارغ.';
  premiumCategoryPreview.append(explanation);
- if(!rows.length){const empty=document.createElement('p');empty.textContent='لا توجد مستندات مصنفة بهذه الفئة حاليًا.';premiumCategoryPreview.append(empty);return}
- const list=document.createElement('ol');
- list.className='docs-premium-category-all';
- list.style.maxHeight='55vh';
- list.style.overflowY='auto';
- list.style.overscrollBehavior='contain';
- list.style.paddingInlineStart='32px';
- list.style.border='1px solid #d7c39c';
- list.style.borderRadius='12px';
- list.style.paddingBlock='10px';
- list.tabIndex=0;
- list.setAttribute('aria-label','جميع مستندات فئة '+button.textContent);
- let readable=0;
+ if(!rows.length){const empty=document.createElement('p');empty.textContent='لا توجد سجلات مصنفة بهذه الفئة حاليًا.';premiumCategoryPreview.append(empty);return}
+ const readableRows=[],otherRows=[];
  for(const row of rows){
-  const item=document.createElement('li');
-  const kind=String(row.type||row.category||row.review_group||row.kind||'سجل').replace(/[<>]/g,'').slice(0,45);
   const text=premiumExtract(row);
-  const hasText=text.length>=18;
-  if(hasText)readable++;
-  item.textContent=kind+' — '+(hasText?'نص قابل للمراجعة':'لا يوجد نص كافٍ للتحليل؛ قد يكون مرفقًا أو سجلًا غير نصي');
-  item.style.marginBlock='6px';
-  list.append(item);
+  const item={row,text,kind:String(row.type||row.category||row.review_group||row.kind||'سجل').replace(/[<>]/g,'').slice(0,45)};
+  (text.length>=18?readableRows:otherRows).push(item);
  }
- const count=document.createElement('p');
- count.textContent='المعروض: '+rows.length+' من '+rows.length+' مستند · نصوص قابلة للمراجعة: '+readable+' · تحتاج فحصًا إضافيًا: '+(rows.length-readable);
- premiumCategoryPreview.append(count,list);
+ const summary=document.createElement('p');
+ summary.textContent='قابل للمراجعة الآن: '+readableRows.length+' · يحتاج فتح الأصل أو فحصًا إضافيًا: '+otherRows.length;
+ premiumCategoryPreview.append(summary);
+ if(readableRows.length){
+  const title=document.createElement('h4');title.textContent='نصوص قابلة للمراجعة';premiumCategoryPreview.append(title);
+  const list=document.createElement('ol');list.className='docs-premium-category-all';
+  list.style.maxHeight='55vh';list.style.overflowY='auto';list.style.overscrollBehavior='contain';list.style.paddingInlineStart='32px';list.style.border='1px solid #d7c39c';list.style.borderRadius='12px';list.style.paddingBlock='10px';list.tabIndex=0;
+  list.setAttribute('aria-label','النصوص القابلة للمراجعة في فئة '+button.textContent);
+  for(const {row,text,kind} of readableRows){
+   const item=document.createElement('li');item.style.marginBlock='10px';
+   const meta=document.createElement('small');meta.className='muted';meta.textContent=[kind,row.title,row.date||row.date_text].filter(Boolean).join(' · ');
+   const excerpt=document.createElement('p');excerpt.textContent=text.length>420?text.slice(0,420).trimEnd()+'…':text;
+   item.append(meta,excerpt);
+   const open=document.createElement('button');open.type='button';open.className='btn';open.textContent='فتح السجل الأصلي';
+   open.onclick=async()=>{open.disabled=true;try{if(row.localRecord)edit(row.localRecord);else if(row.accountSourceTable==='local'&&row.id)edit(row);else if(String(row.type)==='guidance'||String(row.source_table||'').trim())openGuidanceRecord(row.source_table,row.source_record_id);else openMigratedA4(row.source_record_id||row.id)}catch(e){say('تعذر فتح السجل: '+(e.message||'خطأ'))}finally{open.disabled=false}};
+   item.append(open);list.append(item);
+  }
+  premiumCategoryPreview.append(list);
+ }
+ if(otherRows.length){
+  const title=document.createElement('h4');title.textContent='سجلات لا يظهر نصها في الفهرس المحلي';premiumCategoryPreview.append(title);
+  const note=document.createElement('p');note.className='muted';note.textContent='هذه ليست نصوصًا ناقصة بالضرورة: قد تكون مرفقات/صورًا أو بيانات وصفية فقط أو أصلًا لم يُفتح بعد. جُمعت هنا بدل تكرار رسالة واحدة لكل سجل.';premiumCategoryPreview.append(note);
+  const list=document.createElement('ul');
+  for(const {row,kind} of otherRows){
+   const item=document.createElement('li');
+   const reason=(Array.isArray(row.photos)&&row.photos.length)||(Array.isArray(row.attachments)&&row.attachments.length)||row.file_url||row.image_url?'مرفق أو صورة فقط':row.content_pending||row.not_loaded?'المحتوى لم يُحمّل':'الفهرس لا يحتوي نصًا قابلًا للمراجعة';
+   item.textContent=[kind,row.title,reason].filter(Boolean).join(' · ');
+   list.append(item);
+  }
+  premiumCategoryPreview.append(list);
+ }
 }
 for(const button of premiumCategoryButtons)button.addEventListener('click',()=>premiumShowCategory(button.dataset.premiumCategory));
 premiumBox.querySelector('#premiumPrepare').onclick=()=>{
