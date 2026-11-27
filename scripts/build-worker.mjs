@@ -4,12 +4,12 @@ import {Script} from 'node:vm';
 // Keep the standalone Worker deployable without changing its bindings or entry point.
 const root = new URL('../', import.meta.url);
 const pageSource = await readFile(new URL('src/page.html', root), 'utf8');
-const modules = ['fieldwork-case-engine.mjs','fieldwork-case-crypto.mjs','fieldwork-case-encrypted-repository.mjs','fieldwork-case-view.mjs','fieldwork-attendance-import.mjs'];
+const modules = ['fieldwork-case-engine.mjs','fieldwork-case-crypto.mjs','fieldwork-case-encrypted-repository.mjs','fieldwork-case-view.mjs','fieldwork-attendance-import.mjs','professional-portfolio.mjs'];
 const parts = await Promise.all(modules.map(async name => {
   const source = await readFile(new URL('src/'+name, root), 'utf8');
   return source.replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 }));
-const bundle = 'window.docsFieldwork = (() => {\n'+parts.join('\n')+'\nreturn Object.freeze({unlockCaseCipher,encryptedCaseRepository,projectFieldworkCases,previewAttendance,commitAttendanceBatch});\n})();';
+const bundle = 'window.docsFieldwork = (() => {\n'+parts.join('\n')+'\nreturn Object.freeze({unlockCaseCipher,encryptedCaseRepository,projectFieldworkCases,previewAttendance,commitAttendanceBatch,buildProfessionalPortfolio});\n})();';
 new Script(bundle,{filename:'fieldwork-bundle.js'});
 if (bundle.includes('</script')) throw Error('Unsafe inline bundle');
 const marker = '<!-- DOCS_FIELDWORK_BUNDLE -->';
