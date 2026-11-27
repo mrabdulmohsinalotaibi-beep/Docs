@@ -2547,7 +2547,8 @@ async function docsRestorePreviewRead(){
  };
  const collect=key=>copies.flatMap(copy=>Array.isArray(copy.payload[key])?copy.payload[key]:[]);
  const doc=choose(collect('documents'),documents,'id',x=>x&&typeof x.id==='string'&&x.id.length>0&&x.id.length<250);
- const snap=choose(collect('snapshots'),snapshots,'id',x=>x&&typeof x.id==='string'&&x.record&&x.id.length<400);
+ const validFieldworkEnvelope=x=>x&&x.kind==='local-fieldwork-encrypted'&&x.owner===owner&&x.version===1&&typeof x.caseId==='string'&&/^[-a-zA-Z0-9_]{1,128}$/.test(x.caseId)&&x.id==='fieldwork-encrypted:'+x.caseId&&Number.isSafeInteger(x.revision)&&x.revision>0&&Array.isArray(x.iv)&&x.iv.length===12&&x.iv.every(n=>Number.isInteger(n)&&n>=0&&n<=255)&&Array.isArray(x.cipher)&&x.cipher.length>=16&&x.cipher.length<=2000000&&x.cipher.every(n=>Number.isInteger(n)&&n>=0&&n<=255);
+ const snap=choose(collect('snapshots'),snapshots,'id',x=>x&&typeof x.id==='string'&&x.id.length<400&&(x.kind==='local-fieldwork-encrypted'?validFieldworkEnvelope(x):x.kind==='local-fieldwork-config'?x.owner===owner&&x.id==='fieldwork-cipher-config'&&Array.isArray(x.salt)&&x.salt.length===16&&x.salt.every(n=>Number.isInteger(n)&&n>=0&&n<=255)&&validFieldworkEnvelope(x.check)&&x.check.caseId==='key-check':!!x.record));
  const resp=choose(collect('responses'),responses,'id',x=>x&&typeof x.id==='string'&&x.id.startsWith('/api/')&&x.payload?.ok===true&&x.id.length<1000);
  // Restore only complete binary attachments. An absent or malformed blob must not count as recoverable.
  const binary=collect('files').filter(x=>x&&typeof x.id==='string'&&x.id.startsWith('/api/')&&x.blob?.__docsBlob===true&&typeof x.blob.base64==='string'&&x.blob.base64.length>0&&x.blob.base64.length<35000000);
