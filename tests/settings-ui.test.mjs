@@ -23,7 +23,7 @@ function extractPage() {
 test('embedded HTML scripts parse without errors', () => {
   const page = extractPage();
   const inline = [...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
-    .filter(match => !/\bsrc\s*=/.test(match[0]));
+    .filter(match => !/\bsrc\s*=/.test(match[0].slice(0, match[0].indexOf('>') + 1)));
   assert.ok(inline.length >= 4, 'Expected HTML inline scripts');
   inline.forEach((match, index) => {
     assert.doesNotThrow(() => new Script(match[1], { filename: 'inline-' + index + '.js' }));
