@@ -209,7 +209,7 @@ test('portfolio opens all account records and does not inherit stale filters',()
  assert.match(appScript,/if\(view==='portfolio'\)activateDocsTab\('portfolio'\)/);
  assert.match(appScript,/loadGuidanceRecords\(\)\.catch/);
  assert.match(appScript,/جارٍ استرجاع أعمال حسابك لملف الإنجاز/);
- assert.match(appScript,/اختر الأعمال التي تريد إضافتها إلى ملف الإنجاز أولًا/);
+ assert.match(appScript,/if\(isPortfolio\)\{docsRenderProfessionalPortfolio\(allOriginals\);return;\}/);
 });
 
 test('legacy account controls no longer call removed ATHAT APIs',()=>{
@@ -219,13 +219,15 @@ test('legacy account controls no longer call removed ATHAT APIs',()=>{
  assert.match(appScript,/await openGuidanceRecord\(type,id\)/);
  assert.match(appScript,/await docsMirrorCycle\(\)/);
 });
-test('portfolio exports imported and local selected records into the official A4 renderer',()=>{
- assert.match(appScript,/selectedA4=\[\.\.\.selected\]/);
- assert.match(appScript,/selectedGuidance=\[\.\.\.selected\]/);
- assert.match(appScript,/originalA4SourceModel\(item\.record,item\.record\.payload\|\|\{\}\)/);
- assert.match(appScript,/printOriginalA4Docs\(\[\],models,win\)/);
- assert.match(appScript,/if\(failed\)\{/);
- assert.match(appScript,/preparedWindow\|\|window\.open/);
+test('portfolio exports only aggregate projection into isolated A4 print window',()=>{
+ const print=appScript.slice(appScript.indexOf('function docsPrintProfessionalPortfolio(){'),appScript.indexOf('function docsPrintProfessionalPortfolio(){')+1200);
+ assert.match(appScript,/\$\('printPortfolio'\)\.onclick=docsPrintProfessionalPortfolio/);
+ assert.match(print,/const summary=docsProfessionalSnapshot\(\)/);
+ assert.match(print,/win\.opener=null/);
+ assert.match(print,/size:A4/);
+ assert.match(print,/docsPortfolioMarkup\(summary\)/);
+ assert.match(print,/win\.print\(\)/);
+ assert.doesNotMatch(print.split('win.print();')[0],/printOriginalA4Docs|originalA4SourceModel|selectedGuidance|selectedA4/);
  assert.match(appScript,/\$\('backupBtn'\)\.onclick=\(\)=>\{workspaceGoto\('settings'\)/);
 });
 
