@@ -1,8 +1,9 @@
+import {attendanceHijri} from './fieldwork-attendance-import.mjs';
 // Pure local workflow rules. No I/O, identity inference or automatic approvals.
 const transitions={new:['active'],active:['referred','closed'],referred:['active','closed'],closed:[]};
 const priorities=['routine','high','urgent'];
 const clean=v=>typeof v==='string'?v.trim():'';
-function date(v){const m=clean(v).match(/^(14\d{2})\/(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|30)$/);return m?m[0]:''}
+function date(v){const value=clean(v);return attendanceHijri(value)===value?value:''}
 export function createCase(input,studentIds){
  const studentId=clean(input.studentId),id=clean(input.id),reason=clean(input.reason),actor=clean(input.actor),created=date(input.date);
  if(!id||!studentId||!studentIds.has(studentId)||!reason||!actor||!created||!priorities.includes(input.priority))throw Error('بيانات الحالة أو هوية الطالب غير مكتملة');
