@@ -10,16 +10,17 @@ export function attendanceHijri(value){
  while(lo<=hi){const mid=Math.floor((lo+hi)/2),p=fmt.formatToParts(new Date(mid*86400000)),n=k=>Number(p.find(x=>x.type===k)?.value);const actual=n('year')*10000+n('month')*100+n('day');if(actual===target)return d;if(actual<target)lo=mid+1;else hi=mid-1}
  return '';
 }
-const type=v=>({'غياب':'absence','تأخر':'late','التأخر':'late','التأخر الصباحي':'late',absence:'absence',late:'late'}[norm(v)]||'');
+const attendanceTypes=new Map([['غياب','absence'],['تأخر','late'],['التأخر','late'],['التأخر الصباحي','late'],['absence','absence'],['late','late']]);
+const type=v=>attendanceTypes.get(norm(v))||'';
 const key=(id,date,kind)=>JSON.stringify([id,date,kind]);
 export function previewAttendance(rows,students,existing){
  if(!Array.isArray(rows)||!Array.isArray(students)||!Array.isArray(existing)||rows.length>20000)throw Error('بيانات المعاينة غير صالحة');
  const byNumber=new Map();
- for(const s of students){const n=norm(s.student_no);if(!n||!s.key)continue;const ids=byNumber.get(n)||new Set();ids.add(s.key);byNumber.set(n,ids)}
+ for(const s of students){if(!s||typeof s!=='object')continue;const n=norm(s.student_no);if(!n||!s.key)continue;const ids=byNumber.get(n)||new Set();ids.add(s.key);byNumber.set(n,ids)}
  const known=new Set(),seen=new Set(),result=[];
- for(const r of existing){const d=attendanceHijri(r.date),k=type(r.kind);if(r.studentId&&d&&k)known.add(key(r.studentId,d,k))}
+ for(const r of existing){if(!r||typeof r!=='object')continue;const d=attendanceHijri(r.date),k=type(r.kind);if(r.studentId&&d&&k)known.add(key(r.studentId,d,k))}
  for(const [i,r] of rows.entries()){
-  const ids=byNumber.get(norm(r.studentNumber)),date=attendanceHijri(r.date),kind=type(r.kind);
+  const ids=byNumber.get(norm(r?.studentNumber)),date=attendanceHijri(r?.date),kind=type(r?.kind);
   if(!ids||ids.size!==1||!date||!kind){result.push({line:i+1,status:'invalid',reason:!ids?'unknown-student':ids.size!==1?'ambiguous-student':!date?'invalid-date':'invalid-kind'});continue}
   const studentId=[...ids][0],fingerprint=key(studentId,date,kind);
   const status=known.has(fingerprint)?'existing':seen.has(fingerprint)?'duplicate':'candidate';
