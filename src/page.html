@@ -1201,7 +1201,7 @@ body[data-docs-theme="terracotta"] .workspace-nav button[aria-current="page"]{ba
 body[data-docs-theme="terracotta"] :focus-visible{outline-color:#484443!important}
 body[data-docs-theme="terracotta"] .s360-hero{background:#484443!important;color:white!important}
 @media(max-width:650px){#workspaceNav{position:fixed!important;top:auto!important;bottom:0!important;left:0!important;right:0!important;margin:0!important;padding:8px 8px calc(8px + env(safe-area-inset-bottom))!important;background:#fff!important;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;z-index:26!important;border-top:1px solid #ddd;gap:4px!important}#workspaceNav button{min-width:0;font-size:11px!important;min-height:52px!important;padding:4px 2px!important}#workspaceNav button::before{display:block;font-size:19px;line-height:1.2;content:attr(data-nav-icon)}#appMain{padding-bottom:calc(90px + env(safe-area-inset-bottom))!important}.workspace-home .templates{grid-template-columns:repeat(2,minmax(0,1fr))!important}.workspace-home .template{min-height:118px}.workspace-home .hero h1{font-size:24px}#toast{bottom:calc(78px + env(safe-area-inset-bottom))}}
-}</style></head><body><script>(function(){var key='athat-docs-ui-theme-v3',allowed=['terracotta','mono'],v;try{v=localStorage.getItem(key)}catch(e){}v=allowed.includes(v)?v:'terracotta';document.addEventListener('DOMContentLoaded',function(){var themeMeta=document.querySelector('meta[name="theme-color"]'),button=document.getElementById('docsThemeButton'),menu=document.getElementById('docsThemeMenu');function apply(value){v=value;document.body.dataset.docsTheme=value;if(themeMeta)themeMeta.setAttribute('content',value==='mono'?'#111111':'#484443');if(menu)menu.querySelectorAll('[data-theme-choice]').forEach(function(item){item.setAttribute('aria-pressed',String(item.dataset.themeChoice===value))})}apply(v);if(!button||!menu)return;function close(focus){menu.hidden=true;button.setAttribute('aria-expanded','false');if(focus)button.focus()}button.addEventListener('click',function(){if(!menu.hidden){close(false);return}menu.hidden=false;button.setAttribute('aria-expanded','true');menu.querySelector('[aria-pressed="true"]')?.focus()});menu.addEventListener('click',function(e){var item=e.target.closest('[data-theme-choice]');if(!item||!allowed.includes(item.dataset.themeChoice))return;apply(item.dataset.themeChoice);try{localStorage.setItem(key,v)}catch(e){}close(true)});document.addEventListener('click',function(e){if(!menu.hidden&&!menu.contains(e.target)&&!button.contains(e.target))close(false)});document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!menu.hidden){e.preventDefault();close(true)}});document.addEventListener('focusin',function(e){if(!menu.hidden&&!menu.contains(e.target)&&e.target!==button)close(false)})})})();</script>
+}</style><!-- DOCS_FIELDWORK_BUNDLE --></head><body><script>(function(){var key='athat-docs-ui-theme-v3',allowed=['terracotta','mono'],v;try{v=localStorage.getItem(key)}catch(e){}v=allowed.includes(v)?v:'terracotta';document.addEventListener('DOMContentLoaded',function(){var themeMeta=document.querySelector('meta[name="theme-color"]'),button=document.getElementById('docsThemeButton'),menu=document.getElementById('docsThemeMenu');function apply(value){v=value;document.body.dataset.docsTheme=value;if(themeMeta)themeMeta.setAttribute('content',value==='mono'?'#111111':'#484443');if(menu)menu.querySelectorAll('[data-theme-choice]').forEach(function(item){item.setAttribute('aria-pressed',String(item.dataset.themeChoice===value))})}apply(v);if(!button||!menu)return;function close(focus){menu.hidden=true;button.setAttribute('aria-expanded','false');if(focus)button.focus()}button.addEventListener('click',function(){if(!menu.hidden){close(false);return}menu.hidden=false;button.setAttribute('aria-expanded','true');menu.querySelector('[aria-pressed="true"]')?.focus()});menu.addEventListener('click',function(e){var item=e.target.closest('[data-theme-choice]');if(!item||!allowed.includes(item.dataset.themeChoice))return;apply(item.dataset.themeChoice);try{localStorage.setItem(key,v)}catch(e){}close(true)});document.addEventListener('click',function(e){if(!menu.hidden&&!menu.contains(e.target)&&!button.contains(e.target))close(false)});document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!menu.hidden){e.preventDefault();close(true)}});document.addEventListener('focusin',function(e){if(!menu.hidden&&!menu.contains(e.target)&&e.target!==button)close(false)})})})();</script>
 <header class="top"><div class="brand"><div class="logo"><img src="/brand.svg?v=19" alt="شعار مستندات الذات الأصلي DOCS ATHAT" width="88" height="88"></div><div><b>مستندات الذات</b><small>ATHAT Docs · أعمالك وشواهدك</small></div></div><div class="docs-theme-picker"><button type="button" id="docsThemeButton" aria-label="تغيير المظهر" title="تغيير المظهر" aria-expanded="false" aria-controls="docsThemeMenu"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.4a1.7 1.7 0 0 0 1.1-3c-.9-.8-.3-2.2.9-2.2H18a3 3 0 0 0 3-3C21 7.3 17 3 12 3Z"/><circle cx="7.5" cy="11" r=".8"/><circle cx="10" cy="7.5" r=".8"/><circle cx="14.5" cy="7.5" r=".8"/><circle cx="17.5" cy="11" r=".8"/></svg></button><div id="docsThemeMenu" hidden aria-label="خيارات المظهر"><button type="button" data-theme-choice="terracotta" aria-pressed="false">الفحمي والعاجي</button><button type="button" data-theme-choice="mono" aria-pressed="false">الأسود والأبيض</button></div></div><div id="sessionPanel" hidden><small id="accountName"></small><button id="logoutDocs" type="button">تسجيل خروج</button></div></header><div id="docsLiveIndicators" class="docs-live-indicators" hidden aria-label="حالة الحفظ والمزامنة"><span id="docsLocalIndicator" class="docs-live-indicator" data-state="yellow" role="status"><i></i><span>الحفظ بالجهاز: جارٍ التحقق</span></span><span id="docsPeerIndicator" class="docs-live-indicator" data-state="neutral" role="status"><i></i><span>مزامنة الأجهزة: غير متصل</span></span></div>
 <section id="authGate" aria-label="تسجيل الدخول">
 <div class="auth-card"><div class="auth-intro"><span class="auth-eyebrow">مساحة أعمال التوجيه الطلابي</span><h1>أعمالك مرتّبة، وجاهزة للطباعة.</h1><p>أنشئ مستنداتك، نظّم شواهدك، واطبع نماذجك الرسمية.</p></div>
@@ -2102,11 +2102,26 @@ async function docsRenderDailyBrief(){
   const rows=await docsFollowupRows(owner,ownerDb);if(!current())return;
   const today=hijriToday(),pending=docsFollowupReviewQueue(rows,today).map(item=>item.plan);
   const groups={overdue:pending.filter(p=>docsFollowupDate(p.due)&&docsFollowupDate(p.due)<today),today:pending.filter(p=>docsFollowupDate(p.due)===today),review:pending,month:pending.filter(p=>docsFollowupDate(p.due).slice(0,7)===today.slice(0,7)),upcoming:pending.filter(p=>docsFollowupDate(p.due)>today)};
+  const caseSession=docsFieldworkSession;
+  let referrals=null;
+  if(caseSession?.accountId===owner&&caseSession.database===ownerDb){try{referrals=(await docsFieldworkRepo().list()).filter(c=>c.status==='referred'&&c.referral&&!c.referral.resolved)}catch{}}
+  if(!current())return;
+  const referralPanel=document.createElement('section');referralPanel.setAttribute('aria-label','الإحالات الميدانية');
+  function showReferrals(){
+   referralPanel.replaceChildren();
+   const heading=document.createElement('h3');heading.textContent='الإحالات الميدانية';referralPanel.append(heading);
+   if(!referrals||caseSession!==docsFieldworkSession){const p=document.createElement('p');p.textContent='افتح تشفير الحالات من ملف الطالب لعرض الإحالات.';referralPanel.append(p);return}
+   for(const [label,items] of [['متأخرة',referrals.filter(c=>docsFollowupDate(c.referral.due)&&docsFollowupDate(c.referral.due)<today)],['مستحقة اليوم',referrals.filter(c=>docsFollowupDate(c.referral.due)===today)]]){
+    const title=document.createElement('p');title.textContent=label+': '+items.length;referralPanel.append(title);
+    for(const c of items){const student=studentIndex.find(s=>s.key===c.studentId);const button=document.createElement('button');button.type='button';button.className='docs-guidance-row';button.textContent=(student?.name||'طالب غير متاح في الفهرس')+' · '+docsFollowupDate(c.referral.due)+' هـ';button.disabled=!student;button.onclick=()=>{if(current()&&caseSession===docsFieldworkSession&&student)openStudent360(student.key).catch(()=>say('تعذر فتح ملف الطالب'))};referralPanel.append(button)}
+   }
+  }
+
   const labels={overdue:'متأخرة',today:'مستحقة اليوم',review:'تحتاج مراجعة',month:'مواعيد الشهر الهجري',upcoming:'المواعيد القادمة'};
   function show(kind){
    if(!current())return;
    for(const b of metrics.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.dailyFilter===kind));
-   agenda.replaceChildren();
+   agenda.replaceChildren();showReferrals();agenda.append(referralPanel);
    const h=document.createElement('h3');h.textContent=labels[kind]+' ('+groups[kind].length+')';agenda.append(h);
    if(!groups[kind].length){const p=document.createElement('p');p.className='muted';p.textContent='لا توجد متابعات مطابقة في البيانات المحلية المتاحة.';agenda.append(p)}
    for(const plan of groups[kind]){
@@ -2532,7 +2547,8 @@ async function docsRestorePreviewRead(){
  };
  const collect=key=>copies.flatMap(copy=>Array.isArray(copy.payload[key])?copy.payload[key]:[]);
  const doc=choose(collect('documents'),documents,'id',x=>x&&typeof x.id==='string'&&x.id.length>0&&x.id.length<250);
- const snap=choose(collect('snapshots'),snapshots,'id',x=>x&&typeof x.id==='string'&&x.record&&x.id.length<400);
+ const validFieldworkEnvelope=x=>x&&x.kind==='local-fieldwork-encrypted'&&x.owner===owner&&x.version===1&&typeof x.caseId==='string'&&/^[-a-zA-Z0-9_]{1,128}$/.test(x.caseId)&&x.id==='fieldwork-encrypted:'+x.caseId&&Number.isSafeInteger(x.revision)&&x.revision>0&&Array.isArray(x.iv)&&x.iv.length===12&&x.iv.every(n=>Number.isInteger(n)&&n>=0&&n<=255)&&Array.isArray(x.cipher)&&x.cipher.length>=16&&x.cipher.length<=2000000&&x.cipher.every(n=>Number.isInteger(n)&&n>=0&&n<=255);
+ const snap=choose(collect('snapshots'),snapshots,'id',x=>x&&typeof x.id==='string'&&x.id.length<400&&(x.kind==='local-fieldwork-encrypted'?validFieldworkEnvelope(x):x.kind==='local-fieldwork-config'?x.owner===owner&&x.id==='fieldwork-cipher-config'&&Array.isArray(x.salt)&&x.salt.length===16&&x.salt.every(n=>Number.isInteger(n)&&n>=0&&n<=255)&&validFieldworkEnvelope(x.check)&&x.check.caseId==='key-check':!!x.record));
  const resp=choose(collect('responses'),responses,'id',x=>x&&typeof x.id==='string'&&x.id.startsWith('/api/')&&x.payload?.ok===true&&x.id.length<1000);
  // Restore only complete binary attachments. An absent or malformed blob must not count as recoverable.
  const binary=collect('files').filter(x=>x&&typeof x.id==='string'&&x.id.startsWith('/api/')&&x.blob?.__docsBlob===true&&typeof x.blob.base64==='string'&&x.blob.base64.length>0&&x.blob.base64.length<35000000);
@@ -3968,6 +3984,101 @@ async function docsAssistRender(key){
 }
 /* EDUCATIONAL_ASSISTANT_UI_END */
 
+// Keep decrypted case data and the non-extractable key in memory only.
+let docsFieldworkSession=null,docsFieldworkEpoch=0;
+let docsFieldworkReportToken=0;
+async function docsFieldworkReportRefresh(){
+ const root=$('docsFieldworkReport');if(!root)return;
+ const token=++docsFieldworkReportToken,session=docsFieldworkSession,owner=activeUser;
+ root.replaceChildren();const h=document.createElement('h3');h.textContent='مؤشرات الحالات الميدانية المشفرة';root.append(h);
+ const p=document.createElement('p');p.textContent='افتح تشفير الحالات من ملف الطالب لعرض المؤشرات.';root.append(p);
+ if(!session||session.accountId!==owner||session.database!==db)return;
+ const current=()=>token===docsFieldworkReportToken&&owner===activeUser&&session===docsFieldworkSession;
+ try{
+  const rows=await docsFieldworkRepo().list();if(!current())return;
+  const today=hijriToday(),unique=[...new Map(rows.map(r=>[r.id,r])).values()];
+  const stats=[['إجمالي الحالات',unique.length],['المفتوحة',unique.filter(r=>r.status!=='closed').length],['المغلقة',unique.filter(r=>r.status==='closed').length],['الإحالات القائمة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved).length],['الإحالات المتأخرة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved&&docsFollowupDate(r.referral?.due)&&docsFollowupDate(r.referral.due)<today).length]];
+  p.textContent='جميع الفترات المحلية المتاحة؛ مؤشرات مستقلة عن السجلات الرسمية لتجنب جمع مصادر متداخلة. لا أسماء أو تفاصيل فردية.';
+  const grid=document.createElement('div');grid.className='docs-report-metrics';
+  for(const [label,count] of stats){const card=document.createElement('div'),n=document.createElement('strong'),caption=document.createElement('p');n.textContent=String(count);caption.textContent=label;card.append(n,caption);grid.append(card)}root.append(grid);
+ }catch{if(current())p.textContent='تعذر قراءة الحالات المشفرة؛ الأعداد غير متاحة.'}
+}
+document.addEventListener('athat-docs-logout',()=>{docsFieldworkReportToken++;$('docsFieldworkReport')?.replaceChildren()});
+function docsFieldworkLock(){docsFieldworkEpoch++;docsFieldworkSession=null;docsFieldworkReportRefresh().catch(()=>{});$('docsStudentFieldworkCases')?.replaceChildren();$('docsFieldworkDialog')?.close();if(activeUser&&db)docsRenderDailyBrief().catch(()=>{})}
+document.addEventListener('athat-docs-logout',docsFieldworkLock);
+function docsFieldworkRepo(){
+ const session=docsFieldworkSession;
+ if(!session||session.accountId!==activeUser||session.database!==db)throw Error('جلسة الحالات مقفلة');
+ return window.docsFieldwork.encryptedCaseRepository({database:db,session,currentSession:()=>docsFieldworkSession===session&&activeUser===session.accountId&&db===session.database?session:null,studentIds:()=>new Set(studentIndex.map(s=>s.key)),cipher:session.caseCipher});
+}
+async function docsFieldworkUnlock(password){
+ const owner=activeUser,database=db,epoch=++docsFieldworkEpoch;
+ const current=()=>owner&&owner===activeUser&&database===db&&epoch===docsFieldworkEpoch;
+ if(!current())throw Error('الحساب غير متاح');
+ const id='fieldwork-cipher-config';
+ const existing=await new Promise((ok,no)=>{const q=database.transaction('cloudSnapshots').objectStore('cloudSnapshots').get(id);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)});
+ if(!current())throw Error('تغير الحساب');
+ if(existing&&(existing.owner!==owner||existing.kind!=='local-fieldwork-config'))throw Error('إعدادات التشفير غير صالحة');
+ const cipher=await window.docsFieldwork.unlockCaseCipher(password,existing?.salt);
+ if(!current())throw Error('تغير الحساب');
+ if(existing){const marker=await cipher.open(owner,existing.check);if(marker.marker!=='fieldwork-key-check')throw Error('تعذر فتح التشفير')}
+ else {
+  const check=await cipher.seal(owner,{id:'key-check',revision:1,marker:'fieldwork-key-check'});
+  if(!current())throw Error('تغير الحساب');
+  await new Promise((ok,no)=>{const tx=database.transaction('cloudSnapshots','readwrite');const store=tx.objectStore('cloudSnapshots');const req=store.get(id);req.onsuccess=()=>{if(!current()||req.result){tx.abort();return}store.add({id,kind:'local-fieldwork-config',owner,salt:cipher.salt,check})};tx.oncomplete=ok;tx.onabort=()=>no(Error('تغيرت إعدادات التشفير'));tx.onerror=()=>no(tx.error)});
+ }
+ if(!current())throw Error('تغير الحساب');
+ // Only a fresh authenticated server identity may authorize approval.
+ let canApprove=false;
+ if(navigator.onLine){try{const auth=await docsAuth('me',null,'GET');canApprove=auth?.user?.id===owner&&auth.user.role==='owner'&&auth.user.status==='active'}catch{}}
+ if(!current())throw Error('تغير الحساب');
+ docsFieldworkSession={accountId:owner,database,caseCipher:cipher,canApprove};docsFieldworkReportRefresh().catch(()=>{});
+}
+async function docsFieldworkRenderStudent(panel,key,isCurrent){
+ const valid=()=>isCurrent()&&panel.isConnected;
+ if(!valid())return;
+ panel.replaceChildren();const heading=document.createElement('b');heading.textContent='الحالات والإحالات الميدانية المشفرة';panel.append(heading);
+ const session=docsFieldworkSession;
+ if(!session||session.accountId!==activeUser||session.database!==db){
+  const form=document.createElement('form'),password=document.createElement('input'),submit=document.createElement('button'),notice=document.createElement('p');
+  password.type='password';password.minLength=12;password.required=true;password.autocomplete='off';password.setAttribute('aria-label','كلمة مرور تشفير الحالات');password.placeholder='كلمة مرور التشفير (12 حرفًا على الأقل)';
+  submit.type='submit';submit.textContent='فتح التشفير';notice.textContent='استخدم كلمة مرور خاصة بالحالات واحفظها في مكان آمن؛ فقدانها يمنع استعادة المحتوى.';
+  form.append(password,submit,notice);panel.append(form);
+  form.onsubmit=async event=>{event.preventDefault();if(!valid())return;submit.disabled=true;const value=password.value;password.value='';try{await docsFieldworkUnlock(value);if(valid())await docsFieldworkRenderStudent(panel,key,isCurrent);docsRenderDailyBrief().catch(()=>{})}catch{if(valid())notice.textContent='تعذر فتح التشفير. تحقق من كلمة المرور أو أعد المحاولة.'}finally{submit.disabled=false}};
+  return;
+ }
+ const lock=document.createElement('button');lock.type='button';lock.textContent='قفل الحالات';lock.onclick=()=>{docsFieldworkLock();if(valid())docsFieldworkRenderStudent(panel,key,isCurrent).catch(()=>{})};panel.append(lock);
+ const records=await docsFieldworkRepo().list();if(!valid()||docsFieldworkSession!==session)return;
+ const view=window.docsFieldwork.projectFieldworkCases(records,{studentId:key,today:hijriToday()});
+ const canEdit=()=>valid()&&docsFieldworkSession===session&&studentIndex.some(s=>s.key===key);
+ const refreshCases=async()=>{if(canEdit())await docsFieldworkRenderStudent(panel,key,isCurrent);docsFieldworkReportRefresh().catch(()=>{});docsRenderDailyBrief().catch(()=>{})};
+ function formFor(record){
+  const dialog=document.createElement('dialog');dialog.id='docsFieldworkDialog';dialog.style.cssText='width:min(94vw,580px);max-height:85dvh;overflow:auto;direction:rtl';
+  if(!canEdit()||document.getElementById(dialog.id))return;
+  const form=document.createElement('form'),title=document.createElement('h3'),notice=document.createElement('p'),fields=document.createElement('div');
+  title.textContent=record?'تحديث الحالة الميدانية':'إنشاء حالة ميدانية';notice.setAttribute('role','status');form.append(title,fields,notice);
+  const inputs={};function field(name,label,options){const wrap=document.createElement('label');wrap.style.cssText='display:grid;gap:5px;margin:10px 0';wrap.textContent=label;const el=document.createElement(options?'select':'textarea');el.name=name;el.required=true;el.style.width='100%';if(options){for(const [value,text] of options){const option=document.createElement('option');option.value=value;option.textContent=text;el.append(option)}}else{el.maxLength=3500;el.rows=2}wrap.append(el);fields.append(wrap);inputs[name]=el;return el}
+  if(!record){field('reason','سبب فتح الحالة');field('priority','الأولوية',[['routine','عادية'],['high','مرتفعة'],['urgent','عاجلة']])}
+  else{
+   const available={new:[['active','بدء المتابعة']],active:[['referred','إحالة']],referred:[['active','العودة للمتابعة']]}[record.status]||[];
+   if(session.canApprove&&['active','referred'].includes(record.status))available.push(['closed','إغلاق معتمد']);
+   if(!available.length)return;
+   const status=field('status','الإجراء',available);
+   const dynamic=document.createElement('div');fields.append(dynamic);
+   const update=()=>{dynamic.replaceChildren();for(const name of ['recipient','due','reason','response','result'])delete inputs[name];const add=(n,l)=>{const el=field(n,l);dynamic.append(el.parentElement);return el};if(status.value==='referred'){add('recipient','الجهة المحال إليها');const due=add('due','موعد الرد الهجري (سنة/شهر/يوم)');due.value=hijriToday()}if(status.value==='referred')add('reason','سبب الإحالة');if(record.status==='referred')add('response','الرد أو توثيق مبرر العودة');if(status.value==='closed')add('result','نتيجة الحالة')};status.onchange=update;update();
+  }
+  const save=document.createElement('button'),cancel=document.createElement('button');save.type='submit';save.textContent='حفظ مشفر';cancel.type='button';cancel.textContent='إلغاء';cancel.onclick=()=>dialog.close();form.append(save,cancel);dialog.append(form);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
+  form.onsubmit=async event=>{event.preventDefault();if(!canEdit()||!dialog.open)return;save.disabled=true;const data=Object.fromEntries(Object.entries(inputs).map(([n,el])=>[n,el.value.trim()]));if(data.due){data.due=docsFollowupDate(data.due);if(!data.due){notice.textContent='تحقق من الموعد الهجري.';save.disabled=false;return}}try{const repo=docsFieldworkRepo();if(record)await repo.advance(record.id,record.revision,{...data,date:hijriToday()});else await repo.create({...data,id:crypto.randomUUID(),studentId:key,date:hijriToday()});if(canEdit()&&dialog.open){dialog.close();await refreshCases()}}catch{if(canEdit()&&dialog.open)notice.textContent='تعذر الحفظ؛ تحقق من البيانات والصلاحية أو أعد فتح الحالة.'}finally{save.disabled=false}};
+ }
+ const create=document.createElement('button');create.type='button';create.textContent='إنشاء حالة مشفرة';create.onclick=()=>formFor(null);panel.append(create);
+ for(const record of records.filter(r=>r.studentId===key)){
+  const row=document.createElement('div'),desc=document.createElement('p'),edit=document.createElement('button');desc.textContent=record.reason+' · '+({new:'جديدة',active:'تحت المتابعة',referred:'محالة',closed:'مغلقة'}[record.status]||'غير معروفة');row.append(desc);if(record.status!=='closed'){edit.type='button';edit.textContent='تحديث الحالة';edit.onclick=()=>formFor(record);row.append(edit)}panel.append(row);
+ }
+
+ const summary=document.createElement('p');summary.textContent='المفتوحة: '+view.student.open+' · المغلقة: '+view.student.closed;panel.append(summary);
+ const labels={new:'جديدة',active:'تحت المتابعة',referred:'محالة',closed:'مغلقة'};
+ for(const item of view.student.timeline){const p=document.createElement('p');p.textContent=item.date+' هـ · '+(labels[item.status]||'غير معروفة');panel.append(p)}
+}
 async function openStudent360(key){
  const owner=activeUser,ownerDb=db;
  const isCurrent=()=>activeUser===owner&&db===ownerDb&&studentActive===key;
@@ -3982,6 +4093,9 @@ async function openStudent360(key){
  if(review.coverage!=='indexed')workText.textContent+=' — عرض جزئي';
  workSummary.style.gridColumn='1/-1';workSummary.append(workTitle,workText);basics.append(workSummary);
 
+const casePanel=document.createElement('div');casePanel.id='docsStudentFieldworkCases';casePanel.style.gridColumn='1/-1';basics.append(casePanel);
+ docsFieldworkRenderStudent(casePanel,key,isCurrent).catch(()=>{if(isCurrent()&&casePanel.isConnected)casePanel.textContent='تعذر عرض الحالات المشفرة.'});
+ 
  const linkedCare=studentCareIndex[key]||{};
  const healthLabel=student.health_status||(linkedCare.health?'حالة صحية موثقة ضمن سجل مرتبط':'');
  const socialLabel=student.social_status||(linkedCare.special?'رعاية خاصة موثقة ضمن سجل مرتبط':'');
@@ -4564,7 +4678,7 @@ reportIntro.innerHTML='<div class="row"><div><h2>التقارير والتحلي
 '<nav id="reportsSubnav" class="docs-reports-subnav" aria-label="أقسام التقارير"><button data-report-tab="dashboard" type="button">المؤشرات</button><button data-report-tab="analytics" type="button">التحليلات</button><button data-report-tab="official" type="button">التقارير الرسمية</button><button data-report-tab="export" type="button">التصدير والطباعة</button></nav>'+
 '<p id="reportsDataStatus" class="muted" role="status">جارٍ تجهيز مصادر التقارير…</p><section id="reportsProvenance" class="unified-note docs-reports-provenance" aria-labelledby="reportsProvenanceTitle"><h3 id="reportsProvenanceTitle">سياق البيانات وحدود المؤشرات</h3><div id="reportsProvenanceBody">يظهر هنا مصدر كل مجموعة بيانات وحجم العينة بعد تحميل التقارير.</div></section>'+ 
 '<section id="reportsDashboard" data-report-pane="dashboard"><div class="docs-report-filters"><label>الفترة الهجرية<select id="reportsYear"><option value="all">جميع السنوات المتاحة</option><option value="1448">١٤٤٨ هـ</option><option value="1447">١٤٤٧ هـ</option></select></label><label>حالة العمل<select id="reportsStatus"><option value="all">كل الحالات</option><option value="done">موسوم مكتمل في المصدر</option><option value="pending">غير مكتمل أو غير موثّق</option></select></label></div><div id="reportsTopMetrics" class="docs-report-metrics docs-exec-kpis"></div><div class="docs-exec-layout"><section class="docs-exec-chart"><h3>توزيع الأعمال الأصلية</h3><div id="docsExecChart" class="docs-exec-plot"></div><div id="docsReportItems" class="docs-report-bars" hidden></div></section><aside class="docs-exec-summary"><h3>ملخص الحالة</h3><div id="docsExecSummary"></div><p id="docsExecNotice" class="muted"></p></aside></div><section class="docs-exec-shortcuts"><h3>أقسام التقارير</h3><div><button type="button" data-exec-target="official">التقارير الرسمية<small>المسودات والطباعة</small></button><button type="button" data-exec-target="analytics">تحليل الطلاب<small>المواظبة والسلوك والرعاية</small></button><button type="button" data-exec-target="export">التصدير والطباعة<small>PDF وExcel</small></button><button type="button" data-exec-target="dashboard">المؤشرات<small>ملخص الأعمال</small></button></div></section><p class="muted">البرامج المسجلة لا تعني المنفذة. حالة «مكتمل» لا تثبت الإنجاز دون شواهد.</p></section>'+
-'<section id="reportsAnalytics" data-report-pane="analytics" hidden><h3>تحليلات المواظبة والسلوك والرعاية</h3><p class="muted">مؤشرات مجمعة من السجلات المرتبطة بمعرّفات الطلاب المؤكدة. لا تُعرض أسماء أو تفاصيل الحالات الطبية هنا. تحليلات الطلاب تشمل كل الفترات المتاحة في المصدر.</p><div id="reportsStudentMetrics" class="docs-report-metrics"></div><div id="reportsStudentBars" class="docs-report-bars"></div><p id="reportsAnalyticsNote" class="muted"></p></section>'+
+'<section id="reportsAnalytics" data-report-pane="analytics" hidden><h3>تحليلات المواظبة والسلوك والرعاية</h3><p class="muted">مؤشرات مجمعة من السجلات المرتبطة بمعرّفات الطلاب المؤكدة. لا تُعرض أسماء أو تفاصيل الحالات الطبية هنا. تحليلات الطلاب تشمل كل الفترات المتاحة في المصدر.</p><div id="reportsStudentMetrics" class="docs-report-metrics"></div><div id="reportsStudentBars" class="docs-report-bars"></div><p id="reportsAnalyticsNote" class="muted"></p><section id="docsFieldworkReport" aria-live="polite"></section></section>'+
 '<section id="reportsOfficial" data-report-pane="official" hidden><h3>مسودات التقارير الرسمية</h3><p class="muted">تُنشأ المسودة من أرقام السجلات المتاحة. يمكنك تحرير النص قبل الطباعة، ولا تُحفظ نسخة مكررة في الأعمال تلقائيًا.</p><div class="docs-report-filters"><label>نوع التقرير<select id="reportsOfficialType"><option value="monthly">تقرير شهري</option><option value="term">تقرير فصلي</option><option value="annual">تقرير ختامي</option></select></label><label>الفترة الهجرية للتقرير<input id="reportsOfficialPeriod" type="text" maxlength="35" placeholder="مثال: ١٤٤٨/٠٥ أو الفصل الأول ١٤٤٨"></label></div><div class="row"><button id="reportsGenerate" class="primary" type="button">إنشاء مسودة من البيانات</button><button id="reportsOpenOriginals" class="btn" type="button">فتح المستندات الأصلية</button></div><label class="docs-report-draft-label">نص التقرير قابل للتحرير<textarea id="reportsDraft" rows="16" maxlength="18000" placeholder="اختر الفترة ونوع التقرير، ثم اضغط إنشاء مسودة."></textarea></label><p id="reportsDraftStatus" class="muted" role="status"></p></section>'+
 '<section id="reportsExport" data-report-pane="export" hidden><h3>مركز التصدير والطباعة</h3><p class="muted">تصدير ملخص إحصائي دون أسماء الطلاب أو تفاصيل الرعاية. للطباعة الرسمية استخدم مسودة التقرير في القسم السابق.</p><div class="row"><button id="reportsExportExcel" type="button" class="btn">تصدير جدول Excel (CSV)</button><button id="reportsPrintSummary" type="button" class="primary">طباعة A4 / حفظ PDF</button><button id="reportsPrintOfficial" type="button" class="btn">طباعة المسودة الرسمية</button></div><p id="reportsExportStatus" class="muted" role="status"></p></section>';
 docsMain.append(workspacePages.reports);workspacePages.reports.append(reportIntro,originalMetrics,$('docsReliableSummary'));
@@ -5052,7 +5166,7 @@ refreshReportSummary=function(){
  const total={rows,byType,done,programs,unverified,list};
  reportsLastOverview=total;
  reportsRenderProvenance(rows);
- const agg=$('reportsStudentMetrics');agg.replaceChildren();
+ const agg=$('reportsStudentMetrics');agg.replaceChildren();docsFieldworkReportRefresh().catch(()=>{});
  const ins=reportsInsightsReady?Object.values(reportsInsights):[];
  const sums={absence:0,late:0,behavior:0,positive:0,cases:0,interviews:0,referrals:0};
  for(const r of ins)for(const k of Object.keys(sums))sums[k]+=Math.max(0,Number(r[k])||0);
@@ -5073,6 +5187,7 @@ refreshReportSummary=function(){
  reportsBars($('reportsStudentBars'),reportsInsightsReady?studentBars:[],x=>reportsStudentLink(x.key));
  $('reportsAnalyticsNote').textContent=reportsInsightsReady?'الأرقام تشمل السجلات التي أمكن ربطها بمعرّفات الطلاب، ولا تعني تشخيصًا جديدًا.':'لم تُحمّل مؤشرات سجلات الطلاب بعد؛ لا تُفسَّر القيم الفارغة باعتبارها صفرًا.';
 };
+
 async function loadReportSources(){
  if(reportsBusy||!activeUser)return;const owner=activeUser;reportsBusy=true;
  $('reportsDataStatus').textContent='جارٍ تحميل الأصول والمؤشرات من حسابك…';
@@ -5663,6 +5778,7 @@ dsFullRestore.onchange=async()=>{
    for(const item of items){
     ensureRestoreOwner();
     if(storeName==='cloudSnapshots'&&item?.kind==='local-measure-aggregate'&&(item.entry?.owner!==restoreOwner||item.id!=='measure-aggregate:'+item.entry?.id)){skipped++;continue;}
+    if(storeName==='cloudSnapshots'&&item?.kind==='local-fieldwork-case'&&(item.owner!==restoreOwner||typeof item.record?.id!=='string'||!/^[-a-zA-Z0-9_]{1,128}$/.test(item.record.id)||item.id!=='fieldwork-case:'+item.record.id||!Array.isArray(item.record.history)||!Number.isSafeInteger(item.revision)||item.revision<1||item.record.revision!==item.revision)){skipped++;continue;}
     if(!item||typeof item.id!=='string'||item.id.length>250)continue;
     await new Promise((ok,no)=>{
      const tx=restoreDb.transaction(storeName,'readwrite'),store=tx.objectStore(storeName),req=store.get(item.id);
@@ -6573,6 +6689,56 @@ gradesReportLink.className='panel grade-reports-link';
 gradesReportLink.setAttribute('aria-label','تقارير التحصيل الدراسي');
 gradesReportLink.innerHTML='<h3>تقارير التحصيل الدراسي</h3><p class="muted">النتائج المحفوظة محليًا في تحليل نتائج الطلاب؛ اختر الفترة ثم افتح المعاينة أو اطبع تقرير A4.</p><div class="grade-reports-actions"><select id="gradeReportsSaved" aria-label="اختر نتائج التحصيل"><option value="">تحميل النتائج المحفوظة</option></select><button id="gradeReportsRefresh" type="button">تحديث القائمة</button><button id="gradeReportsOpen" type="button">فتح تحليل النتائج</button><button id="gradeReportsPrint" type="button">معاينة وطباعة A4</button></div><p id="gradeReportsStatus" class="muted" role="status"></p>';
 reportIntro.append(gradesReportLink);
+const attendancePreview=document.createElement('section');attendancePreview.className='panel';attendancePreview.innerHTML='<h3>معاينة استيراد المواظبة</h3><p class="muted">ملف CSV أو XLSX بالأعمدة: رقم الطالب، التاريخ الهجري، النوع (غياب أو تأخر). المعاينة والحفظ محليان ومشفران. افتح تشفير الحالات من ملف الطالب قبل الحفظ.</p><label>اختيار الملف <input type="file" accept=".csv,.xlsx" id="docsAttendanceFile"></label><p role="status" id="docsAttendancePreviewStatus"></p>';
+reportIntro.append(attendancePreview);
+let attendancePreviewToken=0;
+const attendanceSave=document.createElement('button');attendanceSave.type='button';attendanceSave.textContent='حفظ الوقائع الجديدة';attendanceSave.disabled=true;attendancePreview.append(attendanceSave);
+document.addEventListener('athat-docs-logout',()=>{attendancePreviewToken++;attendanceSave.disabled=true;attendanceSave.onclick=null;attendancePreview.querySelector('input').value='';attendancePreview.querySelector('[role=status]').textContent=''});
+attendancePreview.querySelector('input').onchange=async event=>{
+ const owner=activeUser,ownerDb=db,token=++attendancePreviewToken,file=event.target.files?.[0],status=attendancePreview.querySelector('[role=status]');event.target.value='';
+ const current=()=>owner&&owner===activeUser&&ownerDb===db&&token===attendancePreviewToken;
+ attendanceSave.disabled=true;attendanceSave.onclick=null;
+ if(!file||!current())return;
+ status.textContent='جارٍ فحص الملف محليًا…';
+ try{
+  if(file.size>5*1024*1024)throw Error('الحد الأقصى 5 ميجابايت');
+  const rows=/\.xlsx$/i.test(file.name)?await readStudentXlsx(file):parseStudentCsv(await file.text());
+  if(!current())return;
+  const headers=rows[0]?.map(v=>String(v).trim())||[],columns=['رقم الطالب','التاريخ الهجري','النوع'].map(h=>headers.indexOf(h));
+  if(columns.some(i=>i<0))throw Error('تحقق من عناوين الأعمدة الثلاثة');
+  if(!studentIndex.length)throw Error('حدّث دليل الطلاب أولًا');
+  const source=await docsOfflineFetch('/api/guidance/records');
+  if(!current())return;
+  if(!Array.isArray(source.records)||source.records.length>=1000)throw Error('لا يمكن تأكيد اكتمال فهرس المواظبة؛ الحفظ متوقف لتجنب التكرار.');
+  const existing=[];
+  for(const item of source.records.filter(r=>r.source_table==='attendance')){
+   if(!current())return;
+   const detail=await docsOfflineFetch('/api/guidance/record?type=attendance&id='+encodeURIComponent(item.source_record_id));
+   const record=detail.record;
+   const kind=record?.fields?.['نوع الواقعة'];
+   if(!record?.student_key||!record.date_hijri||!kind)throw Error('توجد واقعة أصلية بلا بيانات مطابقة كافية؛ الحفظ متوقف.');
+   existing.push({studentId:record.student_key,date:record.date_hijri,kind});
+  }
+  if(!current())return;
+  const result=window.docsFieldwork.previewAttendance(rows.slice(1).filter(row=>row.some(v=>String(v??'').trim())).map(row=>({studentNumber:row[columns[0]],date:row[columns[1]],kind:row[columns[2]]})),studentIndex,existing);
+  if(current())status.textContent='صالحة مبدئيًا: '+result.counts.candidate+' · مكررة داخل الملف: '+result.counts.duplicate+' · غير صالحة: '+result.counts.invalid+' · موجودة في الفهرس المتاح: '+result.counts.existing+' . لم تُحفظ أي بيانات.';
+  if(!current())return;
+  attendanceSave.disabled=!result.counts.candidate;
+  attendanceSave.onclick=async()=>{
+   if(!current())return;
+   const session=docsFieldworkSession;
+   if(!session||session.accountId!==owner||session.database!==ownerDb){status.textContent='افتح تشفير الحالات من ملف الطالب ثم عد إلى هذه المعاينة.';return}
+   if(!window.confirm('حفظ الوقائع الجديدة محليًا بعد مطابقتها مع الفهرس المتاح؟'))return;
+   attendanceSave.disabled=true;
+   try{
+    const outcome=await window.docsFieldwork.commitAttendanceBatch({database:ownerDb,session,currentSession:()=>current()&&docsFieldworkSession===session?session:null,studentIds:()=>new Set(studentIndex.map(s=>s.key)),preview:result,confirmed:true});
+    if(current()){status.textContent='تم حفظ '+outcome.added+' واقعة مشفرة محليًا؛ تم تجاوز '+outcome.skipped+' واقعة مكررة. تمت المقارنة مع الفهرس المتاح قبل الحفظ.';attendanceSave.onclick=null;}
+   }catch(error){if(current()){status.textContent=error.message;attendanceSave.disabled=false}}
+  };
+
+ }catch(error){if(current())status.textContent=error.message}
+};
+
 async function gradeReportsRefresh(){
  const select=gradesReportLink.querySelector('#gradeReportsSaved'),status=gradesReportLink.querySelector('#gradeReportsStatus');
  try{

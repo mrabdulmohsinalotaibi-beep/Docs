@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {Script} from 'node:vm';
+import {Script,runInNewContext} from 'node:vm';
 import {inflateSync} from 'node:zlib';
 const worker=readFileSync(new URL('../worker.js',import.meta.url),'utf8');
 const match=worker.match(/if\(path==="\/sw\.js"\)return new Response\(("(?:\\.|[^"\\])*"),\{headers:/);
@@ -9,7 +9,7 @@ assert.ok(match,'Embedded Service Worker source exists');
 const sw=JSON.parse(match[1]);
 const page=JSON.parse(worker.match(/^const PAGE=("(?:\\.|[^"\\])*");/)[1]);
 test('offline shell installs only when all executable assets are cached',()=>{
- assert.match(sw,/const CACHE_NAME='athat-docs-shell-v36';/);
+ assert.match(sw,/const CACHE_NAME='athat-docs-shell-v37';/);
  assert.doesNotMatch(sw,/const CACHE_NAME='athat-docs-shell-v35';/);
  for(const asset of ['/brand.svg?v=19','/app-icon.svg?v=19','/pwa-icon-192.png?v=19','/pwa-icon-512.png?v=19','/icon.png?v=19']) assert.ok(sw.includes(asset), 'Offline brand asset missing: '+asset);
  assert.match(sw,/OFFLINE_CORE_MISSING/);
@@ -58,4 +58,13 @@ test('legacy manifest URLs serve the same updated metadata and maskable icons ke
   for(let y=0;y<size;y++){const row=y*(size*4+1);assert.equal(pixels[row],0);for(let x=0;x<size;x++){const p=row+1+x*4;assert.equal(pixels[p+3],255);if(pixels[p]!==255||pixels[p+1]!==255||pixels[p+2]!==255){artwork++;assert.ok(Math.hypot(x+.5-size/2,y+.5-size/2)<=size*.4,'artwork outside Android safe zone')}}}
   assert.ok(artwork>size*size*.02);
  }
+});
+
+test('offline manifest is served from the local cache without attempting a network fetch',async()=>{
+ const handlers={};let network=0;
+ const manifest=new Response(JSON.stringify({name:'Fixture'}),{headers:{'content-type':'application/manifest+json'}});
+ const cache={match:async key=>key==='/manifest.webmanifest'?manifest.clone():undefined};
+ runInNewContext(sw,{URL,Response,self:{location:{origin:'https://docs.athat.app'},navigator:{onLine:false},addEventListener:(name,fn)=>handlers[name]=fn},caches:{open:async()=>cache},fetch:async()=>{network++;throw Error('offline')}});
+ let response;handlers.fetch({request:new Request('https://docs.athat.app/manifest.webmanifest?v=19'),respondWith:promise=>response=promise});
+ assert.equal((await response).status,200);assert.equal(network,0);assert.equal((await (await response).json()).name,'Fixture');
 });
