@@ -7119,7 +7119,7 @@ function docsIndicatorState(state,message){
  const inactive=['الحفظ التلقائي متوقف على هذا الجهاز','الحفظ التلقائي معطل على هذا الجهاز','غير متصل','بانتظار جهاز آخر متصل','الجهاز الآخر غير متصل','الاتصال متوقف'];
  return state==='red'&&inactive.includes(String(message||''))?'neutral':(['green','yellow','red','neutral'].includes(state)?state:'yellow');
 }
- function set(el,state,label,message){if(!el)return;el.dataset.state=docsIndicatorState(state,message);el.querySelector('span').textContent=label;el.title=label;const warning=document.getElementById('docsMobileHealthWarning');const failed=[local,peer].some(node=>node?.dataset.state==='red');if(warning)warning.hidden=!failed}
+ function set(el,state,label,message){if(!el)return;const next=docsIndicatorState(state,message);if(el===local&&next==='green'&&el.dataset.state==='red')return;el.dataset.state=next;el.querySelector('span').textContent=label;el.title=label;const warning=document.getElementById('docsMobileHealthWarning');const failed=[local,peer].some(node=>node?.dataset.state==='red');if(warning)warning.hidden=!failed}
  function show(){root.hidden=!document.getElementById('sessionPanel')||document.getElementById('sessionPanel').hidden}
  const observer=new MutationObserver(show);const panel=document.getElementById('sessionPanel');if(panel)observer.observe(panel,{attributes:true,attributeFilter:['hidden']});show();
  window.addEventListener('docs:local-status',e=>{const d=e.detail||{};set(local,d.state||'red','الحفظ بالجهاز: '+(d.message||'متوقف'),d.message)});
