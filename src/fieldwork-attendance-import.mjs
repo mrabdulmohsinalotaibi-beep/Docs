@@ -28,3 +28,37 @@ export function previewAttendance(rows,students,existing){
  }
  return {rows:result,counts:Object.fromEntries(['candidate','existing','duplicate','invalid'].map(k=>[k,result.filter(r=>r.status===k).length]))};
 }
+
+ 
+// Local encrypted attendance batch. Writes only after confirmation and rechecks
+// the live session and roster inside the transaction. No network access.
+export async function commitAttendanceBatch({database,session,currentSession,studentIds,preview,confirmed}){
+ const active=()=>{const now=currentSession();if(!session?.accountId||now!==session||now.database!==database||!now.caseCipher)throw Error('جلسة الحفظ مقفلة أو تغير الحساب');return now};
+ active();
+ if(confirmed!==true||!Array.isArray(preview?.rows)||preview.rows.length>20000)throw Error('تأكيد المعاينة مطلوب');
+ const candidates=preview.rows.filter(r=>r?.status==='candidate'), staged=new Map();
+ for(const r of candidates){
+  active();
+  if(typeof r.studentId!=='string'||!studentIds().has(r.studentId)||attendanceHijri(r.date)!==r.date||!['absence','late'].includes(r.kind))throw Error('تغيرت بيانات المعاينة');
+  const fingerprint=key(r.studentId,r.date,r.kind);
+  if(staged.has(fingerprint))continue;
+  // A deterministic account-keyed digest is not available on the case cipher.
+  // Use a random encrypted batch and compare decrypted prior batches before commit.
+  staged.set(fingerprint,{studentId:r.studentId,date:r.date,kind:r.kind});
+ }
+ const readAll=()=>new Promise((ok,no)=>{const q=database.transaction('cloudSnapshots','readonly').objectStore('cloudSnapshots').getAll();q.onsuccess=()=>ok(q.result||[]);q.onerror=()=>no(q.error)});
+ const prior=(await readAll()).filter(r=>r.kind==='local-fieldwork-encrypted'&&r.owner===session.accountId&&r.caseId?.startsWith('attendance-'));
+ const known=new Set();
+ for(const row of prior){active();const clear=await session.caseCipher.open(session.accountId,row);if(!Array.isArray(clear.events))throw Error('سجل مواظبة غير صالح');for(const event of clear.events)known.add(key(event.studentId,event.date,event.kind))}
+ const events=[...staged].filter(([k])=>!known.has(k)).map(([,v])=>v);
+ if(!events.length)return {added:0,skipped:candidates.length};
+ const envelopes=[];
+ for(let i=0;i<events.length;i+=250){active();envelopes.push(await session.caseCipher.seal(session.accountId,{id:'attendance-'+crypto.randomUUID(),revision:1,events:events.slice(i,i+250)}))}
+ active();
+ await new Promise((ok,no)=>{
+  const tx=database.transaction('cloudSnapshots','readwrite'),store=tx.objectStore('cloudSnapshots');let failure;
+  const q=store.getAll();q.onsuccess=()=>{try{active();const latest=(q.result||[]).filter(r=>r.kind==='local-fieldwork-encrypted'&&r.owner===session.accountId&&r.caseId?.startsWith('attendance-'));if(JSON.stringify(latest)!==JSON.stringify(prior))throw Error('تغيرت المواظبة؛ أعد المعاينة');if(events.some(r=>!studentIds().has(r.studentId)))throw Error('تغير دليل الطلاب');for(const row of envelopes)store.add(row)}catch(e){failure=e;tx.abort()}};
+  tx.oncomplete=ok;tx.onabort=()=>no(failure||tx.error||Error('تعذر الحفظ'));tx.onerror=()=>no(tx.error);
+ });
+ active();return {added:events.length,skipped:candidates.length-events.length};
+}
