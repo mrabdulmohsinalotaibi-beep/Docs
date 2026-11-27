@@ -19,3 +19,23 @@ export function buildProfessionalPortfolio(rows,classify,{signedIn=false,indexRe
  const safe=n=>n===0?'0':n<5?'أقل من 5':String(Math.floor(n/5)*5)+'+';
  return {coverage:indexReady?'indexed':'partial',total:safe(total),completed:safe(completed),groups:groups.map(g=>({label:g.label,total:safe(g.total),completed:safe(g.completed)}))};
 }
+
+export function buildProfessionalHighlights(rows,{selectedKeys=[],max=8}={}){
+ const selected=new Set((selectedKeys||[]).map(value=>String(value)));
+ const keysOf=row=>{
+  const id=String(row?.source_record_id||row?.id||'');
+  const keys=[id];
+  if(row?.source_table&&id)keys.push('guidance:'+row.source_table+':'+id);
+  if(row?.accountSourceTable&&row.accountSourceTable!=='local'&&id)keys.push('a4:'+id);
+  return keys;
+ };
+ const evidenceCount=row=>{
+  const fields=row?.fields&&typeof row.fields==='object'?row.fields:{};
+  return (Array.isArray(row?.photos)?row.photos.length:0)+(Array.isArray(row?.evidence)?row.evidence.length:0)+Object.values(fields).filter(value=>typeof value==='string'&&/^data:image\//.test(value)).length;
+ };
+ return rows.filter(row=>keysOf(row).some(key=>selected.has(key))||selected.has(String(row?.id||''))).slice(0,max).map(row=>{
+  const linked=Boolean(row?.studentKey||row?.student_key||row?.studentName||row?.student_name||row?.linked);
+  const title=linked?(row?.kind||row?.title||'عمل موثق'):String(row?.title||row?.kind||'عمل موثق').slice(0,160);
+  return {title,kind:String(row?.kind||row?.accountSourceTable||'عمل توجيهي').slice(0,100),date:String(row?.hijriDate||row?.date_hijri||row?.date_text||'غير محدد').slice(0,60),status:String(row?.status||'غير محدد').slice(0,40),evidence:evidenceCount(row),linked};
+ });
+}

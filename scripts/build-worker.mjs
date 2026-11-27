@@ -9,7 +9,7 @@ const parts = await Promise.all(modules.map(async name => {
   const source = await readFile(new URL('src/'+name, root), 'utf8');
   return source.replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 }));
-const bundle = 'window.docsFieldwork = (() => {\n'+parts.join('\n')+'\nreturn Object.freeze({unlockCaseCipher,encryptedCaseRepository,projectFieldworkCases,previewAttendance,commitAttendanceBatch,buildProfessionalPortfolio});\n})();';
+const bundle = 'window.docsFieldwork = (() => {\n'+parts.join('\n')+'\nreturn Object.freeze({unlockCaseCipher,encryptedCaseRepository,projectFieldworkCases,previewAttendance,commitAttendanceBatch,buildProfessionalPortfolio,buildProfessionalHighlights});\n})();';
 new Script(bundle,{filename:'fieldwork-bundle.js'});
 if (bundle.includes('</script')) throw Error('Unsafe inline bundle');
 const marker = '<!-- DOCS_FIELDWORK_BUNDLE -->';
