@@ -2,11 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {Script} from 'node:vm';
+import {execFileSync} from 'node:child_process';
 
 const root=new URL('../',import.meta.url);
 const page=await readFile(new URL('src/page.html',root),'utf8');
-const runtime=await readFile(new URL('src/worker-runtime.js',root),'utf8');
-const worker=await readFile(new URL('worker.js',root),'utf8');
 
 test('student assistant is integrated into the existing student profile exactly once',()=>{
  for(const marker of ['data-s360page="assistant"','id="student360Assistant"','async function docsAssistRender(key)','docsAssistRender(key).catch']){
@@ -31,5 +30,6 @@ test('all inline scripts parse and generated worker matches the sources',()=>{
  for(const [index,match] of [...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].entries()){
   new Script(match[1],{filename:'embedded-'+(index+1)+'.js'});
  }
- assert.equal(worker,'const PAGE='+JSON.stringify(page)+';\n'+runtime);
+ // The canonical builder injects the fieldwork bundle before comparing the complete generated worker.
+ assert.doesNotThrow(()=>execFileSync(process.execPath,['scripts/build-worker.mjs','--check'],{cwd:root,stdio:'pipe'}));
 });
