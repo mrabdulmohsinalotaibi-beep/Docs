@@ -16,3 +16,11 @@ test('validates actual Umm al-Qura calendar days',()=>{
  assert.equal(attendanceHijri('1448/06/31'),'');
  assert.equal(attendanceHijri('2026/11/26'),'');
 });
+
+ test('rejects inherited property names and tolerates malformed rows',()=>{
+ const students=[null,{key:'a',student_no:'001'}];
+ const row={studentNumber:'001',date:'1448/06/01',kind:'constructor'};
+ const result=previewAttendance([row,{...row,kind:'__proto__'},null,{...row,kind:'غياب'}],students,[null]);
+ assert.deepEqual(result.counts,{candidate:1,existing:0,duplicate:0,invalid:3});
+ assert.equal(result.rows[0].reason,'invalid-kind');
+ });
