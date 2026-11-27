@@ -3986,6 +3986,24 @@ async function docsAssistRender(key){
 
 // Keep decrypted case data and the non-extractable key in memory only.
 let docsFieldworkSession=null,docsFieldworkEpoch=0;
+let docsFieldworkReportToken=0;
+async function docsFieldworkReportRefresh(){
+ const root=$('docsFieldworkReport');if(!root)return;
+ const token=++docsFieldworkReportToken,session=docsFieldworkSession,owner=activeUser;
+ root.replaceChildren();const h=document.createElement('h3');h.textContent='مؤشرات الحالات الميدانية المشفرة';root.append(h);
+ const p=document.createElement('p');p.textContent='افتح تشفير الحالات من ملف الطالب لعرض المؤشرات.';root.append(p);
+ if(!session||session.accountId!==owner||session.database!==db)return;
+ const current=()=>token===docsFieldworkReportToken&&owner===activeUser&&session===docsFieldworkSession;
+ try{
+  const rows=await docsFieldworkRepo().list();if(!current())return;
+  const today=hijriToday(),unique=[...new Map(rows.map(r=>[r.id,r])).values()];
+  const stats=[['إجمالي الحالات',unique.length],['المفتوحة',unique.filter(r=>r.status!=='closed').length],['المغلقة',unique.filter(r=>r.status==='closed').length],['الإحالات القائمة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved).length],['الإحالات المتأخرة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved&&docsFollowupDate(r.referral?.due)&&docsFollowupDate(r.referral.due)<today).length]];
+  p.textContent='جميع الفترات المحلية المتاحة؛ مؤشرات مستقلة عن السجلات الرسمية لتجنب جمع مصادر متداخلة. لا أسماء أو تفاصيل فردية.';
+  const grid=document.createElement('div');grid.className='docs-report-metrics';
+  for(const [label,count] of stats){const card=document.createElement('div'),n=document.createElement('strong'),caption=document.createElement('p');n.textContent=String(count);caption.textContent=label;card.append(n,caption);grid.append(card)}root.append(grid);
+ }catch{if(current())p.textContent='تعذر قراءة الحالات المشفرة؛ الأعداد غير متاحة.'}
+}
+document.addEventListener('athat-docs-logout',()=>{docsFieldworkReportToken++;$('docsFieldworkReport')?.replaceChildren()});
 function docsFieldworkLock(){docsFieldworkEpoch++;docsFieldworkSession=null;docsFieldworkReportRefresh().catch(()=>{});$('docsStudentFieldworkCases')?.replaceChildren();$('docsFieldworkDialog')?.close();if(activeUser&&db)docsRenderDailyBrief().catch(()=>{})}
 document.addEventListener('athat-docs-logout',docsFieldworkLock);
 function docsFieldworkRepo(){
@@ -5169,24 +5187,7 @@ refreshReportSummary=function(){
  reportsBars($('reportsStudentBars'),reportsInsightsReady?studentBars:[],x=>reportsStudentLink(x.key));
  $('reportsAnalyticsNote').textContent=reportsInsightsReady?'الأرقام تشمل السجلات التي أمكن ربطها بمعرّفات الطلاب، ولا تعني تشخيصًا جديدًا.':'لم تُحمّل مؤشرات سجلات الطلاب بعد؛ لا تُفسَّر القيم الفارغة باعتبارها صفرًا.';
 };
-let docsFieldworkReportToken=0;
-async function docsFieldworkReportRefresh(){
- const root=$('docsFieldworkReport');if(!root)return;
- const token=++docsFieldworkReportToken,session=docsFieldworkSession,owner=activeUser;
- root.replaceChildren();const h=document.createElement('h3');h.textContent='مؤشرات الحالات الميدانية المشفرة';root.append(h);
- const p=document.createElement('p');p.textContent='افتح تشفير الحالات من ملف الطالب لعرض المؤشرات.';root.append(p);
- if(!session||session.accountId!==owner||session.database!==db)return;
- const current=()=>token===docsFieldworkReportToken&&owner===activeUser&&session===docsFieldworkSession;
- try{
-  const rows=await docsFieldworkRepo().list();if(!current())return;
-  const today=hijriToday(),unique=[...new Map(rows.map(r=>[r.id,r])).values()];
-  const stats=[['إجمالي الحالات',unique.length],['المفتوحة',unique.filter(r=>r.status!=='closed').length],['المغلقة',unique.filter(r=>r.status==='closed').length],['الإحالات القائمة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved).length],['الإحالات المتأخرة',unique.filter(r=>r.status==='referred'&&!r.referral?.resolved&&docsFollowupDate(r.referral?.due)&&docsFollowupDate(r.referral.due)<today).length]];
-  p.textContent='جميع الفترات المحلية المتاحة؛ مؤشرات مستقلة عن السجلات الرسمية لتجنب جمع مصادر متداخلة. لا أسماء أو تفاصيل فردية.';
-  const grid=document.createElement('div');grid.className='docs-report-metrics';
-  for(const [label,count] of stats){const card=document.createElement('div'),n=document.createElement('strong'),caption=document.createElement('p');n.textContent=String(count);caption.textContent=label;card.append(n,caption);grid.append(card)}root.append(grid);
- }catch{if(current())p.textContent='تعذر قراءة الحالات المشفرة؛ الأعداد غير متاحة.'}
-}
-document.addEventListener('athat-docs-logout',()=>{docsFieldworkReportToken++;$('docsFieldworkReport')?.replaceChildren()});
+
 async function loadReportSources(){
  if(reportsBusy||!activeUser)return;const owner=activeUser;reportsBusy=true;
  $('reportsDataStatus').textContent='جارٍ تحميل الأصول والمؤشرات من حسابك…';
