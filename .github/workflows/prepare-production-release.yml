@@ -31,6 +31,9 @@ jobs:
           ref: ${{ inputs.candidate_sha }}
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
       - name: Verify exact current main and generated Worker
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
@@ -38,15 +41,7 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SHA"
-          node --input-type=module <<'JS'
-          import {readFileSync} from 'node:fs';
-          import assert from 'node:assert/strict';
-          const page=readFileSync('src/page.html','utf8');
-          const runtime=readFileSync('src/worker-runtime.js','utf8');
-          assert.equal(readFileSync('worker.js','utf8'),'const PAGE='+JSON.stringify(page)+';\n'+runtime);
-          JS
-          cp worker.js worker-release.mjs
-          node --check worker-release.mjs
+          npm run build:check
           sha256sum worker.js > worker.sha256
           printf '%s\n' "$CANDIDATE_SHA" > candidate-sha.txt
       - uses: actions/upload-artifact@v4

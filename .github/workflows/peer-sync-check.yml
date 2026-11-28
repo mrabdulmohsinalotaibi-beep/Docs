@@ -1,7 +1,7 @@
 name: Docs peer-sync checks
 on:
   push:
-    branches: [feature/p2p-sync-after-a4]
+    branches: [main, feature/p2p-sync-after-a4]
   pull_request:
     paths: [worker.js, peer-sync.js, tests/peer-sync.test.mjs, tests/offline-readiness.test.mjs, tests/offline-browser.test.mjs, .github/workflows/peer-sync-check.yml]
 jobs:

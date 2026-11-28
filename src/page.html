@@ -600,6 +600,9 @@ body.docs-pdf-modal-open{overflow:hidden}
 #docsGuidancePanel .docs-guidance-controls{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
 #docsGuidancePanel input,#docsGuidancePanel select{min-width:170px;flex:1;padding:12px;border:1px solid #D5D1C8;border-radius:12px;background:#FFFFFF;color:#484443;font:inherit}
 .docs-guidance-row{display:flex;flex-direction:column;gap:5px;width:100%;text-align:right;border:1px solid #ECE9E0;border-radius:12px;background:#ECE9E0;color:#484443;padding:12px;margin:7px 0;font:inherit;cursor:pointer}
+#docsOriginalList{width:min(700px,calc(100% - 24px));max-height:88vh;margin:auto;overflow:auto}
+#docsOriginalList::backdrop{background:#231f1dd0}
+#docsOriginalList input{width:100%}
 .docs-guidance-row strong{font-size:14px}.docs-guidance-row small{color:#625E5D;line-height:1.7}
 #docsGuidanceModal[hidden]{display:none!important}
 #docsGuidanceModal{position:fixed;inset:0;z-index:10000;background:rgba(20,15,11,.72);display:flex;align-items:center;justify-content:center;padding:12px}
@@ -1462,7 +1465,7 @@ const CARE_GROUPS=[
 ];
 let studentInsights={},studentQuickFilter='all',studentInsightBusy=false;
 let studentCareIndex={};
-let migratedA4Records=[],a4SyncBusy=false,currentA4Payload=null,migratedLibraryShown=40;
+let migratedA4Records=[],migratedA4LoadedUser='',a4SyncBusy=false,currentA4Payload=null,migratedLibraryShown=40;
 let nativeDocsShown=35,localDocsShown=50;
 function say(s){$('toast').textContent=s;$('toast').style.display='block';clearTimeout(say.t);say.t=setTimeout(()=>$('toast').style.display='none',4200)}
 function openDb(userId){return new Promise((ok,no)=>{const r=indexedDB.open(storage+'-'+userId,3);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('documents'))r.result.createObjectStore('documents',{keyPath:'id'});if(!r.result.objectStoreNames.contains('deletions'))r.result.createObjectStore('deletions',{keyPath:'id'});if(!r.result.objectStoreNames.contains('cloudSnapshots'))r.result.createObjectStore('cloudSnapshots',{keyPath:'id'})};r.onsuccess=()=>{window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'green',message:'التخزين جاهز؛ لم يُختبر حفظ تغيير بعد'}}));ok(r.result)};r.onerror=()=>{window.dispatchEvent(new CustomEvent('docs:local-status',{detail:{state:'red',message:'تعذر فتح التخزين'}}));no(r.error)}})}
@@ -1972,7 +1975,7 @@ function docsCanonicalKey(document){
 function docsAccountOriginals(){
  const originals=new Map();
  const valid=doc=>String(doc.body||'').trim()||Object.values(doc.fields||{}).some(v=>String(v||'').trim())||(doc.photos||[]).length;
- for(const row of nativeA4Rows()){const id=String(row.source_record_id||'');if(id)originals.set('a4:'+id,{...row,accountSourceTable:row.source_table||'a4'})}
+ for(const row of nativeA4Rows()){const id=String(row.source_record_id||'');if(id)originals.set('a4:'+id,{...row,accountRecordKind:'a4',accountSourceTable:row.source_table||'a4'})}
  for(const doc of docs){
   if(!valid(doc))continue;
   if(doc.sourceA4){
@@ -2003,7 +2006,7 @@ function docsAccountOriginals(){
  if(guidanceLoadedUser===activeUser)for(const record of guidanceRecords){
   const id=String(record.source_record_id||''),type=String(record.source_table||'guidance');
   if(!id)continue;const key='guidance:'+type+':'+id;
-  if(!originals.has(key))originals.set(key,{...record,accountSourceTable:type});
+  if(!originals.has(key))originals.set(key,{...record,accountRecordKind:'guidance',accountSourceTable:type});
  }
  return [...originals.values()];
 }
@@ -2278,13 +2281,46 @@ function docsWorkOpen(row){
   say('تعذر العثور على أصل المستند المحلي في هذا الجهاز؛ راجع المزامنة والنسخ الاحتياطية.');return;
  }
  // Imported A4 source is opened from the account archive, not an editable duplicate.
- if(nativeA4Rows().some(item=>String(item.source_record_id)===sourceId)){
+ if(row.accountRecordKind!=='guidance'&&nativeA4Rows().some(item=>String(item.source_record_id)===sourceId)){
   openMigratedA4(sourceId).catch(error=>say('تعذر فتح سجل A4: '+error.message));return;
  }
  if(type&&sourceId&&guidanceRecords.some(item=>item.source_table===type&&String(item.source_record_id)===sourceId)){
   openGuidanceRecord(type,sourceId).catch(error=>say('تعذر فتح السجل: '+error.message));return;
  }
  say('مصدر هذا السجل غير متاح الآن. افتح المستندات والسجلات لتحديث الفهرس قبل المحاولة.');
+}
+function docsOpenOriginalList(title,rows){
+ if(!activeUser||!db)return;
+ const owner=activeUser,ownerDb=db;
+ const dialog=document.createElement('dialog');
+ dialog.id='docsOriginalList';dialog.className='panel';dialog.setAttribute('aria-labelledby','docsOriginalListTitle');
+ dialog.innerHTML='<div class="row"><h2 id="docsOriginalListTitle"></h2><button type="button" class="btn">إغلاق</button></div><input type="search" aria-label="البحث في الأعمال" placeholder="ابحث بالعنوان أو التصنيف أو التاريخ"><p class="muted" role="status"></p><div class="docs-original-rows"></div><button type="button" class="btn docs-original-more">عرض المزيد</button>';
+ dialog.querySelector('h2').textContent=title;
+ dialog.querySelector('button').onclick=()=>dialog.close();
+ const search=dialog.querySelector('input'),status=dialog.querySelector('[role="status"]');
+ const results=dialog.querySelector('.docs-original-rows'),more=dialog.querySelector('.docs-original-more');
+ const date=row=>row.date_text||row.date_hijri||row.hijriDate||docsDisplayHijri(row.created);
+ const sorted=[...rows].sort((a,b)=>docsChronologyKey(date(b)).localeCompare(docsChronologyKey(date(a))));
+ let visible=30;
+ function render(){
+  const query=auditText(search.value);
+  const found=sorted.filter(row=>!query||auditText([docsWorkTitle(row),row.kind,row.student_name||row.studentName,row.status,date(row)].join(' ')).includes(query));
+  status.textContent='عرض '+Math.min(visible,found.length)+' من '+found.length+' عمل';
+  results.replaceChildren();
+  for(const row of found.slice(0,visible)){
+   const button=document.createElement('button');button.type='button';button.className='docs-guidance-row';
+   const name=document.createElement('strong'),details=document.createElement('small');
+   name.textContent=docsWorkTitle(row);
+   details.textContent=[row.kind,date(row),row.status||'حالة غير مصنفة',row.student_name||row.studentName||row.source_student_name].filter(Boolean).join(' · ');
+   button.append(name,details);button.onclick=()=>{dialog.close();if(owner===activeUser&&ownerDb===db)docsWorkOpen(row)};
+   results.append(button);
+  }
+  more.hidden=found.length<=visible;
+ }
+ search.oninput=()=>{visible=30;render()};
+ more.onclick=()=>{visible+=30;render()};
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ document.body.append(dialog);render();dialog.showModal();
 }
 function docsRenderMobileRecent(){
  const root=$('docsMobileRecentList');if(!root)return;root.replaceChildren();
@@ -2692,33 +2728,40 @@ $('auditExportCsv').onclick=()=>{
  const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='جرد-مستندات-الذات.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
 };
 
-function docsChronologyKey(value){
- const raw=String(value||'').replace(/[٠-٩]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/[۰-۹]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).trim();
- const match=raw.match(/(14\d{2})[\/-](\d{1,2})[\/-](\d{1,2})/);
- if(match)return match[1]+'-'+match[2].padStart(2,'0')+'-'+match[3].padStart(2,'0');
- const converted=docsDisplayHijri(raw);
- const fallback=converted.replace(/[٠-٩]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).match(/(14\d{2})\D+(\d{1,2})\D+(\d{1,2})/);
- return fallback?fallback[1]+'-'+fallback[2].padStart(2,'0')+'-'+fallback[3].padStart(2,'0'):'';
+function docsLatinDigits(input){return String(input||'').replace(/[٠-٩]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/[۰-۹]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[\u200e\u200f\u061c]/g,'').trim()}
+function docsChronologyKey(raw){
+ const value=docsLatinDigits(raw);
+ const isGregorian=/^20\d{2}-\d{2}-\d{2}(?:$|[T ])/.test(value);
+ const converted=isGregorian?docsLatinDigits(docsDisplayHijri(value)):value;
+ const date=converted.replace(/\s*هـ?$/u,'');
+ const yearFirst=/^(14\d{2})(?:[/-](\d{1,2})(?:[/-](\d{1,2}))?)?$/.exec(date);
+ const dayFirst=/^(\d{1,2})[/-](\d{1,2})[/-](14\d{2})$/.exec(date);
+ if(!yearFirst&&!dayFirst)return '';
+ const [year,month,day]=yearFirst?yearFirst.slice(1):dayFirst.slice(1).reverse();
+ if(month&&(Number(month)<1||Number(month)>12))return '';
+ if(day&&(Number(day)<1||Number(day)>30))return '';
+ return [year,month?.padStart(2,'0'),day?.padStart(2,'0')].filter(Boolean).join('-');
 }
 const docsPortfolioStyle=".portfolio-cover{background:#484443;color:#fff;padding:24px;border-radius:12px;text-align:center}.portfolio-cover h2{font-size:26px;margin:12px 0}.portfolio-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.portfolio-metrics div{background:#ECE9E0;padding:16px;border-radius:9px;text-align:center}.portfolio-metrics strong{display:block;font-size:26px}.portfolio-table{width:100%;border-collapse:collapse;font-size:13px}.portfolio-table td,.portfolio-table th{border-bottom:1px solid #D5D1C8;text-align:right;padding:9px}.portfolio-table th{background:#ECE9E0}.portfolio-table tr{break-inside:avoid}.portfolio-highlights{display:grid;gap:10px}.portfolio-highlight{border:1px solid #D5D1C8;border-radius:10px;padding:12px;background:#fff;break-inside:avoid}.portfolio-highlight h4{margin:0 0 7px;color:#484443}.portfolio-highlight-meta{display:flex;flex-wrap:wrap;gap:6px;color:#625E5D;font-size:12px}.portfolio-highlight-meta span{padding:3px 8px;border-radius:999px;background:#ECE9E0}.portfolio-note{border-right:3px solid #484443;background:#ECE9E0;padding:10px 12px;font-size:12px}.portfolio-empty{border:1px dashed #D5D1C8;border-radius:10px;padding:14px;color:#625E5D;font-size:13px}@media print{.portfolio-cover{break-after:page;padding:80mm 10mm 20mm;print-color-adjust:exact}.portfolio-metrics div,.portfolio-table th,.portfolio-highlight-meta span{print-color-adjust:exact}}";
 
-function docsPortfolioSelectedKeys(){return [...selected].map(value=>String(value));}
 function docsProfessionalSnapshot(rows=docsAccountOriginals()){
- const summary=window.docsFieldwork.buildProfessionalPortfolio(rows,classifyDocsWorkStatus,{signedIn:!!activeUser&&!!db,indexReady:guidanceLoadedUser===activeUser&&!guidanceLoadError});
- const highlights=summary.coverage==='unavailable'?[]:window.docsFieldwork.buildProfessionalHighlights(rows,{selectedKeys:docsPortfolioSelectedKeys(),max:8});
- return {summary,highlights};
+ const summary=window.docsFieldwork.buildProfessionalPortfolio(rows,classifyDocsWorkStatus,{signedIn:!!activeUser&&!!db,indexReady:guidanceLoadedUser===activeUser&&!guidanceLoadError&&migratedA4LoadedUser===activeUser});
+ return {summary};
 }
 function docsPortfolioMarkup(snapshot){
- const summary=snapshot?.summary||snapshot,highlights=snapshot?.highlights||[];
+ const summary=snapshot.summary;
  const coverage=summary.coverage==='indexed'?'الفهرس المتاح للحساب؛ لا يثبت اكتمال جميع المصادر.':'عرض جزئي؛ بعض مصادر الأعمال غير متاحة.';
  if(summary.coverage==='unavailable')return '<p>سجّل الدخول أولًا.</p>';
- const highlightMarkup=highlights.length?'<div class="portfolio-highlights">'+highlights.map(item=>'<article class="portfolio-highlight"><h4>'+esc(item.title)+'</h4><div class="portfolio-highlight-meta"><span>'+esc(item.kind)+'</span><span>'+esc(item.date)+'</span><span>'+esc(item.status)+'</span><span>'+(item.evidence?'شواهد مرفقة: '+esc(item.evidence):'لم تُحدد شواهد')+'</span></div></article>').join('')+'</div>':'<p class="portfolio-empty">لم تُحدد نماذج مختارة بعد. اختر الأعمال من القائمة أعلاه ثم اطبع الملف لإضافتها هنا.</p>';
- return '<div class="portfolio-cover"><small>مستندات الذات · التوجيه الطلابي</small><h2>ملف الإنجاز المهني</h2><p>عرض مهني للأعمال المتاحة · جميع الفترات</p><p>نسخة عرض تراعي الخصوصية</p><p>المحتويات: الملخص التنفيذي · النماذج المختارة · مجالات الإنجاز · حدود العرض</p></div><h3>١. الملخص التنفيذي</h3><div class="portfolio-metrics"><div>الأعمال المفهرسة<strong>'+esc(summary.total)+'</strong></div><div>المكتملة والمعتمدة<strong>'+esc(summary.completed)+'</strong></div></div><p>'+coverage+'</p><h3>٢. نماذج مختارة من الإنجاز</h3><p class="portfolio-note">هذه النماذج اختارها المستخدم من قائمة الأعمال. لا تُدرج أسماء الطلاب أو نصوص الحالات أو الصور في هذا الملخص.</p>'+highlightMarkup+'<h3>٣. مجالات الإنجاز</h3><table class="portfolio-table"><thead><tr><th>المجال</th><th>المفهرس</th><th>المكتمل والمعتمد</th></tr></thead><tbody>'+summary.groups.map(g=>'<tr><td>'+esc(g.label)+'</td><td>'+esc(g.total)+'</td><td>'+esc(g.completed)+'</td></tr>').join('')+'</tbody></table><h3>٤. حدود العرض وقياس الأثر</h3><p>الأعداد مجمعة ضمن نطاقات لحماية الخصوصية. لا تعني أعداد السجلات تحقق الأثر أو اكتمال الخطة. راجع النماذج المختارة قبل مشاركة التقرير، ولا تضع بيانات تعريفية في عناوين الأعمال.</p>';
+ return '<div class="portfolio-cover"><small>مستندات الذات · التوجيه الطلابي</small><h2>ملف الإنجاز المهني</h2><p>عرض مهني للأعمال المتاحة · جميع الفترات</p><p>نسخة عرض تراعي الخصوصية</p></div><h3>الملخص التنفيذي</h3><div class="portfolio-metrics"><div>الأعمال المفهرسة<strong>'+esc(summary.total)+'</strong></div><div>المكتملة والمعتمدة<strong>'+esc(summary.completed)+'</strong></div></div><p>'+coverage+'</p><h3>مجالات الإنجاز</h3><table class="portfolio-table"><thead><tr><th>المجال</th><th>المفهرس</th><th>المكتمل والمعتمد</th></tr></thead><tbody>'+summary.groups.map(g=>'<tr><td>'+esc(g.label)+'</td><td>'+esc(g.total)+'</td><td>'+esc(g.completed)+'</td></tr>').join('')+'</tbody></table><p>الأعداد مجمعة ضمن نطاقات لحماية الخصوصية. لا تعني أعداد السجلات تحقق الأثر أو اكتمال الخطة.</p>';
 }
 function docsRenderProfessionalPortfolio(rows){
- $('docs').innerHTML=docsPortfolioMarkup(docsProfessionalSnapshot(rows));
- $('nativeDocsNotice').textContent='اختر الأعمال التي تريد إبرازها من القائمة، ثم اطبع ملف الإنجاز. السجلات الأصلية تبقى في أعمالي والأرشيف.';
- $('nativeDocsCount').textContent='';
+ const host=$('docs');host.innerHTML=docsPortfolioMarkup(docsProfessionalSnapshot(rows));
+ const open=document.createElement('button');open.id='docsPortfolioOriginals';open.type='button';open.className='primary';
+ open.textContent='عرض الأعمال الأصلية ('+rows.length+')';open.disabled=!activeUser||!db||!rows.length;
+ open.onclick=()=>docsOpenOriginalList('أعمال ملف الإنجاز',docsAccountOriginals());
+ host.prepend(open);
+ $('nativeDocsNotice').textContent='يمكنك فتح بيانات كل عمل داخل حسابك. نسخة PDF تعرض الإنجاز حسب المجال وتحافظ على خصوصية الطلاب.';
+ $('nativeDocsCount').textContent=guidanceLoadInFlight?'جارٍ استرجاع أعمال حسابك لملف الإنجاز…':'';
  $('portfolioActions').classList.remove('hidden');
  $('printPortfolio').disabled=!activeUser||!db;
 }
@@ -2832,7 +2875,7 @@ function draw(){
   const key=card.dataset.workDate||'',month=key?key.slice(0,7):'undated';
   if(month!==previousMonth){
    const heading=document.createElement('h3');
-   heading.textContent=month==='undated'?'أعمال بلا تاريخ محدد':'أعمال شهر '+month.replace('-', '/')+' هـ';
+   heading.textContent=month==='undated'?'أعمال بلا تاريخ محدد':month.length===4?'أعمال عام '+month+' هـ':'أعمال شهر '+month.replace('-', '/')+' هـ';
    heading.style.cssText='margin:14px 0 5px;padding:7px 10px;border-inline-start:3px solid #95815A;background:#F7F4ED;border-radius:6px;color:#514735;font-size:14px';
    el.append(heading);previousMonth=month;
   }
@@ -2848,6 +2891,7 @@ function activateDocsTab(nextTab){
  if(tab==='portfolio'){
   // Portfolio is the whole account, never the prior search/record filter.
   $('search').value='';$('nativeDocsType').value='';$('nativeDocsLink').value='all';
+  if(activeUser)loadMigratedA4().catch(e=>console.warn('a4_list_unavailable',e.message));
  }
  document.querySelectorAll('[data-tab]').forEach(button=>button.classList.toggle('active',button.dataset.tab===tab));
  draw();
@@ -3706,7 +3750,7 @@ async function loadMigratedA4(){
  if(!activeUser)return;const user=activeUser;
  const data=await docsOfflineFetch('/api/students/a4');
  if(activeUser!==user)return;
- migratedA4Records=data.records||[];renderMigratedLibrary();draw();
+ migratedA4Records=data.records||[];migratedA4LoadedUser=user;renderMigratedLibrary();draw();
  $('s360MigratedTotal').textContent='السجلات المنقولة: '+new Set(migratedA4Records.map(x=>x.source_record_id)).size;
  if(!a4SyncBusy)$('s360A4SyncText').textContent=migratedA4Records.length?'توجد '+migratedA4Records.length+' نسخة محفوظة عبر الأجهزة، ويمكن تحديث النقل عند الحاجة.':'لم تنقل سجلات A4 بعد. اضغط نقل ومزامنة سجلات A4.';
  if(studentActive)renderStudentA4(studentActive);
@@ -4117,6 +4161,13 @@ async function openStudent360(key){
  workText.textContent=own?Object.entries(docsWorkLabels).map(([status,label])=>label+': '+own[status]).join(' · '):'لا توجد أعمال مرتبطة في الفهرس المتاح';
  if(review.coverage!=='indexed')workText.textContent+=' — عرض جزئي';
  workSummary.style.gridColumn='1/-1';workSummary.append(workTitle,workText);basics.append(workSummary);
+ const a4Ids=new Set(migratedA4Records.filter(row=>row.student_key===key).map(row=>row.source_record_id));
+ const linkedRows=docsAccountOriginals().filter(row=>(row.student_key??row.studentKey)===key||row.accountRecordKind==='a4'&&a4Ids.has(row.source_record_id));
+ if(linkedRows.length){
+  const open=document.createElement('button');open.type='button';open.className='btn';
+  open.textContent='فتح الأعمال المرتبطة ('+linkedRows.length+')';
+  open.onclick=()=>{if(isCurrent())docsOpenOriginalList('الأعمال المرتبطة بالطالب',linkedRows)};workSummary.append(open);
+ }
 
 const casePanel=document.createElement('div');casePanel.id='docsStudentFieldworkCases';casePanel.style.gridColumn='1/-1';basics.append(casePanel);
  docsFieldworkRenderStudent(casePanel,key,isCurrent).catch(()=>{if(isCurrent()&&casePanel.isConnected)casePanel.textContent='تعذر عرض الحالات المشفرة.'});
@@ -4280,7 +4331,7 @@ $('logoutDocs').onclick=async()=>{
 (async()=>{try{const data=await docsAuth('me',null,'GET');try{await enterDocs(data.user)}catch(e){if(e?.authSucceeded){$('retryAuthSession').hidden=true;authMessage('')}else{$('retryAuthSession').hidden=false;authMessage('تم التحقق من الحساب لكن تعذّر فتح أرشيف الجهاز: '+(e.message||'خطأ في التخزين المحلي')+'. اضغط «فتح الجلسة مجددًا».')}}}catch(e){if(e.code==='UNAUTHORIZED'||e.code==='INVALID_CREDENTIALS'){authMessage('سجّل الدخول ببريدك الإلكتروني لفتح مستنداتك.')}else{authMessage('تعذر التحقق من الجلسة. أدخل البريد وكلمة المرور للفتح المحلي أو أعد الاتصال بالخادم. لا تمسح بيانات الموقع.');$('retryAuthSession').hidden=false;docsRefreshOfflineShortcut()}}})();
 
 
-let guidanceRecords=[],guidanceLoadInFlight=false,guidanceLoadedUser='',guidanceLoadError='';
+let guidanceRecords=[],guidanceLoadInFlight=null,guidanceLoadedUser='',guidanceLoadError='';
 const guidanceKinds={attendance:'المواظبة',interviews:'المقابلات والجلسات',counseling_cases:'الحالات الفردية والمتابعة',referrals:'الإحالات',programs:'البرامج والأعمال',committees:'لجنة التوجيه',plan_tasks:'مهام الخطة'};
 function guidanceLabel(item){return guidanceKinds[item.source_table]||item.kind||item.source_table}
 const guidanceCompletionTypes=new Set(['counseling_cases','interviews','referrals']);
@@ -4299,20 +4350,24 @@ async function guidanceFetch(url,options){
  return d;
 }
 async function loadGuidanceRecords(){
- if(!activeUser||guidanceLoadInFlight)return;
- const user=activeUser;guidanceLoadInFlight=true;guidanceLoadError='';
- try{
-  const d=await docsOfflineFetch('/api/guidance/records');
-  if(user!==activeUser)return;
+ if(!activeUser||!db)return;
+ const user=activeUser,ownerDb=db;
+ if(guidanceLoadInFlight?.db===ownerDb)return guidanceLoadInFlight.promise;
+ guidanceLoadError='';
+ const promise=docsOfflineFetch('/api/guidance/records').then(d=>{
+  if(user!==activeUser||ownerDb!==db)return;
   guidanceRecords=Array.isArray(d.records)?d.records:[];
   guidanceLoadedUser=user;
-  if(typeof refreshReportSummary==='function')refreshReportSummary();
   renderGuidanceRecords();
-  draw();
- }catch(error){
-  if(user===activeUser){guidanceLoadError=error.message||'تعذر تحميل سجلات الحساب';draw()}
+ }).catch(error=>{
+  if(user===activeUser&&ownerDb===db)guidanceLoadError=error.message||'تعذر تحميل سجلات الحساب';
   throw error;
- }finally{guidanceLoadInFlight=false}
+ }).finally(()=>{
+  if(guidanceLoadInFlight?.db===ownerDb)guidanceLoadInFlight=null;
+  if(user===activeUser&&ownerDb===db)draw();
+ });
+ guidanceLoadInFlight={db:ownerDb,promise};
+ return promise;
 }
 
 let guidancePage=0,guidanceSelected=null,guidanceDocsShown=35;
@@ -4717,14 +4772,19 @@ document.addEventListener('athat-docs-data-restored',event=>{
  docsRefreshAfterRecovery();
 });
 document.addEventListener('athat-docs-login',()=>{guidanceRecords=[];guidanceLoadedUser='';guidanceLoadError='';guidanceDocsShown=35;refreshModernHome().catch(()=>{});docsRenderDailyBrief().catch(()=>{});loadGuidanceRecords().catch(e=>console.warn('guidance_list_unavailable',e.message))});
-document.addEventListener('athat-docs-logout',()=>{guidanceRecords=[];guidanceLoadedUser='';guidanceLoadError='';guidanceDocsShown=35});
+document.addEventListener('athat-docs-logout',()=>{
+ guidanceRecords=[];guidanceLoadInFlight=null;guidanceLoadedUser='';guidanceLoadError='';guidanceDocsShown=35;
+ $('docsOriginalList')?.remove();
+ const guidanceDialog=$('docsGuidanceModal');if(guidanceDialog){guidanceDialog.hidden=true;$('docsGuidanceForm').replaceChildren()}
+ $('s360A4Preview').hidden=true;$('s360A4Paper').replaceChildren();migratedA4LoadedUser='';
+});
 
 const reportIntro=document.createElement('section');reportIntro.className='panel docs-report-center';
 reportIntro.innerHTML='<div class="row"><div><h2>التقارير والتحليلات</h2><p class="muted">أرقام من الأصول فقط، مع توضيح حالة البيانات. لا نسخ جديدة من سجلات الطلاب.</p></div><button id="reportsRefresh" type="button" class="btn">تحديث البيانات</button></div>'+
 '<nav id="reportsSubnav" class="docs-reports-subnav" aria-label="أقسام التقارير"><button data-report-tab="dashboard" type="button">المؤشرات</button><button data-report-tab="analytics" type="button">التحليلات</button><button data-report-tab="official" type="button">التقارير الرسمية</button><button data-report-tab="export" type="button">التصدير والطباعة</button></nav>'+
 '<p id="reportsDataStatus" class="muted" role="status">جارٍ تجهيز مصادر التقارير…</p><section id="reportsProvenance" class="unified-note docs-reports-provenance" aria-labelledby="reportsProvenanceTitle"><h3 id="reportsProvenanceTitle">سياق البيانات وحدود المؤشرات</h3><div id="reportsProvenanceBody">يظهر هنا مصدر كل مجموعة بيانات وحجم العينة بعد تحميل التقارير.</div></section>'+ 
 '<section id="reportsDashboard" data-report-pane="dashboard"><div class="docs-report-filters"><label>الفترة الهجرية<select id="reportsYear"><option value="all">جميع السنوات المتاحة</option><option value="1448">١٤٤٨ هـ</option><option value="1447">١٤٤٧ هـ</option></select></label><label>حالة العمل<select id="reportsStatus"><option value="all">كل الحالات</option><option value="done">موسوم مكتمل في المصدر</option><option value="pending">غير مكتمل أو غير موثّق</option></select></label></div><div id="reportsTopMetrics" class="docs-report-metrics docs-exec-kpis"></div><div class="docs-exec-layout"><section class="docs-exec-chart"><h3>توزيع الأعمال الأصلية</h3><div id="docsExecChart" class="docs-exec-plot"></div><div id="docsReportItems" class="docs-report-bars" hidden></div></section><aside class="docs-exec-summary"><h3>ملخص الحالة</h3><div id="docsExecSummary"></div><p id="docsExecNotice" class="muted"></p></aside></div><section class="docs-exec-shortcuts"><h3>أقسام التقارير</h3><div><button type="button" data-exec-target="official">التقارير الرسمية<small>المسودات والطباعة</small></button><button type="button" data-exec-target="analytics">تحليل الطلاب<small>المواظبة والسلوك والرعاية</small></button><button type="button" data-exec-target="export">التصدير والطباعة<small>PDF وExcel</small></button><button type="button" data-exec-target="dashboard">المؤشرات<small>ملخص الأعمال</small></button></div></section><p class="muted">البرامج المسجلة لا تعني المنفذة. حالة «مكتمل» لا تثبت الإنجاز دون شواهد.</p></section>'+
-'<section id="reportsAnalytics" data-report-pane="analytics" hidden><h3>تحليلات المواظبة والسلوك والرعاية</h3><p class="muted">مؤشرات مجمعة من السجلات المرتبطة بمعرّفات الطلاب المؤكدة. لا تُعرض أسماء أو تفاصيل الحالات الطبية هنا. تحليلات الطلاب تشمل كل الفترات المتاحة في المصدر.</p><div id="reportsStudentMetrics" class="docs-report-metrics"></div><div id="reportsStudentBars" class="docs-report-bars"></div><p id="reportsAnalyticsNote" class="muted"></p><section id="docsFieldworkReport" aria-live="polite"></section></section>'+
+'<section id="reportsAnalytics" data-report-pane="analytics" hidden><h3>تحليلات المواظبة والسلوك والرعاية</h3><p class="muted">مؤشرات مجمعة من السجلات المرتبطة بمعرّفات الطلاب المؤكدة. لا تُعرض أسماء أو تفاصيل الحالات الطبية هنا. تحليلات الطلاب تشمل كل الفترات المتاحة في المصدر.</p><h3>تحليل الأعمال حسب النوع</h3><p class="muted">حسب الفترة وحالة العمل في تبويب المؤشرات. اضغط على أي نوع لعرض أعماله.</p><div id="reportsAnalyticsWorks" class="docs-report-bars"></div><h3>مؤشرات الطلاب المرتبطة</h3><div id="reportsStudentMetrics" class="docs-report-metrics"></div><div id="reportsStudentBars" class="docs-report-bars"></div><p id="reportsAnalyticsNote" class="muted"></p><section id="docsFieldworkReport" aria-live="polite"></section></section>'+
 '<section id="reportsOfficial" data-report-pane="official" hidden><h3>مسودات التقارير الرسمية</h3><p class="muted">تُنشأ المسودة من أرقام السجلات المتاحة. يمكنك تحرير النص قبل الطباعة، ولا تُحفظ نسخة مكررة في الأعمال تلقائيًا.</p><div class="docs-report-filters"><label>نوع التقرير<select id="reportsOfficialType"><option value="monthly">تقرير شهري</option><option value="term">تقرير فصلي</option><option value="annual">تقرير ختامي</option></select></label><label>الفترة الهجرية للتقرير<input id="reportsOfficialPeriod" type="text" maxlength="35" placeholder="مثال: ١٤٤٨/٠٥ أو الفصل الأول ١٤٤٨"></label></div><div class="row"><button id="reportsGenerate" class="primary" type="button">إنشاء مسودة من البيانات</button><button id="reportsOpenOriginals" class="btn" type="button">فتح المستندات الأصلية</button></div><label class="docs-report-draft-label">نص التقرير قابل للتحرير<textarea id="reportsDraft" rows="16" maxlength="18000" placeholder="اختر الفترة ونوع التقرير، ثم اضغط إنشاء مسودة."></textarea></label><p id="reportsDraftStatus" class="muted" role="status"></p></section>'+
 '<section id="reportsExport" data-report-pane="export" hidden><h3>مركز التصدير والطباعة</h3><p class="muted">تصدير ملخص إحصائي دون أسماء الطلاب أو تفاصيل الرعاية. للطباعة الرسمية استخدم مسودة التقرير في القسم السابق.</p><div class="row"><button id="reportsExportExcel" type="button" class="btn">تصدير جدول Excel (CSV)</button><button id="reportsPrintSummary" type="button" class="primary">طباعة A4 / حفظ PDF</button><button id="reportsPrintOfficial" type="button" class="btn">طباعة المسودة الرسمية</button></div><p id="reportsExportStatus" class="muted" role="status"></p></section>';
 docsMain.append(workspacePages.reports);workspacePages.reports.append(reportIntro,originalMetrics,$('docsReliableSummary'));
@@ -5123,9 +5183,17 @@ adminNotificationsPanel.querySelector('#docsAdminAlertsRead').onclick=async()=>{
 
 
 const reportsPanes={dashboard:$('reportsDashboard'),analytics:$('reportsAnalytics'),official:$('reportsOfficial'),export:$('reportsExport')};
-let reportsActiveTab='dashboard',reportsBusy=false,reportsOwner='',reportsSourcesReady=false,reportsStudentReady=false,reportsInsightsReady=false,reportsCareReady=false;
+let reportsActiveTab='dashboard',reportsBusy=false,reportsSourcesReady=false,reportsStudentReady=false,reportsInsightsReady=false,reportsCareReady=false;
 let reportsStudents=[],reportsInsights={},reportsCare=[],reportsLastOverview=null;
-const reportLabels={attendance:'الغياب والتأخر',behavior:'السلوك',counseling_cases:'الحالات الفردية',interviews:'المقابلات والجلسات',referrals:'الإحالات',programs:'البرامج',plan_tasks:'أعمال الخطة',committees:'اللجان',initiatives:'المبادرات',school_tasks:'أعمال المدرسة',free_documents:'المستندات الحرة',public_requests:'طلبات التواصل',guidance_requests:'طلبات التوجيه'};
+const reportLabels={attendance:'الغياب والتأخر',behavior:'السلوك',counseling_cases:'الحالات الفردية',interviews:'المقابلات والجلسات',referrals:'الإحالات',programs:'البرامج',plan_tasks:'أعمال الخطة',committees:'اللجان',initiatives:'المبادرات',school_tasks:'أعمال المدرسة',free_documents:'المستندات الحرة',public_requests:'طلبات التواصل',guidance_requests:'طلبات التوجيه',reports:'التقارير الإرشادية',achievement:'التحصيل الدراسي',evidence:'الشواهد والتوثيق'};
+const reportLocalTypes=new Map([
+ ['الغياب والتأخر','attendance'],['سجل الانضباط','behavior'],['المخالفات السلوكية','behavior'],['السلوك الإيجابي','behavior'],
+ ['فتح الحالة الفردية','counseling_cases'],['الخطة العلاجية','counseling_cases'],['الإغلاق والمتابعة','counseling_cases'],['الحالات الطارئة','counseling_cases'],
+ ['الجلسات الفردية','interviews'],['الجلسات الجماعية','interviews'],['الإحالات','referrals'],
+ ['برامج الوزارة','programs'],['الحضور والاستبانات','programs'],['المبادرات','initiatives'],
+ ['خطة التوجيه الطلابي','plan_tasks'],['لجنة التوجيه الطلابي','committees'],['مجلس الطلاب','committees'],
+ ['التقارير الإرشادية','reports'],['تحليل النتائج','achievement'],['الضعف الدراسي','achievement'],['خطة الدعم','achievement'],['الشواهد والتوثيق','evidence']
+]);
 function openReportTab(name){
  reportsActiveTab=reportsPanes[name]?name:'dashboard';
  for(const [key,node] of Object.entries(reportsPanes))node.hidden=key!==reportsActiveTab;
@@ -5138,12 +5206,11 @@ function reportsRows(ignoreFilters=false){
  const year=ignoreFilters?'all':$('reportsYear').value,status=ignoreFilters?'all':$('reportsStatus').value;
  const all=docsAccountOriginals().map(record=>({
   ...record,
-  source_table:record.accountSourceTable||record.source_table||'local',
-  date_text:record.date_text||record.date_hijri||record.hijriDate||docsDisplayHijri(record.created)||''
+  source_table:record.accountSourceTable==='local'?(reportLocalTypes.get(record.kind)||'local'):(record.accountSourceTable||record.source_table||'local'),
+  date_text:record.date_text||record.date_hijri||record.hijriDate||record.created||''
  }));
  return all.filter(r=>{
-  const hijri=docsDisplayHijri(r.date_text||r.hijriDate||''),rawDate=String(r.date_text||'');
-  if(year!=='all'&&!hijri.includes(year)&&!hijri.includes(year.replace(/[0-9]/g,c=>'٠١٢٣٤٥٦٧٨٩'[Number(c)]))&&!rawDate.includes(year))return false;
+  if(year!=='all'&&docsChronologyKey(r.date_text).slice(0,4)!==year)return false;
   const done=/^مكتمل(?:ة)?$/.test(String(r.status||'').trim());
   return status==='all'||(status==='done'?done:!done)
  });
@@ -5160,7 +5227,7 @@ function reportsRenderProvenance(rows){
  const sourceRows=[
   ['الأعمال الأصلية','سجلات الأعمال والفهارس المرتبطة بالحساب',reportsSourcesReady&&guidanceLoadedUser===activeUser,rows.length],
   ['دليل الطلاب','معرّفات الطلاب المرتبطة بالحساب',reportsStudentReady,reportsStudents.length],
-  ['مؤشرات المتابعة','سجلات مواظبة وسلوك مرتبطة بمعرّفات مؤكدة',reportsInsightsReady,Object.keys(reportsInsights||{}).length],
+  ['طلاب لهم سجلات متابعة مرتبطة','عدد الطلاب ذوي سجلات متابعة مرتبطة بمعرّفاتهم',reportsInsightsReady,Object.keys(reportsInsights||{}).length],
   ['الرعاية الخاصة','فهرس مؤشرات الرعاية المرتبط بالطلاب',reportsCareReady,reportsCare.length]
  ];
  const list=document.createElement('ul');list.className='docs-report-provenance-list';
@@ -5175,10 +5242,8 @@ function reportsRenderProvenance(rows){
  const note=document.createElement('p');note.className='muted';note.textContent='البيانات غير المتاحة لا تُحتسب صفرًا، والفهرس الجزئي لا يكفي للحكم على اكتمال السجل أو تنفيذ البرنامج.';
  host.replaceChildren(list,period,note);
 }
-function reportsSourceLink(table){
- workspaceGoto('documents');openDocsView('works');draw();
- const rows=nativeA4Rows().filter(r=>r.source_table===table),kind=rows[0]?.kind||(guidanceKinds[table]||'');
- const select=$('nativeDocsType');if(kind&&[...select.options].some(o=>o.value===kind)){select.value=kind;draw()}
+function reportsSourceLink(rows,item){
+ docsOpenOriginalList(item.label,rows.filter(row=>row.source_table===item.table));
 }
 function reportsStudentLink(filter){
  workspaceGoto('students');
@@ -5204,7 +5269,7 @@ refreshReportSummary=function(){
  const host=$('reportsTopMetrics');if(!host)return;
  const rows=reportsRows(),byType=new Map();
  for(const row of rows){const key=row.source_table||'local';byType.set(key,(byType.get(key)||0)+1)}
- const done=rows.filter(r=>/^مكتمل(?:ة)?$/.test(String(r.status||'').trim())).length;
+ const doneRows=rows.filter(r=>/^مكتمل(?:ة)?$/.test(String(r.status||'').trim())),done=doneRows.length;
  const programs=byType.get('programs')||0;
  const statusCounts={required:0,active:0,done:0,approved:0,overdue:0,archived:0,unknown:0};
  for(const row of rows)statusCounts[classifyDocsWorkStatus(row.status)]++;
@@ -5215,8 +5280,8 @@ refreshReportSummary=function(){
  host.replaceChildren();
  reportsMakeMetric(host,'الطلاب',reportsStudentReady?String(reportsStudents.length):'—',reportsStudentReady?'من دليل الطلاب':'الدليل غير محمّل',()=>reportsStudentLink('all'));
  reportsMakeMetric(host,'حالات رعاية خاصة',reportsCareReady?String(reportsCare.length):'—','عدد الطلاب وليس عدد التشخيصات',()=>reportsStudentLink('special'));
- reportsMakeMetric(host,'الأعمال الأصلية',reportsSourcesReady&&guidanceLoadedUser===activeUser?String(rows.length):'—',selectedStatus==='all'?'إجمالي بعد استبعاد النسخ المشتقة':'نتائج فلتر «'+statusText+'»؛ ليست حكمًا بالنقص',()=>{workspaceGoto('documents');openDocsView('works')});
- reportsMakeMetric(host,'موسومة مكتمل',reportsSourcesReady&&guidanceLoadedUser===activeUser?String(done):'—','يستلزم التحقق من الشواهد');
+ reportsMakeMetric(host,'الأعمال الأصلية',reportsSourcesReady&&guidanceLoadedUser===activeUser?String(rows.length):'—',selectedStatus==='all'?'إجمالي بعد استبعاد النسخ المشتقة':'نتائج فلتر «'+statusText+'»؛ ليست حكمًا بالنقص',()=>docsOpenOriginalList('الأعمال الأصلية في المؤشرات',rows));
+ reportsMakeMetric(host,'موسومة مكتمل',reportsSourcesReady&&guidanceLoadedUser===activeUser?String(done):'—','يستلزم التحقق من الشواهد',()=>docsOpenOriginalList('الأعمال الموسومة مكتمل',doneRows));
  const summary=$('docsExecSummary');summary.replaceChildren();
  for(const [label,val] of [['إجمالي الطلاب',reportsStudentReady?reportsStudents.length:'—'],['حالات الرعاية الخاصة',reportsCareReady?reportsCare.length:'—'],['الأعمال الأصلية',reportsSourcesReady&&guidanceLoadedUser===activeUser?rows.length:'—'],['لم توسم مكتملًا (لم يُفحص المحتوى)',reportsSourcesReady&&guidanceLoadedUser===activeUser?unverified:'—'],['البرامج المسجلة',reportsSourcesReady&&guidanceLoadedUser===activeUser?programs:'—']]){const x=document.createElement('div'),y=document.createElement('span'),z=document.createElement('strong');y.textContent=label;z.textContent=String(val);x.append(y,z);summary.append(x)}
  const notice=$('docsExecNotice');
@@ -5225,15 +5290,16 @@ refreshReportSummary=function(){
  else if(selectedStatus==='pending')notice.textContent='العدد '+rows.length+' هو عدد السجلات التي لا تحمل وسم «مكتمل» مؤكدًا أو حالتها غير موثقة ضمن الفلتر الحالي، وليس إثباتًا بأن كل سجل ناقص. '+(reviewBreakdown?'التوزيع: '+reviewBreakdown+'. ':'')+'الحل: مسؤول الحساب يفتح السجل، يراجع المحتوى والشواهد، ثم يحدّث الحالة أو ينشئ متابعة. النظام لا يحدد نقص العمل أو الشخص المسؤول تلقائيًا من الفهرس.';
  else notice.textContent='عدم وجود وسم مكتمل لا يعني نقص السجل. يلزم فتح محتوى العمل والشواهد قبل تقرير اكتماله أو نقصه. '+(reviewBreakdown?'الحالات التي تحتاج مراجعة: '+reviewBreakdown+'.':'');
  const list=[...byType].map(([table,count])=>({table,label:reportLabels[table]||(table==='local'?'مستندات محلية':'أعمال أخرى'),count})).sort((a,b)=>b.count-a.count);
- reportsBars($('docsReportItems'),list,x=>x.table==='local'?(workspaceGoto('documents'),openDocsView('works')):reportsSourceLink(x.table));
+ reportsBars($('docsReportItems'),list,item=>reportsSourceLink(rows,item));
  const plot=$('docsExecChart');plot.replaceChildren();
  if(!reportsSourcesReady||guidanceLoadedUser!==activeUser||!list.length){const empty=document.createElement('div');empty.className='docs-exec-empty';const title=document.createElement('strong'),desc=document.createElement('small');title.textContent=reportsSourcesReady?'لا توجد أعمال أصلية ضمن الفلاتر الحالية':'تعذر تحميل مصدر الأعمال الأصلية';desc.textContent=reportsSourcesReady?'غيّر السنة أو حالة العمل لعرض الرسم عند توفر البيانات.':'عدم توفر البيانات لا يعني أن العدد صفر.';empty.append(title,desc);plot.append(empty)}
- else{const max=Math.max(1,...list.map(x=>x.count));for(const item of list.slice(0,10)){const btn=document.createElement('button'),label=document.createElement('span'),track=document.createElement('span'),fill=document.createElement('i'),count=document.createElement('b');btn.type='button';btn.className='docs-exec-bar';label.textContent=item.label;track.className='docs-exec-track';fill.style.width=(item.count/max*100)+'%';track.append(fill);count.textContent=String(item.count);btn.append(label,track,count);btn.onclick=()=>item.table==='local'?(workspaceGoto('documents'),openDocsView('works')):reportsSourceLink(item.table);plot.append(btn)}}
+ else{const max=Math.max(1,...list.map(x=>x.count));for(const item of list){const btn=document.createElement('button'),label=document.createElement('span'),track=document.createElement('span'),fill=document.createElement('i'),count=document.createElement('b');btn.type='button';btn.className='docs-exec-bar';label.textContent=item.label;track.className='docs-exec-track';fill.style.width=(item.count/max*100)+'%';track.append(fill);count.textContent=String(item.count);btn.append(label,track,count);btn.onclick=()=>reportsSourceLink(rows,item);plot.append(btn)}}
 
  const total={rows,byType,done,programs,unverified,list};
  reportsLastOverview=total;
  reportsRenderProvenance(rows);
  const agg=$('reportsStudentMetrics');agg.replaceChildren();docsFieldworkReportRefresh().catch(()=>{});
+ reportsBars($('reportsAnalyticsWorks'),list,item=>reportsSourceLink(rows,item));
  const ins=reportsInsightsReady?Object.values(reportsInsights):[];
  const sums={absence:0,late:0,behavior:0,positive:0,cases:0,interviews:0,referrals:0};
  for(const r of ins)for(const k of Object.keys(sums))sums[k]+=Math.max(0,Number(r[k])||0);
@@ -5256,52 +5322,59 @@ refreshReportSummary=function(){
 };
 
 async function loadReportSources(){
- if(reportsBusy||!activeUser)return;const owner=activeUser;reportsBusy=true;
+ if(reportsBusy||!activeUser||!db)return;const owner=activeUser,ownerDb=db;reportsBusy=true;
  $('reportsDataStatus').textContent='جارٍ تحميل الأصول والمؤشرات من حسابك…';
  $('reportsRefresh').disabled=true;
  try{
-  if(guidanceLoadedUser!==owner)await loadGuidanceRecords().catch(()=>{});
+  const guidance=loadGuidanceRecords().catch(()=>{});
   const names=['a4','students','insights','care'];
   const paths=['/api/students/a4','/api/students','/api/students/insights','/api/students/care'];
   const results=await Promise.allSettled(paths.map(path=>docsMirrorAccountRead(path)));
-  if(owner!==activeUser)return;
+  await guidance;
+  if(owner!==activeUser||ownerDb!==db)return;
   reportsSourcesReady=false;reportsStudentReady=false;reportsInsightsReady=false;reportsCareReady=false;
   let failures=0;
   for(let i=0;i<results.length;i++){
    const result=results[i];if(result.status!=='fulfilled'||!result.value?.ok){failures++;continue}
    const value=result.value;
-   if(names[i]==='a4'){migratedA4Records=value.records||[];reportsSourcesReady=true;renderMigratedLibrary()}
+   if(names[i]==='a4'){migratedA4Records=value.records||[];migratedA4LoadedUser=owner;reportsSourcesReady=true;renderMigratedLibrary()}
    if(names[i]==='students'){reportsStudents=value.students||[];reportsStudentReady=true}
    if(names[i]==='insights'){reportsInsights=value.insights||{};reportsInsightsReady=true}
    if(names[i]==='care'){reportsCare=value.index||[];reportsCareReady=true}
   }
-  reportsOwner=owner;
-  $('reportsDataStatus').textContent=failures?'توفرت '+(4-failures)+' من ٤ مصادر (من الجهاز أو الشبكة). بعض المؤشرات غير متاحة ولا تُحتسب صفرًا.':'تم تحميل المصادر الأربعة من الجهاز أو الشبكة، دون حذف الأرشيف أو كشف أسماء الطلاب.';
+  $('reportsDataStatus').textContent=(failures?'توفرت '+(4-failures)+' من ٤ مصادر (من الجهاز أو الشبكة).':'تم تحميل المصادر الأربعة من الجهاز أو الشبكة.')+(guidanceLoadError?' تعذر تحديث فهرس السجلات المهيكلة.':'');
   refreshReportSummary();
- }catch(e){$('reportsDataStatus').textContent='تعذر تحميل التقارير: '+e.message}
- finally{reportsBusy=false;$('reportsRefresh').disabled=false}
+ }catch(e){if(ownerDb===db)$('reportsDataStatus').textContent='تعذر تحميل التقارير: '+e.message}
+ finally{if(ownerDb===db){reportsBusy=false;$('reportsRefresh').disabled=false}}
 }
+document.addEventListener('athat-docs-logout',()=>{
+ reportsBusy=reportsSourcesReady=reportsStudentReady=reportsInsightsReady=reportsCareReady=false;
+ reportsStudents=[];reportsInsights={};reportsCare=[];reportsLastOverview=null;
+ $('reportsDraft').value='';$('reportsDraftStatus').textContent='';$('reportsRefresh').disabled=false;
+});
 $('reportsRefresh').onclick=loadReportSources;
 $('reportsYear').onchange=refreshReportSummary;
 $('reportsStatus').onchange=refreshReportSummary;
 function reportsReportPeriod(){return $('reportsOfficialPeriod').value.trim()||'الفترة المتاحة في النظام'}
-function reportsLatinDigits(input){return String(input||'').replace(/[٠-٩]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/[۰-۹]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[\u200e\u200f\u061c]/g,'').trim()}
 function reportsOfficialOverview(){
- const type=$('reportsOfficialType').value;
- let rows=reportsRows();
- if(type==='monthly'){
-  const value=reportsLatinDigits($('reportsOfficialPeriod').value),parts=/^(14\d{2})[\/-](\d{1,2})$/.exec(value);
+ const monthly=$('reportsOfficialType').value==='monthly';
+ let unknownMonth=0,outsideMonth=0,month='';
+ if(monthly){
+  const value=docsLatinDigits($('reportsOfficialPeriod').value),parts=/^(14\d{2})[\/-](\d{1,2})$/.exec(value);
   if(!parts||Number(parts[2])<1||Number(parts[2])>12)throw Error('أدخل الشهر الهجري بصيغة ١٤٤٨/٠٥ حتى تُحسب الأعمال للشهر الصحيح.');
-  const prefix=parts[1]+'/'+String(Number(parts[2])).padStart(2,'0');
-  rows=reportsRows(true).filter(r=>{
-   const hijri=reportsLatinDigits(docsDisplayHijri(r.date_text||r.hijriDate||'')).replace(/-/g,'/');
-   return hijri.startsWith(prefix+'/');
-  });
+  month=parts[1]+'-'+parts[2].padStart(2,'0');
  }
+ const originals=reportsRows(monthly);
+ const rows=monthly?originals.filter(row=>{
+  const recordMonth=docsChronologyKey(row.date_text).slice(0,7);
+  if(recordMonth.length<7)unknownMonth++;
+  else if(recordMonth!==month)outsideMonth++;
+  return recordMonth===month;
+ }):originals;
  const byType=new Map();for(const row of rows)byType.set(row.source_table||'local',(byType.get(row.source_table||'local')||0)+1);
  const done=rows.filter(r=>/^مكتمل(?:ة)?$/.test(String(r.status||'').trim())).length;
  const list=[...byType].map(([table,count])=>({table,count,label:reportLabels[table]||(table==='local'?'مستندات محلية':'أعمال أخرى')})).sort((a,b)=>b.count-a.count);
- return {rows,byType,done,programs:byType.get('programs')||0,unverified:rows.length-done,list};
+ return {rows,byType,done,programs:byType.get('programs')||0,unverified:rows.length-done,list,unknownMonth,outsideMonth};
 }
 function reportsDraftContent(){
  const current=reportsOfficialOverview();
@@ -5313,9 +5386,10 @@ function reportsDraftContent(){
   'الموجّه الطلابي: '+(a4Profile.counselor||'لم يُحدد'),
   'الفترة: '+reportsReportPeriod(),
   'نطاق الأرقام: '+(type==='monthly'?'الشهر الهجري المحدد فقط (السجلات ذات التاريخ المعروف)':'الفترة المحددة بمرشّحات المؤشرات؛ لا تُستنتج حدود الفصل الدراسي تلقائيًا'),
-  'حالة مصدر الأعمال: '+(reportsSourcesReady?'متاح من الحساب أو النسخة المحلية':'غير متاح'),
+  'حالة مصدر الأعمال: '+(guidanceLoadedUser===activeUser?'متاح من الحساب أو النسخة المحلية':'متاح جزئيًا، تعذر تحميل فهرس السجلات المهيكلة'),
   'حجم العينة بعد الفلاتر: '+current.rows.length,
-  'تغطية المصادر الأخرى: الطلاب '+(reportsStudentReady?'متاح ('+reportsStudents.length+')':'غير متاح')+'، مؤشرات المتابعة '+(reportsInsightsReady?'متاح ('+Object.keys(reportsInsights||{}).length+')':'غير متاح')+'، الرعاية '+(reportsCareReady?'متاح ('+reportsCare.length+')':'غير متاح'),
+  ...(type==='monthly'?['السجلات المستبعدة: '+current.outsideMonth+' خارج الشهر، '+current.unknownMonth+' بلا شهر هجري قابل للتحديد']:[]),
+  'تغطية المصادر الأخرى: دليل الطلاب '+(reportsStudentReady?'متاح ('+reportsStudents.length+')':'غير متاح')+'، عدد الطلاب ذوي سجلات متابعة مرتبطة '+(reportsInsightsReady?Object.keys(reportsInsights||{}).length:'غير متاح')+'، الرعاية '+(reportsCareReady?'متاح ('+reportsCare.length+')':'غير متاح'),
   'تاريخ الإعداد (هجري): '+hijriToday(),
   '',
   'أولاً: ملخص الأعمال الموثقة في المصدر',
@@ -5342,7 +5416,10 @@ $('reportsGenerate').onclick=()=>{
   $('reportsDraftStatus').textContent='تم إنشاء مسودة قابلة للتحرير من الفترة الموثقة، ولم يُنشأ مستند أو سجل جديد.';
  }catch(error){$('reportsDraftStatus').textContent=error.message}
 };
-$('reportsOpenOriginals').onclick=()=>{workspaceGoto('documents');openDocsView('works')};
+$('reportsOpenOriginals').onclick=()=>{
+ try{docsOpenOriginalList('الأعمال الداخلة في التقرير',reportsOfficialOverview().rows)}
+ catch(error){$('reportsDraftStatus').textContent=error.message}
+};
 function reportsDownload(name,content,mime){
  const file=new Blob([content],{type:mime}),url=URL.createObjectURL(file),a=document.createElement('a');
  a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
@@ -5355,7 +5432,7 @@ $('reportsExportExcel').onclick=()=>{
   ...((reportsLastOverview?.list||[]).map(x=>[x.label,x.count,reportsSourcesReady?'متاح':'غير متاح',$('reportsYear').selectedOptions[0].text,'لا يثبت التنفيذ دون مراجعة الشواهد'])),
   ['الإجمالي',reportsLastOverview?.rows.length||0,reportsSourcesReady?'متاح':'غير متاح',$('reportsYear').selectedOptions[0].text,'بعد الفلاتر الحالية'],
   ['الطلاب',reportsStudentReady?reportsStudents.length:'غير متاح',reportsStudentReady?'متاح':'غير متاح','كل الفترات المتاحة','معرّفات مرتبطة فقط'],
-  ['مؤشرات المتابعة',reportsInsightsReady?Object.keys(reportsInsights||{}).length:'غير متاح',reportsInsightsReady?'متاح':'غير متاح','كل الفترات المتاحة','لا تُفسر كتشخيص'],
+  ['طلاب لهم سجلات متابعة مرتبطة',reportsInsightsReady?Object.keys(reportsInsights||{}).length:'غير متاح',reportsInsightsReady?'متاح':'غير متاح','كل الفترات المتاحة','عدد الطلاب حسب المعرّف'],
   ['الرعاية',reportsCareReady?reportsCare.length:'غير متاح',reportsCareReady?'متاح':'غير متاح','كل الفترات المتاحة','عدد الفهارس وليس التشخيصات']
  ];
  reportsDownload('مؤشرات-مستندات-الذات.csv','\uFEFF'+rows.map(r=>r.map(reportsCsvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');

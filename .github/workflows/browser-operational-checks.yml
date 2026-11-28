@@ -295,10 +295,11 @@ jobs:
                     await page.locator('#authGate').waitFor({state:'visible'});
                     console.log('PASS document persistence across account switching '+label);
                     console.log('PASS mock-account navigation '+label);
+                    assert.deepEqual(errors,[],'no page errors are expected during online use');
                     // Verify real service-worker caching and offline navigation, without an account.
                     await page.waitForFunction(async()=>{
                       if(!navigator.serviceWorker.controller)return false;
-                      const entries=await Promise.all(['/','/peer-sync.js','/auto-sync.js'].map(p=>caches.match(p)));
+                      const entries=await Promise.all(['/','/peer-sync.js','/auto-sync.js','/manifest.webmanifest'].map(p=>caches.match(p)));
                       return entries.every(r=>r?.ok);
                     },null,{timeout:30000});
                     // Independently test loss of connectivity to the origin without
@@ -313,6 +314,11 @@ jobs:
                       await page.locator('#registerName').waitFor({state:'visible'});
                       await page.locator('#tabLogin').click();
                       await page.locator('#registerName').waitFor({state:'hidden'});
+                      const manifestServed=await page.evaluate(async()=>{
+                        const response=await fetch('/manifest.webmanifest');
+                        return response.ok&&(await response.json()).start_url==='/';
+                      });
+                      assert.equal(manifestServed,true,'manifest must be served while the fixture origin is unavailable');
                       assert.ok(blockedRequests>blockedBefore,'must exercise a failed origin request');
                       console.log('PASS origin-unavailable '+label);
                     }finally{serverUnavailable=false}
@@ -362,7 +368,7 @@ jobs:
                         await context.setOffline(true);
                         assert.equal(await page.evaluate(()=>navigator.onLine),false);
                         const cacheEvidence=await page.evaluate(async()=>{
-                          const results=await Promise.all(['/','/peer-sync.js','/auto-sync.js'].map(async p=>{
+                          const results=await Promise.all(['/','/peer-sync.js','/auto-sync.js','/manifest.webmanifest'].map(async p=>{
                             const r=await caches.match(p);
                             return Boolean(r?.ok&&(await r.text()).length>100);
                           }));
@@ -385,7 +391,12 @@ jobs:
                         await page.locator('#registerName').waitFor({state:'hidden'});
                       }
                     }finally{await context.setOffline(false)}
-                    assert.deepEqual(errors,[]);
+                    // WebKit can report its native manifest-loader error after the simulated
+                    // outage even though the service worker served a valid manifest above.
+                    const manifestError='/'+new URL(origin).host+'/manifest.webmanifest due to access control checks.';
+                    const unexpectedErrors=name==='webkit'&&upstreamOfflineDefect?errors.filter(error=>error!==manifestError):errors;
+                    if(unexpectedErrors.length!==errors.length)console.log('WebKit manifest-loader diagnostic reproduced after verified offline manifest access '+label);
+                    assert.deepEqual(unexpectedErrors,[]);
                     console.log('PASS '+label);
                   }catch(e){failures++;console.error('FAIL '+label,e);await page.screenshot({path:'browser-results/'+label+'.png',fullPage:true}).catch(()=>{})}
                   finally{await context.close()}

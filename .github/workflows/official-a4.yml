@@ -1,7 +1,7 @@
 name: Official Docs A4 checks
 on:
   push:
-    branches: [feature/official-a4-docs-1448]
+    branches: [main, feature/official-a4-docs-1448]
   pull_request:
     paths: [worker.js, data/a4-guidance-1448.json, tests/official-a4.test.mjs, .github/workflows/official-a4.yml]
 jobs:
