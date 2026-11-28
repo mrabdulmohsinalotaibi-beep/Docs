@@ -1,7 +1,7 @@
 name: DeepSeek integration checks
 on:
   push:
-    branches: [feature/deepseek-document-assistant]
+    branches: [main, feature/deepseek-document-assistant]
   pull_request:
     paths:
       - worker.js
